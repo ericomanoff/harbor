@@ -1,0 +1,11 @@
+# Go
+/bin/
+# Built frontend (embedded at build time; keep the dir so go:embed compiles)
+/internal/assets/dist/*
+!/internal/assets/dist/.gitkeep
+# Node
+/web/node_modules/
+/web/dist/
+# OS / editor
+.DS_Store
+*.log

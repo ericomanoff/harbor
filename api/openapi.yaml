@@ -1,0 +1,400 @@
+openapi: 3.0.3
+info:
+  title: harbor API
+  version: 0.1.0
+  description: >
+    Local API between the harbor Phaser frontend and the Go backend. Wire models
+    are lean summaries of Kubernetes objects, not raw Kubernetes JSON. The
+    WebSocket event stream at /ws carries WsMessage objects; it is not an HTTP
+    path and so is described only under components.
+servers:
+  - url: http://127.0.0.1:8080
+
+paths:
+  /api/healthz:
+    get:
+      operationId: getHealth
+      summary: Liveness and build info
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /api/contexts:
+    get:
+      operationId: listContexts
+      summary: List kubeconfig contexts
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContextList"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/contexts/{name}/select:
+    post:
+      operationId: selectContext
+      summary: Select a context and start watching it
+      parameters:
+        - $ref: "#/components/parameters/ContextNameParam"
+      responses:
+        "204":
+          description: Context selected
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/snapshot:
+    get:
+      operationId: getSnapshot
+      summary: Full cluster state for a fresh client
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Snapshot"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/deployments:
+    post:
+      operationId: createDeployment
+      summary: Create a Deployment (place a War Factory)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeploymentRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deployment"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/deployments/{ns}/{name}/scale:
+    patch:
+      operationId: scaleDeployment
+      summary: Set replica count (build or sell units)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScaleRequest"
+      responses:
+        "204":
+          description: Scaled
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/deployments/{ns}/{name}/mappos:
+    patch:
+      operationId: setDeploymentMapPos
+      summary: Persist the building's map tile as an annotation
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapPos"
+      responses:
+        "204":
+          description: Stored
+        default:
+          $ref: "#/components/responses/Error"
+
+components:
+  parameters:
+    ContextNameParam:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+    NamespaceParam:
+      name: ns
+      in: path
+      required: true
+      schema:
+        type: string
+    NameParam:
+      name: name
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    Health:
+      type: object
+      required: [status, version, uptimeSeconds]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+        uptimeSeconds:
+          type: integer
+
+    ContextList:
+      type: object
+      required: [contexts, current]
+      properties:
+        contexts:
+          type: array
+          items:
+            $ref: "#/components/schemas/KubeContext"
+        current:
+          type: string
+          description: Name of the context the backend is watching, empty if none.
+
+    KubeContext:
+      type: object
+      required: [name, cluster, user]
+      properties:
+        name:
+          type: string
+        cluster:
+          type: string
+        user:
+          type: string
+        namespace:
+          type: string
+
+    MapPos:
+      type: object
+      description: Tile coordinates on the map grid.
+      required: [x, y]
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+
+    Node:
+      type: object
+      required: [name, ready, cpuAlloc, memAlloc, cpuReq, memReq, labels]
+      properties:
+        name:
+          type: string
+        ready:
+          type: boolean
+        cpuAlloc:
+          type: integer
+          description: Allocatable CPU in millicores.
+        memAlloc:
+          type: integer
+          format: int64
+          description: Allocatable memory in bytes.
+        cpuReq:
+          type: integer
+          description: Sum of pod CPU requests in millicores.
+        memReq:
+          type: integer
+          format: int64
+          description: Sum of pod memory requests in bytes.
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+
+    Namespace:
+      type: object
+      required: [name, phase]
+      properties:
+        name:
+          type: string
+        phase:
+          type: string
+
+    Condition:
+      type: object
+      required: [type, status]
+      properties:
+        type:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+        message:
+          type: string
+
+    Deployment:
+      type: object
+      required: [ns, name, replicas, available, updated, image, conditions]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        replicas:
+          type: integer
+        available:
+          type: integer
+        updated:
+          type: integer
+        image:
+          type: string
+          description: Image of the first container.
+        mapPos:
+          $ref: "#/components/schemas/MapPos"
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Condition"
+
+    Pod:
+      type: object
+      required: [ns, name, node, phase, ready, restarts, created]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        node:
+          type: string
+          description: Scheduled node name, empty while Pending.
+        phase:
+          type: string
+        ready:
+          type: boolean
+        restarts:
+          type: integer
+        reason:
+          type: string
+          description: Waiting or terminated reason of the worst container, e.g. CrashLoopBackOff.
+        ownerRS:
+          type: string
+        deployment:
+          type: string
+          description: Owning Deployment name resolved through the ReplicaSet.
+        created:
+          type: string
+          format: date-time
+
+    Event:
+      type: object
+      required: [ns, kind, name, type, reason, message, ts]
+      properties:
+        ns:
+          type: string
+        kind:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          description: Normal or Warning.
+        reason:
+          type: string
+        message:
+          type: string
+        ts:
+          type: string
+          format: date-time
+
+    Snapshot:
+      type: object
+      required: [context, nodes, namespaces, deployments, pods]
+      properties:
+        context:
+          type: string
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Node"
+        namespaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/Namespace"
+        deployments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Deployment"
+        pods:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pod"
+
+    CreateDeploymentRequest:
+      type: object
+      required: [ns, name, image, replicas]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        image:
+          type: string
+        replicas:
+          type: integer
+          minimum: 0
+        port:
+          type: integer
+          description: Container port to expose, optional.
+        mapPos:
+          $ref: "#/components/schemas/MapPos"
+
+    ScaleRequest:
+      type: object
+      required: [replicas]
+      properties:
+        replicas:
+          type: integer
+          minimum: 0
+
+    WsMessage:
+      type: object
+      description: One message on the /ws event stream.
+      required: [type, kind]
+      properties:
+        type:
+          type: string
+          enum: [snapshot, added, modified, deleted]
+        kind:
+          type: string
+          enum: [Node, Namespace, Deployment, Pod, Event, Snapshot]
+        obj:
+          description: Wire model of the given kind; a Snapshot when type is snapshot.
+          oneOf:
+            - $ref: "#/components/schemas/Node"
+            - $ref: "#/components/schemas/Namespace"
+            - $ref: "#/components/schemas/Deployment"
+            - $ref: "#/components/schemas/Pod"
+            - $ref: "#/components/schemas/Event"
+            - $ref: "#/components/schemas/Snapshot"

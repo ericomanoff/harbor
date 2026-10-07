@@ -1,0 +1,59 @@
+# Sample base so a fresh cluster already has something on the map.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sandbox
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: sandbox
+  labels:
+    app: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+---
+# Deliberately broken so Phase 2 has a burning unit to render.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashy
+  namespace: sandbox
+  labels:
+    app: crashy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crashy
+  template:
+    metadata:
+      labels:
+        app: crashy
+    spec:
+      containers:
+        - name: crashy
+          image: busybox:1.36
+          command: ["sh", "-c", "echo boom; exit 1"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
