@@ -24,9 +24,10 @@ fake cluster with no backend.
 
 Controls: left-click selects, drag box-selects units, drag a structure to
 move it, right-drag pans, wheel zooms, arrows or WASD scroll, H homes the
-camera, N toggles system namespaces, B (or the WAR FACTORY cameo) starts
-placing a Deployment, Tab cycles the selection, Esc cancels or clears. Click
-the radar to jump.
+camera, B (or the WAR FACTORY cameo) starts placing a Deployment, Tab cycles
+the selection, `/` opens the locate box, F opens the namespace filter, N
+toggles system namespaces, M toggles sound and the EVA voice, Esc cancels or
+clears. Click the radar to jump.
 
 Playing: place a War Factory on a free cell in a plateau's top rows and fill
 in the form to create a Deployment. Select the factory to build or retire

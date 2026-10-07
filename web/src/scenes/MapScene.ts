@@ -10,6 +10,10 @@ import { BUILD_CELL, TILE, cellAt, computeLayout, isCellFree, type Cell, type Ma
 import { nsKey, type ClusterEvent } from '../store/cluster';
 import { isObsolete } from '../game/unitState';
 import { openBuildForm } from '../ui/buildForm';
+import { openFilter } from '../ui/filterPanel';
+import { openSearch } from '../ui/searchBox';
+import { namespaceVisible } from '../game/filter';
+import { sfx } from '../game/audio';
 
 const EDGE = 14;
 const SCROLL_SPEED = 0.6; // px per ms
@@ -88,6 +92,18 @@ export class MapScene extends Phaser.Scene {
       if (mode.current === 'place') mode.set('idle');
       else selection.clear();
     });
+    kb.on('keydown-FORWARD_SLASH', (ev: KeyboardEvent) => {
+      if (modal.open) return;
+      ev.preventDefault();
+      this.openSearch();
+    });
+    kb.on('keydown-F', () => !modal.open && openFilter());
+    kb.on('keydown-M', () => {
+      if (modal.open) return;
+      settings.sound = !settings.sound;
+      sfx.setEnabled(settings.sound);
+      settings.changed.emit();
+    });
     kb.addCapture('TAB');
     kb.on('keydown-TAB', (ev: KeyboardEvent) => !modal.open && this.cycleSelection(ev.shiftKey ? -1 : 1));
 
@@ -129,6 +145,14 @@ export class MapScene extends Phaser.Scene {
 
   centerOnWorld(x: number, y: number): void {
     this.cameras.main.centerOn(x, y);
+  }
+
+  /** "/" search overlay; picking a hit selects it and pans to it. */
+  openSearch(): void {
+    openSearch((hit) => {
+      const v = hit.kind === 'structure' ? this.buildings.get(hit.key.slice(2)) : this.units.get(hit.key.slice(2));
+      if (v) this.centerOnWorld(v.x + TILE, v.y + TILE);
+    });
   }
 
   /** Tab: step through structures then units, panning to each. */
@@ -348,7 +372,7 @@ export class MapScene extends Phaser.Scene {
 
   /** Recompute the layout and reconcile every view against the store. */
   private rebuild(): void {
-    const show = (ns: string): boolean => settings.showSystemNamespaces || !isSystemNamespace(ns);
+    const show = (ns: string): boolean => namespaceVisible(ns, settings);
     const deployments = [...store.deployments.values()].filter((d) => show(d.ns));
     const pods = [...store.pods.values()].filter((p) => show(p.ns));
     this.layout = computeLayout([...store.nodes.values()], deployments, pods);

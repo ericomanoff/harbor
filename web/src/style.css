@@ -108,3 +108,44 @@ html, body {
   color: #555550;
   cursor: default;
 }
+
+.overlay.top {
+  align-items: flex-start;
+  padding-top: 60px;
+}
+.panel .results {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.panel .results li {
+  padding: 3px 6px;
+  color: #c8c8b0;
+  cursor: pointer;
+}
+.panel .results li.active, .panel .results li:hover {
+  background: #1a2a14;
+  color: #39ff14;
+}
+.panel .list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.panel .list label, .panel label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: #c8c8b0;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.panel input[type=checkbox] {
+  accent-color: #39ff14;
+}
+.panel input[type=text] {
+  width: 100%;
+  box-sizing: border-box;
+}

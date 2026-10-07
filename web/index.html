@@ -29,6 +29,24 @@
         </div>
       </form>
     </div>
+    <div id="search" class="overlay top" hidden>
+      <div class="panel">
+        <h2>LOCATE <span class="where">Enter selects, Esc closes</span></h2>
+        <input type="text" placeholder="structure or unit name" autocomplete="off" />
+        <ul class="results"></ul>
+      </div>
+    </div>
+    <div id="filter" class="overlay" hidden>
+      <div class="panel">
+        <h2>RADAR FILTER <span class="where">which namespaces to show</span></h2>
+        <label class="inline"><input type="checkbox" name="system" /> show system namespaces</label>
+        <div class="list"></div>
+        <div class="actions">
+          <button type="button" data-all>SHOW ALL</button>
+          <button type="button" data-close>CLOSE</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

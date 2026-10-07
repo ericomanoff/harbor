@@ -1,6 +1,6 @@
 # Harbor: a Command & Conquer style GUI for Kubernetes and Helm
 
-Status: Phases 0-3 complete; Phase 4 in progress (updated 2026-10-07).
+Status: Phases 0-4 complete (updated 2026-10-07). Next: Phase 5, Helm.
 
 ## Progress
 
@@ -10,8 +10,9 @@ Status: Phases 0-3 complete; Phase 4 in progress (updated 2026-10-07).
 | 1     | Done        | 2026-10-07. Contexts, informers for 6 kinds, wire conversion, hub, /ws, /api/snapshot, startup auto-connect. `make test-kind` passes against kind-harbor. |
 | 2     | Done        | 2026-10-07. Store + WebSocket reconnect, deterministic layout, plateaus/buildings/units, camera, selection, radar, EVA log. Live: `kubectl scale` 3→5→3 showed units deploy and die within ~2 s. |
 | 3     | Done        | 2026-10-07. War Factory cameo + placement ghost, HTML build form, create/scale/mappos endpoints, build/retire/sell commands (sell retires the exact pods via pod-deletion-cost), power bar, building drag-move. Live: built, spawned 5, sold 2, restarted, site persisted. |
-| 4     | In progress | 2026-10-07: generated pixel-art sprites (8-facing tank, factory, scaffold, fire, explosion), rollout hatching + badge, warning flashes, sell structure (confirm) and repair unit, Tab cycling. Regression suite: pure game modules under test, kind integration round trip, Playwright e2e round. Left: audio/EVA voice, search box, namespace filter UI. |
-| 5-6   | Not started |                                                                       |
+| 4     | Done        | 2026-10-07. Generated pixel-art sprites (8-facing tank, factory, scaffold, fire, explosion), rollout hatching + badge, warning flashes, sell structure (confirm) and repair unit, Tab cycling, "/" locate overlay, F namespace filter, M synthesised sfx + EVA voice (speechSynthesis, fixed vocabulary). Regression suite: pure game modules, kind round trip, Playwright e2e round incl. search and filter. |
+| 5     | Next        | Helm tech tree.                                                       |
+| 6     | Not started |                                                                       |
 
 Deviations from the original plan so far:
 
@@ -48,7 +49,13 @@ Deviations from the original plan so far:
   not a cell origin, or is occupied, falls back to auto-placement.
 - Hidden Chrome tabs do not deliver keyboard events to Phaser and synthesized
   hovers do not move its pointer, so pointer handlers use the event's pointer
-  (not `input.activePointer`); that also fixes touch input.
+  (not `input.activePointer`); that also fixes touch input. Visual checks
+  now go through headless Chromium (Playwright), which runs the game loop.
+- Audio is fully synthesised (WebAudio beeps, browser speechSynthesis for a
+  fixed EVA vocabulary that never reads names). Off by default; the M toggle
+  doubles as the user gesture browsers need before playing sound.
+- Overlays (build form, locate, filter) are plain HTML over the canvas and
+  set a modal flag the scenes check before handling keys.
 
 Decisions already made:
 
@@ -280,7 +287,7 @@ Each phase ends with something you can run against the kind cluster.
 - Done when: you can build a deployment, spawn five pods, sell two, all from
   the game, and the state survives a restart of the binary.
 
-### Phase 4: Polish and feel (2-3 sessions) — IN PROGRESS
+### Phase 4: Polish and feel (2-3 sessions) — DONE 2026-10-07
 
 - Replace placeholders with original pixel-art sprites, build/sell/death
   animations, burning and crashloop effects, 8-facing unit movement.

@@ -57,6 +57,20 @@ async function focus(page: Page, worldX: number, worldY: number): Promise<{ x: n
   );
 }
 
+/** Waits for a unit to finish driving to its slot and returns its live world centre. */
+async function unitCentre(page: Page, key: string): Promise<{ x: number; y: number }> {
+  await page.waitForFunction((k) => {
+    const m = window.harbor.game.scene.keys.Map as { units: Map<string, { x: number; y: number; placement: { x: number; y: number } }> };
+    const v = m.units.get(k);
+    return !!v && Math.abs(v.x - v.placement.x * 24) < 0.5 && Math.abs(v.y - v.placement.y * 24) < 0.5;
+  }, key, { timeout: 10_000 });
+  return page.evaluate((k) => {
+    const m = window.harbor.game.scene.keys.Map as { units: Map<string, { x: number; y: number }> };
+    const v = m.units.get(k)!;
+    return { x: v.x + 12, y: v.y + 12 };
+  }, key);
+}
+
 async function deployment(page: Page): Promise<{ replicas: number; available: number } | undefined> {
   return page.evaluate((key) => window.harbor.store.deployments.get(key) as { replicas: number; available: number } | undefined, `${NS}/${NAME}`);
 }
@@ -124,6 +138,35 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   }, `${NS}/${NAME}`, { timeout: 120_000 });
   expect(kubectl('get', 'deployment', NAME, '-n', NS, '-o', 'jsonpath={.metadata.annotations.harbor\\.dev/map-pos}')).toBe(`${cell.x},${cell.y}`);
 
+  // Locate it by name: "/" opens the search, Enter selects the first hit.
+  await page.mouse.click(MAP_W / 2, 300); // focus the canvas, clear selection
+  await page.keyboard.press('/');
+  const search = page.locator('#search');
+  await expect(search).toBeVisible();
+  await search.locator('input').fill(NAME.slice(0, 6));
+  await expect(search.locator('li.active')).toContainText(`${NS}/${NAME}`);
+  await page.keyboard.press('Enter');
+  await expect(search).toBeHidden();
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`b:${NS}/${NAME}`]);
+
+  // Filter: hiding the namespace removes the structure from the map, and
+  // showing it again brings it back.
+  await page.keyboard.press('f');
+  const filter = page.locator('#filter');
+  await expect(filter).toBeVisible();
+  await filter.locator('.list label', { hasText: NS }).locator('input').uncheck();
+  await expect.poll(() => page.evaluate((key) => {
+    const m = window.harbor.game.scene.keys.Map as { layout: { buildings: Map<string, unknown> } };
+    return m.layout.buildings.has(key);
+  }, `${NS}/${NAME}`)).toBe(false);
+  await filter.locator('.list label', { hasText: NS }).locator('input').check();
+  await filter.locator('button[data-close]').click();
+  await expect(filter).toBeHidden();
+  await expect.poll(() => page.evaluate((key) => {
+    const m = window.harbor.game.scene.keys.Map as { layout: { buildings: Map<string, unknown> } };
+    return m.layout.buildings.has(key);
+  }, `${NS}/${NAME}`)).toBe(true);
+
   // Select the factory (click its cell) and order one more unit.
   let bAt = await focus(page, cell.x * 24 + 36, cell.y * 24 + 36);
   await page.mouse.click(bAt.x, bAt.y);
@@ -138,11 +181,8 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   const pods = await podsOf(page);
   expect(pods).toHaveLength(2);
   const victim = pods[0]!.name;
-  const unitPos = await page.evaluate((key) => {
-    const m = window.harbor.game.scene.keys.Map as { layout: { units: Map<string, { x: number; y: number }> } };
-    return m.layout.units.get(key)!;
-  }, `${NS}/${victim}`);
-  const uAt = await focus(page, unitPos.x * 24 + 12, unitPos.y * 24 + 12);
+  const unitPos = await unitCentre(page, `${NS}/${victim}`);
+  const uAt = await focus(page, unitPos.x, unitPos.y);
   await page.mouse.click(uAt.x, uAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${victim}`]);
   await page.mouse.click(cmd(0).x, cmd(0).y);
@@ -158,11 +198,8 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
 
   // Repair the remaining unit: a different pod replaces it, replicas unchanged.
   const [remaining] = await podsOf(page);
-  const rPos = await page.evaluate((key) => {
-    const m = window.harbor.game.scene.keys.Map as { layout: { units: Map<string, { x: number; y: number }> } };
-    return m.layout.units.get(key)!;
-  }, `${NS}/${remaining!.name}`);
-  const rAt = await focus(page, rPos.x * 24 + 12, rPos.y * 24 + 12);
+  const rPos = await unitCentre(page, `${NS}/${remaining!.name}`);
+  const rAt = await focus(page, rPos.x, rPos.y);
   await page.mouse.click(rAt.x, rAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${remaining!.name}`]);
   await page.mouse.click(cmd(1).x, cmd(1).y);

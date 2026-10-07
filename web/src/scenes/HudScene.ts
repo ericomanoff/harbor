@@ -5,7 +5,11 @@ import { FONT, GAME_HEIGHT, GAME_WIDTH, MAP_W, PALETTE, SIDEBAR_W } from '../con
 import { sellPlan } from '../game/commands';
 import { EvaFeed, clipLine } from '../game/eva';
 import { computePower, formatPower, type PowerLevel } from '../game/power';
-import { hexString, isSystemNamespace, namespaceColor } from '../layout/colors';
+import { hexString, namespaceColor } from '../layout/colors';
+import { namespaceVisible, filterSummary } from '../game/filter';
+import { sfx } from '../game/audio';
+import { voiceLineFor } from '../game/voice';
+import { openFilter } from '../ui/filterPanel';
 import { BUILD_CELL, TILE } from '../layout/grid';
 import type { StoreEvent } from '../store/cluster';
 import { Button } from '../ui/Button';
@@ -50,6 +54,8 @@ export class HudScene extends Phaser.Scene {
   private actions: (Action | undefined)[] = [];
   private pendingConfirm?: { index: number; until: number };
   private feed = new EvaFeed(store);
+  private soundText!: Phaser.GameObjects.Text;
+  private powerLevel: PowerLevel = 'ok';
   readonly log: string[] = [];
 
   constructor() {
@@ -85,8 +91,12 @@ export class HudScene extends Phaser.Scene {
 
     this.toggleText = this.add.text(X, TOGGLE_Y, '', { ...TEXT, color: hexString(PALETTE.amber) })
       .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => openFilter());
+    this.soundText = this.add.text(GAME_WIDTH - PAD, TOGGLE_Y, '', { ...TEXT, color: hexString(PALETTE.amber) }).setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
-        settings.showSystemNamespaces = !settings.showSystemNamespaces;
+        settings.sound = !settings.sound;
+        sfx.setEnabled(settings.sound);
         settings.changed.emit();
       });
     this.add.text(X, LOG.y + 2, 'EVA LOG', { ...TEXT, color: '#8a8a70' });
@@ -166,7 +176,7 @@ export class HudScene extends Phaser.Scene {
       g.fillStyle(p.ready ? 0x1f5a1f : 0x5a1f1f, 1);
       g.fillRect(ox + p.x * TILE * s, oy + p.y * TILE * s, p.w * TILE * s, p.h * TILE * s);
     }
-    const show = (ns: string): boolean => settings.showSystemNamespaces || !isSystemNamespace(ns);
+    const show = (ns: string): boolean => namespaceVisible(ns, settings);
     for (const [key, pl] of L.buildings) {
       const ns = key.split('/')[0] ?? '';
       if (!show(ns)) continue;
@@ -201,6 +211,11 @@ export class HudScene extends Phaser.Scene {
     g.lineStyle(1, PALETTE.bevelDark, 1).strokeRect(x + 0.5, POWER.y + 0.5, w - 1, POWER.h - 1);
     g.fillStyle(color, 1).fillRect(x + 1, POWER.y + 1, Math.max(0, Math.min(1, p.frac) * (w - 2)), POWER.h - 2);
     this.powerText.setText(formatPower(p)).setColor(hexString(color));
+    if (p.level !== this.powerLevel) {
+      this.powerLevel = p.level;
+      if (p.level === 'critical') this.eva('INSUFFICIENT POWER');
+      else if (p.level === 'low') this.eva('LOW POWER');
+    }
   }
 
   private setLink(s: LinkStatus): void {
@@ -211,7 +226,8 @@ export class HudScene extends Phaser.Scene {
   }
 
   private refreshToggle(): void {
-    this.toggleText.setText(`[N] SYSTEM NS: ${settings.showSystemNamespaces ? 'SHOWN' : 'HIDDEN'}`);
+    this.toggleText.setText(`[F] ${filterSummary(store.namespaces.keys(), settings)}`);
+    this.soundText.setText(`[M] SND ${settings.sound ? 'ON' : 'OFF'}`);
   }
 
   // ---- selection and commands -------------------------------------------
@@ -219,6 +235,7 @@ export class HudScene extends Phaser.Scene {
   private async run(i: number): Promise<void> {
     const a = this.actions[i];
     if (!a?.run || !a.enabled) return;
+    sfx.play('click');
     if (a.confirm && this.pendingConfirm?.index !== i) {
       this.pendingConfirm = { index: i, until: this.time.now + CONFIRM_MS };
       this.refreshButtons();
@@ -255,7 +272,7 @@ export class HudScene extends Phaser.Scene {
     }
     const keys = [...selection.keys];
     if (keys.length === 0) {
-      this.infoText.setText('Click a structure or unit.\nDrag to box-select units.\nDrag a structure to move it.\nTab cycles the selection.\n\n[B] place a War Factory.\nRight-drag pans, wheel zooms,\nH homes the camera.');
+      this.infoText.setText('Click a structure or unit.\nDrag to box-select units.\nDrag a structure to move it.\nTab cycles the selection.\n\n[B] place a War Factory\n[/] locate  [F] filter  [M] sound\nRight-drag pans, wheel zooms,\nH homes the camera.');
       this.setActions();
       return;
     }
@@ -326,12 +343,19 @@ export class HudScene extends Phaser.Scene {
   private onStore(e: StoreEvent): void {
     for (const line of this.feed.announce(e)) this.eva(line);
     if (e.type === 'snapshot') this.contextText.setText(store.context ? `THEATER: ${store.context}` : 'NO THEATER');
+    if (e.type === 'snapshot' || e.type === 'namespace') this.refreshToggle();
     if (e.type === 'snapshot' || e.type === 'node') this.drawPower();
     if (e.type === 'event' && e.event.type === 'Warning') this.map().flashFor(e.event);
     this.refreshInfo();
   }
 
   private eva(line: string): void {
+    const voice = voiceLineFor(line);
+    if (/^UNABLE|^CANNOT|^INSUFFICIENT|^LINK/.test(line)) sfx.play('error');
+    else if (/under attack/.test(voice ?? '')) sfx.play('alert');
+    else if (/^CONSTRUCTION STARTED|^UNIT ORDERED/.test(line)) sfx.play('build');
+    else if (/^CONSTRUCTION COMPLETE|^UNIT DEPLOYED/.test(line)) sfx.play('ok');
+    sfx.say(voice);
     this.log.push(clipLine(line));
     if (this.log.length > LOG_LINES) this.log.splice(0, this.log.length - LOG_LINES);
     this.logText.setText(this.log.join('\n'));

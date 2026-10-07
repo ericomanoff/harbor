@@ -40,6 +40,8 @@ export class Selection {
 
 export const settings = {
   showSystemNamespaces: false,
+  hiddenNamespaces: new Set<string>(),
+  sound: false,
   changed: new Emitter<void>(),
 };
 
