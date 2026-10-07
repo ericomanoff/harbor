@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Deployment, Node, Pod } from '../store/cluster';
-import { buildingCells, computeLayout, layoutPlateaus, plateauWidth, unitCells } from './grid';
+import { buildingCells, cellAt, computeLayout, isCellFree, layoutPlateaus, plateauWidth, unitCells } from './grid';
 
 const node = (name: string, cpu = 4000, ready = true): Node => ({ name, ready, cpuAlloc: cpu, memAlloc: 0, cpuReq: 0, memReq: 0, labels: {} });
 const dep = (ns: string, name: string, mapPos?: { x: number; y: number }): Deployment => ({ ns, name, replicas: 1, available: 1, updated: 1, image: 'x', conditions: [], ...(mapPos ? { mapPos } : {}) });
@@ -91,5 +91,35 @@ describe('computeLayout', () => {
     expect(l.width).toBeGreaterThan(0);
     expect(l.height).toBeGreaterThan(0);
     expect(l.buildings.get('a/web')?.kind).toBe('void');
+  });
+});
+
+describe('cellAt / isCellFree', () => {
+  const nodes = [node('w1'), node('w2')];
+  const plateaus = layoutPlateaus(nodes);
+
+  it('maps any tile inside a footprint to its cell origin', () => {
+    const p = plateaus[0]!;
+    const first = buildingCells(p)[0]!;
+    for (const [dx, dy] of [[0, 0], [2, 2], [1, 0]] as const) {
+      expect(cellAt(plateaus, first.x + dx, first.y + dy)).toMatchObject({ x: first.x, y: first.y, plateau: 'w1' });
+    }
+    const last = buildingCells(p).at(-1)!;
+    expect(cellAt(plateaus, last.x + 2, last.y + 2)).toMatchObject({ x: last.x, y: last.y });
+  });
+
+  it('returns undefined off-plateau, in the unit zone, and in the margin', () => {
+    const p = plateaus[0]!;
+    expect(cellAt(plateaus, p.x, p.y)).toBeUndefined(); // margin tile
+    expect(cellAt(plateaus, p.x + 1, p.y + 1 + 3 * 2 + 1)).toBeUndefined(); // unit zone
+    expect(cellAt(plateaus, 500, 500)).toBeUndefined();
+  });
+
+  it('reports occupancy, ignoring the building being moved', () => {
+    const l = computeLayout(nodes, [dep('a', 'web')], []);
+    const b = l.buildings.get('a/web')!;
+    expect(isCellFree(l, b)).toBe(false);
+    expect(isCellFree(l, b, 'a/web')).toBe(true);
+    expect(isCellFree(l, { x: b.x + 3, y: b.y })).toBe(true);
   });
 });

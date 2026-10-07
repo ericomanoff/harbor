@@ -1,6 +1,6 @@
 # Harbor: a Command & Conquer style GUI for Kubernetes and Helm
 
-Status: Phases 0-2 complete and verified against the kind cluster (updated 2026-10-07).
+Status: Phases 0-3 complete and verified against the kind cluster (updated 2026-10-07). First playable.
 
 ## Progress
 
@@ -9,8 +9,9 @@ Status: Phases 0-2 complete and verified against the kind cluster (updated 2026-
 | 0     | Done        | 2026-10-07. Go server + embedded Vite/Phaser app, OpenAPI codegen both sides, Makefile, kind config, tests. |
 | 1     | Done        | 2026-10-07. Contexts, informers for 6 kinds, wire conversion, hub, /ws, /api/snapshot, startup auto-connect. `make test-kind` passes against kind-harbor. |
 | 2     | Done        | 2026-10-07. Store + WebSocket reconnect, deterministic layout, plateaus/buildings/units, camera, selection, radar, EVA log. Live: `kubectl scale` 3→5→3 showed units deploy and die within ~2 s. |
-| 3     | Next        | Build and scale.                                                      |
-| 4-6   | Not started |                                                                       |
+| 3     | Done        | 2026-10-07. War Factory cameo + placement ghost, HTML build form, create/scale/mappos endpoints, build/retire/sell commands (sell retires the exact pods via pod-deletion-cost), power bar, building drag-move. Live: built, spawned 5, sold 2, restarted, site persisted. |
+| 4     | Next        | Polish and feel.                                                      |
+| 5-6   | Not started |                                                                       |
 
 Deviations from the original plan so far:
 
@@ -36,6 +37,18 @@ Deviations from the original plan so far:
   stops animation frames in hidden tabs, which stalls Phaser).
 - Phaser containers reserve `body` and `state`; entity fields use `shape`
   and `status` instead.
+- "Sell unit" scales the Deployment down by the number of selected pods and
+  annotates exactly those pods with `controller.kubernetes.io/pod-deletion-cost`
+  so the ReplicaSet retires them first. Scale and map-position writes are
+  merge patches (the fake clientset cannot do the scale subresource).
+- Deployments created from the game get `app.kubernetes.io/managed-by: harbor`
+  and default requests of 50m CPU / 64Mi (editable in the form) so new units
+  register on the power bar.
+- Map positions snap to 3x3 building cells; a `harbor.dev/map-pos` that is
+  not a cell origin, or is occupied, falls back to auto-placement.
+- Hidden Chrome tabs do not deliver keyboard events to Phaser and synthesized
+  hovers do not move its pointer, so pointer handlers use the event's pointer
+  (not `input.activePointer`); that also fixes touch input.
 
 Decisions already made:
 
@@ -253,7 +266,7 @@ Each phase ends with something you can run against the kind cluster.
 - Done when: opening the app shows the kind cluster live and a `kubectl scale`
   makes units roll out or die within a second.
 
-### Phase 3: Build and scale (1-2 sessions) — first playable
+### Phase 3: Build and scale (1-2 sessions) — first playable — DONE 2026-10-07
 
 - Sidebar structure icon "War Factory" = Deployment. Click, place footprint
   (green valid / red invalid, must be on a plateau), form opens (namespace,

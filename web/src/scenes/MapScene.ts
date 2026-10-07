@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
-import { selection, settings, store } from '../app';
+import { createDeployment, setMapPos } from '../api/client';
+import { eva, modal, mode, selection, settings, store } from '../app';
 import { GAME_HEIGHT, MAP_W, PALETTE } from '../config';
 import { BuildingView } from '../entities/Building';
 import { PlateauView } from '../entities/Plateau';
 import { UnitView } from '../entities/Unit';
 import { isSystemNamespace } from '../layout/colors';
-import { TILE, computeLayout, type MapLayout } from '../layout/grid';
+import { BUILD_CELL, TILE, cellAt, computeLayout, isCellFree, type Cell, type MapLayout } from '../layout/grid';
 import { nsKey } from '../store/cluster';
+import { openBuildForm } from '../ui/buildForm';
 
 const EDGE = 14;
 const SCROLL_SPEED = 0.6; // px per ms
@@ -17,9 +19,15 @@ const CLICK_SLOP = 4;
 export const buildingKey = (k: string): string => `b:${k}`;
 export const unitKey = (k: string): string => `u:${k}`;
 
+interface GhostTarget {
+  cell?: Cell & { plateau: string };
+  valid: boolean;
+}
+
 /**
  * The battlefield. Renders the store as plateaus, buildings and units,
- * reconciling views against the store whenever it changes.
+ * reconciling views against the store whenever it changes, and handles
+ * placing and moving War Factories.
  */
 export class MapScene extends Phaser.Scene {
   layout: MapLayout = computeLayout([], [], []);
@@ -32,8 +40,10 @@ export class MapScene extends Phaser.Scene {
 
   private ground!: Phaser.GameObjects.Graphics;
   private selBox!: Phaser.GameObjects.Graphics;
+  private ghost!: Phaser.GameObjects.Graphics;
   private dragStart?: Phaser.Math.Vector2;
   private panStart?: { px: number; py: number; sx: number; sy: number };
+  private dragBuilding?: { view: BuildingView; start: Phaser.Math.Vector2; moved: boolean };
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
 
   constructor() {
@@ -48,6 +58,7 @@ export class MapScene extends Phaser.Scene {
 
     this.ground = this.add.graphics().setDepth(-10);
     this.selBox = this.add.graphics().setDepth(100);
+    this.ghost = this.add.graphics().setDepth(90);
 
     store.subscribe(() => {
       this.dirty = true;
@@ -56,6 +67,7 @@ export class MapScene extends Phaser.Scene {
       this.dirty = true;
     });
     selection.changed.on(() => this.refreshSelection());
+    mode.changed.on(() => this.updateGhost());
 
     const kb = this.input.keyboard!;
     const K = Phaser.Input.Keyboard.KeyCodes;
@@ -63,15 +75,21 @@ export class MapScene extends Phaser.Scene {
       up: kb.addKey(K.UP), down: kb.addKey(K.DOWN), left: kb.addKey(K.LEFT), right: kb.addKey(K.RIGHT),
       w: kb.addKey(K.W), a: kb.addKey(K.A), s: kb.addKey(K.S), d: kb.addKey(K.D),
     };
-    kb.on('keydown-H', () => this.homeCamera());
+    kb.on('keydown-H', () => !modal.open && this.homeCamera());
     kb.on('keydown-N', () => {
+      if (modal.open) return;
       settings.showSystemNamespaces = !settings.showSystemNamespaces;
       settings.changed.emit();
     });
-    kb.on('keydown-ESC', () => selection.clear());
+    kb.on('keydown-B', () => !modal.open && mode.set(mode.current === 'place' ? 'idle' : 'place'));
+    kb.on('keydown-ESC', () => {
+      if (modal.open) return;
+      if (mode.current === 'place') mode.set('idle');
+      else selection.clear();
+    });
 
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (p.x >= MAP_W) return;
+      if (p.x >= MAP_W || modal.open) return;
       const before = cam.getWorldPoint(p.x, p.y);
       cam.setZoom(Phaser.Math.Clamp(cam.zoom * (dy > 0 ? 0.9 : 1.1), ZOOM_MIN, ZOOM_MAX));
       const after = cam.getWorldPoint(p.x, p.y);
@@ -92,7 +110,7 @@ export class MapScene extends Phaser.Scene {
       this.rebuild();
       this.dirty = false;
     }
-    this.moveCamera(delta);
+    if (!modal.open) this.moveCamera(delta);
     for (const b of this.buildings.values()) b.tick(time);
     for (const u of this.units.values()) u.tick(time);
   }
@@ -127,17 +145,93 @@ export class MapScene extends Phaser.Scene {
       if (p.y < EDGE) dy -= v;
       if (p.y > GAME_HEIGHT - EDGE) dy += v;
     }
-    cam.scrollX += dx;
-    cam.scrollY += dy;
+    if (dx || dy) {
+      cam.scrollX += dx;
+      cam.scrollY += dy;
+      this.updateGhost();
+    }
   }
 
+  // ---- placement ---------------------------------------------------------
+
+  /** Where the 3x3 ghost footprint would land under the pointer. */
+  private ghostTarget(p: Phaser.Input.Pointer, except?: string): GhostTarget {
+    const w = this.cameras.main.getWorldPoint(p.x, p.y);
+    const cell = cellAt(this.layout.plateaus, Math.floor(w.x / TILE), Math.floor(w.y / TILE));
+    return { cell, valid: !!cell && isCellFree(this.layout, cell, except) };
+  }
+
+  /** Draws (or clears) the footprint for placing or moving a building. */
+  private updateGhost(p: Phaser.Input.Pointer = this.input.activePointer): GhostTarget | undefined {
+    const moving = this.dragBuilding?.moved ? this.dragBuilding.view.key : undefined;
+    if ((mode.current !== 'place' && !moving) || p.x >= MAP_W) {
+      this.ghost.clear();
+      return undefined;
+    }
+    const t = this.ghostTarget(p, moving);
+    const w = this.cameras.main.getWorldPoint(p.x, p.y);
+    const x = t.cell ? t.cell.x * TILE : Math.floor(w.x / TILE) * TILE - TILE;
+    const y = t.cell ? t.cell.y * TILE : Math.floor(w.y / TILE) * TILE - TILE;
+    const s = BUILD_CELL * TILE;
+    this.ghost.clear();
+    this.ghost.fillStyle(t.valid ? PALETTE.radarGreen : PALETTE.alert, 0.18).fillRect(x, y, s, s);
+    this.ghost.lineStyle(2, t.valid ? PALETTE.radarGreen : PALETTE.alert, 1).strokeRect(x + 1, y + 1, s - 2, s - 2);
+    return t;
+  }
+
+  private startBuild(cell: Cell): void {
+    mode.set('idle');
+    this.ghost.clear();
+    const names = [...store.namespaces.keys()].sort((a, b) => {
+      const sa = isSystemNamespace(a) ? 1 : 0;
+      const sb = isSystemNamespace(b) ? 1 : 0;
+      return sa - sb || a.localeCompare(b);
+    });
+    openBuildForm({
+      namespaces: names,
+      defaultNamespace: names.includes('default') ? 'default' : names[0],
+      mapPos: { x: cell.x, y: cell.y },
+      onSubmit: async (req) => {
+        await createDeployment(req);
+        eva.emit(`CONSTRUCTION STARTED: ${req.name}`);
+      },
+    });
+  }
+
+  // ---- pointer -----------------------------------------------------------
+
   private onPointerDown(p: Phaser.Input.Pointer): void {
-    if (p.x >= MAP_W) return;
+    if (p.x >= MAP_W || modal.open) return;
     if (p.rightButtonDown() || p.middleButtonDown()) {
+      if (mode.current === 'place') {
+        mode.set('idle');
+        return;
+      }
       this.panStart = { px: p.x, py: p.y, sx: this.cameras.main.scrollX, sy: this.cameras.main.scrollY };
       return;
     }
-    this.dragStart = this.cameras.main.getWorldPoint(p.x, p.y).clone();
+    if (mode.current === 'place') {
+      const t = this.updateGhost(p);
+      if (t?.valid && t.cell) this.startBuild(t.cell);
+      else eva.emit('CANNOT DEPLOY HERE');
+      return;
+    }
+    const w = this.cameras.main.getWorldPoint(p.x, p.y).clone();
+    // A press on a building may become a move; a press anywhere else may
+    // become a box selection.
+    for (const u of this.units.values()) {
+      if (!u.dying && u.rect().contains(w.x, w.y)) {
+        this.dragStart = w;
+        return;
+      }
+    }
+    for (const b of this.buildings.values()) {
+      if (b.rect().contains(w.x, w.y)) {
+        this.dragBuilding = { view: b, start: w, moved: false };
+        return;
+      }
+    }
+    this.dragStart = w;
   }
 
   private onPointerMove(p: Phaser.Input.Pointer): void {
@@ -145,6 +239,18 @@ export class MapScene extends Phaser.Scene {
     if (this.panStart) {
       cam.scrollX = this.panStart.sx - (p.x - this.panStart.px) / cam.zoom;
       cam.scrollY = this.panStart.sy - (p.y - this.panStart.py) / cam.zoom;
+      return;
+    }
+    if (mode.current === 'place') {
+      this.updateGhost(p);
+      return;
+    }
+    if (this.dragBuilding && p.isDown) {
+      const w = cam.getWorldPoint(p.x, p.y);
+      if (!this.dragBuilding.moved && Phaser.Math.Distance.Between(w.x, w.y, this.dragBuilding.start.x, this.dragBuilding.start.y) > CLICK_SLOP * 2) {
+        this.dragBuilding.moved = true;
+      }
+      if (this.dragBuilding.moved) this.updateGhost(p);
       return;
     }
     if (this.dragStart && p.isDown) {
@@ -162,6 +268,26 @@ export class MapScene extends Phaser.Scene {
       this.panStart = undefined;
       return;
     }
+    if (this.dragBuilding) {
+      const { view, moved } = this.dragBuilding;
+      this.dragBuilding = undefined;
+      if (!moved) {
+        selection.set([buildingKey(view.key)]);
+        return;
+      }
+      const t = this.ghostTarget(p, view.key);
+      this.ghost.clear();
+      if (!t.valid || !t.cell) {
+        eva.emit('CANNOT DEPLOY HERE');
+        return;
+      }
+      const { ns, name } = view.dep;
+      const cell = t.cell;
+      setMapPos(ns, name, { x: cell.x, y: cell.y })
+        .then(() => eva.emit(`STRUCTURE RELOCATED: ${name}`))
+        .catch((e: unknown) => eva.emit(`UNABLE TO COMPLY: ${e instanceof Error ? e.message : String(e)}`));
+      return;
+    }
     if (!this.dragStart) return;
     const start = this.dragStart;
     this.dragStart = undefined;
@@ -176,16 +302,9 @@ export class MapScene extends Phaser.Scene {
       selection.set(picked);
       return;
     }
-    // Click: units sit on top of buildings, so test them first.
     for (const u of this.units.values()) {
       if (!u.dying && u.rect().contains(end.x, end.y)) {
         selection.set([unitKey(u.key)]);
-        return;
-      }
-    }
-    for (const b of this.buildings.values()) {
-      if (b.rect().contains(end.x, end.y)) {
-        selection.set([buildingKey(b.key)]);
         return;
       }
     }
@@ -196,6 +315,8 @@ export class MapScene extends Phaser.Scene {
     for (const b of this.buildings.values()) b.setSelected(selection.keys.has(buildingKey(b.key)));
     for (const u of this.units.values()) u.setSelected(selection.keys.has(unitKey(u.key)));
   }
+
+  // ---- reconcile ---------------------------------------------------------
 
   /** Recompute the layout and reconcile every view against the store. */
   private rebuild(): void {
@@ -208,7 +329,6 @@ export class MapScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, 0, L.width * TILE, L.height * TILE);
     this.drawGround();
 
-    // Plateaus.
     const liveNodes = new Set<string>();
     for (const pl of L.plateaus) {
       liveNodes.add(pl.node);
@@ -223,7 +343,6 @@ export class MapScene extends Phaser.Scene {
       }
     }
 
-    // Buildings.
     const liveDeps = new Set<string>();
     for (const d of deployments) {
       const key = nsKey(d.ns, d.name);
@@ -236,12 +355,12 @@ export class MapScene extends Phaser.Scene {
     }
     for (const [k, v] of this.buildings) {
       if (!liveDeps.has(k)) {
+        if (this.dragBuilding?.view === v) this.dragBuilding = undefined;
         v.destroy();
         this.buildings.delete(k);
       }
     }
 
-    // Units. New ones roll out of their building's door when it is on screen.
     const livePods = new Set<string>();
     for (const p of pods) {
       const key = nsKey(p.ns, p.name);
@@ -264,7 +383,6 @@ export class MapScene extends Phaser.Scene {
       }
     }
 
-    // Drop selections that no longer exist.
     const stale = [...selection.keys].filter((k) => {
       const [kind, key] = [k.slice(0, 1), k.slice(2)];
       return kind === 'b' ? !liveDeps.has(key) : !livePods.has(key);
@@ -277,11 +395,8 @@ export class MapScene extends Phaser.Scene {
   private drawGround(): void {
     const L = this.layout;
     this.ground.clear();
-    this.ground.fillStyle(PALETTE.ground, 1);
-    this.ground.fillRect(0, 0, L.width * TILE, L.height * TILE);
-    this.ground.fillStyle(PALETTE.voidStrip, 1);
-    this.ground.fillRect(0, L.voidY * TILE, L.width * TILE, 4 * TILE);
-    this.ground.lineStyle(1, 0x2a2a20, 1);
-    this.ground.strokeRect(0.5, L.voidY * TILE + 0.5, L.width * TILE - 1, 4 * TILE - 1);
+    this.ground.fillStyle(PALETTE.ground, 1).fillRect(0, 0, L.width * TILE, L.height * TILE);
+    this.ground.fillStyle(PALETTE.voidStrip, 1).fillRect(0, L.voidY * TILE, L.width * TILE, 4 * TILE);
+    this.ground.lineStyle(1, 0x2a2a20, 1).strokeRect(0.5, L.voidY * TILE + 0.5, L.width * TILE - 1, 4 * TILE - 1);
   }
 }

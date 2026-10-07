@@ -3,6 +3,7 @@ html, body {
   height: 100%;
   background: #000;
   overflow: hidden;
+  font-family: monospace;
 }
 #game {
   width: 100vw;
@@ -11,4 +12,99 @@ html, body {
 #game canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+/* C&C style modal: black panel, grey bevels, radar-green text. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 10;
+}
+.overlay[hidden] {
+  display: none;
+}
+.panel {
+  width: 340px;
+  padding: 14px 16px;
+  background: #0a0a0a;
+  color: #c8c8b0;
+  border: 2px solid #5a5a5a;
+  box-shadow: inset 0 0 0 1px #2c2c2c, 0 0 0 2px #000;
+  font-size: 12px;
+}
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: #39ff14;
+  letter-spacing: 1px;
+}
+.panel h2 .where {
+  float: right;
+  font-size: 10px;
+  color: #ffb000;
+}
+.panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+  font-size: 10px;
+  color: #8a8a70;
+  letter-spacing: 1px;
+}
+.panel input, .panel select {
+  background: #001a00;
+  color: #39ff14;
+  border: 1px solid #2c2c2c;
+  border-top-color: #000;
+  border-left-color: #000;
+  border-bottom-color: #5a5a5a;
+  border-right-color: #5a5a5a;
+  padding: 4px 6px;
+  font: 12px monospace;
+  outline: none;
+}
+.panel input:focus, .panel select:focus {
+  border-color: #39ff14;
+}
+.panel input:invalid {
+  color: #ff2a2a;
+}
+.panel .row {
+  display: flex;
+  gap: 10px;
+}
+.panel .row label {
+  flex: 1;
+}
+.panel .err {
+  margin: 4px 0 8px;
+  color: #ff2a2a;
+  font-size: 11px;
+}
+.panel .actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.panel button {
+  background: #0a0a0a;
+  color: #39ff14;
+  border: 1px solid;
+  border-color: #5a5a5a #2c2c2c #2c2c2c #5a5a5a;
+  padding: 5px 14px;
+  font: 11px monospace;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.panel button:hover:not(:disabled) {
+  background: #1a1a14;
+}
+.panel button:disabled {
+  color: #555550;
+  cursor: default;
 }

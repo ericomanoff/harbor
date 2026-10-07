@@ -43,5 +43,31 @@ export const settings = {
   changed: new Emitter<void>(),
 };
 
+export type Mode = 'idle' | 'place';
+
+/** What the pointer does on the map: select things, or place a War Factory. */
+export const mode = {
+  current: 'idle' as Mode,
+  changed: new Emitter<Mode>(),
+  set(m: Mode): void {
+    if (this.current === m) return;
+    this.current = m;
+    this.changed.emit(m);
+  },
+};
+
+/** True while an HTML form covers the game; scenes must ignore keys then. */
+export const modal = {
+  open: false,
+  changed: new Emitter<boolean>(),
+  set(v: boolean): void {
+    this.open = v;
+    this.changed.emit(v);
+  },
+};
+
+/** EVA announcements from anywhere; the HUD shows them in the log. */
+export const eva = new Emitter<string>();
+
 export const store = new ClusterStore();
 export const selection = new Selection();

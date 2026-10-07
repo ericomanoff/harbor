@@ -236,9 +236,15 @@ export interface components {
             /** @description Container port to expose, optional. */
             port?: number;
             mapPos?: components["schemas"]["MapPos"];
+            /** @description CPU request per pod (e.g. "50m"). Defaults to 50m; this is the unit's power drain. */
+            cpuRequest?: string;
+            /** @description Memory request per pod (e.g. "64Mi"). Defaults to 64Mi. */
+            memRequest?: string;
         };
         ScaleRequest: {
             replicas: number;
+            /** @description Pod names to retire first when scaling down ("sell this unit"). Implemented with the controller.kubernetes.io/pod-deletion-cost annotation, so the ReplicaSet removes these before any others. */
+            retireFirst?: string[];
         };
         /** @description One message on the /ws event stream. */
         WsMessage: {

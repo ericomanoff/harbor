@@ -22,9 +22,15 @@ make dev       # backend on :8080, Vite with hot reload on :5173
 Open http://127.0.0.1:5173. Add `?demo` to the URL to run against a built-in
 fake cluster with no backend.
 
-Controls: left-click selects, drag box-selects units, right-drag pans, wheel
-zooms, arrows or WASD scroll, H homes the camera, N toggles system
-namespaces, Esc clears the selection. Click the radar to jump.
+Controls: left-click selects, drag box-selects units, drag a structure to
+move it, right-drag pans, wheel zooms, arrows or WASD scroll, H homes the
+camera, N toggles system namespaces, B (or the WAR FACTORY cameo) starts
+placing a Deployment, Esc cancels or clears. Click the radar to jump.
+
+Playing: place a War Factory on a free cell in a plateau's top rows and fill
+in the form to create a Deployment. Select the factory to build or retire
+units (scale replicas). Select units and SELL to scale down retiring exactly
+those pods. The power bar is CPU requests over allocatable across ready nodes.
 
 For the single-binary experience:
 

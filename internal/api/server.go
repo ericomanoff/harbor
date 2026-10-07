@@ -153,10 +153,6 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, gen.Error{Message: msg})
 }
 
-func notImplemented(w http.ResponseWriter) {
-	writeError(w, http.StatusNotImplemented, "not implemented yet")
-}
-
 // GetHealth reports liveness, version and uptime.
 func (s *Server) GetHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, gen.Health{
@@ -198,14 +194,4 @@ func (s *Server) SelectContext(w http.ResponseWriter, r *http.Request, name gen.
 // GetSnapshot returns the full cluster state for a fresh client.
 func (s *Server) GetSnapshot(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.snapshot())
-}
-
-func (s *Server) CreateDeployment(w http.ResponseWriter, _ *http.Request) { notImplemented(w) }
-
-func (s *Server) ScaleDeployment(w http.ResponseWriter, _ *http.Request, _ gen.NamespaceParam, _ gen.NameParam) {
-	notImplemented(w)
-}
-
-func (s *Server) SetDeploymentMapPos(w http.ResponseWriter, _ *http.Request, _ gen.NamespaceParam, _ gen.NameParam) {
-	notImplemented(w)
 }

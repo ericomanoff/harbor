@@ -156,6 +156,9 @@ func (w *Watcher) Start(ctx context.Context) error {
 	return nil
 }
 
+// Client returns the clientset this watcher reads with; writes go through it too.
+func (w *Watcher) Client() kubernetes.Interface { return w.client }
+
 // Stop halts the informers. Safe to call more than once.
 func (w *Watcher) Stop() {
 	w.stopOnce.Do(func() {

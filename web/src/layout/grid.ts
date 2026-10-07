@@ -180,3 +180,23 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
 
   return { plateaus, width, height, voidY, buildings, units };
 }
+
+/** The building cell whose 3x3 footprint contains tile (tx, ty), if any. */
+export function cellAt(plateaus: PlateauLayout[], tx: number, ty: number): (Cell & { plateau: string }) | undefined {
+  for (const p of plateaus) {
+    const col = Math.floor((tx - p.x - 1) / BUILD_CELL);
+    const row = Math.floor((ty - p.y - 1) / BUILD_CELL);
+    const cols = Math.floor((p.w - 2) / BUILD_CELL);
+    if (tx < p.x + 1 || ty < p.y + 1 || col >= cols || row >= BUILD_ROWS) continue;
+    return { x: p.x + 1 + col * BUILD_CELL, y: p.y + 1 + row * BUILD_CELL, plateau: p.node };
+  }
+  return undefined;
+}
+
+/** True when no building other than `except` occupies the cell. */
+export function isCellFree(layout: MapLayout, cell: Cell, except?: string): boolean {
+  for (const [k, b] of layout.buildings) {
+    if (k !== except && b.kind === 'plateau' && b.x === cell.x && b.y === cell.y) return false;
+  }
+  return true;
+}

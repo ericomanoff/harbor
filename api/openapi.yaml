@@ -369,6 +369,12 @@ components:
           description: Container port to expose, optional.
         mapPos:
           $ref: "#/components/schemas/MapPos"
+        cpuRequest:
+          type: string
+          description: CPU request per pod (e.g. "50m"). Defaults to 50m; this is the unit's power drain.
+        memRequest:
+          type: string
+          description: Memory request per pod (e.g. "64Mi"). Defaults to 64Mi.
 
     ScaleRequest:
       type: object
@@ -377,6 +383,14 @@ components:
         replicas:
           type: integer
           minimum: 0
+        retireFirst:
+          type: array
+          description: >
+            Pod names to retire first when scaling down ("sell this unit").
+            Implemented with the controller.kubernetes.io/pod-deletion-cost
+            annotation, so the ReplicaSet removes these before any others.
+          items:
+            type: string
 
     WsMessage:
       type: object

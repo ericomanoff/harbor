@@ -101,12 +101,17 @@ type ContextList struct {
 
 // CreateDeploymentRequest defines model for CreateDeploymentRequest.
 type CreateDeploymentRequest struct {
-	Image string `json:"image"`
+	// CpuRequest CPU request per pod (e.g. "50m"). Defaults to 50m; this is the unit's power drain.
+	CpuRequest *string `json:"cpuRequest,omitempty"`
+	Image      string  `json:"image"`
 
 	// MapPos Tile coordinates on the map grid.
 	MapPos *MapPos `json:"mapPos,omitempty"`
-	Name   string  `json:"name"`
-	Ns     string  `json:"ns"`
+
+	// MemRequest Memory request per pod (e.g. "64Mi"). Defaults to 64Mi.
+	MemRequest *string `json:"memRequest,omitempty"`
+	Name       string  `json:"name"`
+	Ns         string  `json:"ns"`
 
 	// Port Container port to expose, optional.
 	Port     *int `json:"port,omitempty"`
@@ -218,6 +223,9 @@ type Pod struct {
 // ScaleRequest defines model for ScaleRequest.
 type ScaleRequest struct {
 	Replicas int `json:"replicas"`
+
+	// RetireFirst Pod names to retire first when scaling down ("sell this unit"). Implemented with the controller.kubernetes.io/pod-deletion-cost annotation, so the ReplicaSet removes these before any others.
+	RetireFirst *[]string `json:"retireFirst,omitempty"`
 }
 
 // Snapshot defines model for Snapshot.

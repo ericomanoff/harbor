@@ -197,7 +197,7 @@ func TestWebSocketRejectsForeignOrigin(t *testing.T) {
 	}
 }
 
-func TestUnimplementedRoutesAnswer501(t *testing.T) {
+func TestActionsRequireAContext(t *testing.T) {
 	h := NewHandler()
 	for _, tc := range []struct{ method, path string }{
 		{http.MethodPost, "/api/deployments"},
@@ -205,10 +205,68 @@ func TestUnimplementedRoutesAnswer501(t *testing.T) {
 		{http.MethodPatch, "/api/deployments/default/web/mappos"},
 	} {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
-		if rec.Code != http.StatusNotImplemented {
-			t.Errorf("%s %s: status = %d, want 501", tc.method, tc.path, rec.Code)
+		h.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`)))
+		if rec.Code != http.StatusConflict {
+			t.Errorf("%s %s: status = %d, want 409", tc.method, tc.path, rec.Code)
 		}
+	}
+}
+
+func TestCreateScaleMapPosRoundTrip(t *testing.T) {
+	s := fakeServer(t, corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox"}})
+	h := s.Handler()
+	ctx := context.Background()
+	if err := s.SelectContextByName(ctx, "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	rec := do(http.MethodPost, "/api/deployments", `{"ns":"sandbox","name":"web","image":"nginx","replicas":2,"port":80,"mapPos":{"x":3,"y":4}}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	var created gen.Deployment
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Name != "web" || created.Replicas != 2 || created.MapPos == nil || created.MapPos.X != 3 {
+		t.Errorf("created = %+v", created)
+	}
+
+	if rec = do(http.MethodPost, "/api/deployments", `{"ns":"sandbox","name":"web","image":"nginx","replicas":2}`); rec.Code != http.StatusConflict {
+		t.Errorf("duplicate create: %d, want 409", rec.Code)
+	}
+	if rec = do(http.MethodPost, "/api/deployments", `{"ns":"sandbox","name":"Bad Name","image":"nginx","replicas":2}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("invalid name: %d, want 400", rec.Code)
+	}
+	if rec = do(http.MethodPost, "/api/deployments", `{"ns":"sandbox","name":"x","image":"nginx","replicas":2,"bogus":1}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown field: %d, want 400", rec.Code)
+	}
+
+	if rec = do(http.MethodPatch, "/api/deployments/sandbox/web/scale", `{"replicas":5}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("scale: %d %s", rec.Code, rec.Body.String())
+	}
+	d, err := s.current().Client().AppsV1().Deployments("sandbox").Get(ctx, "web", metav1.GetOptions{})
+	if err != nil || *d.Spec.Replicas != 5 {
+		t.Errorf("replicas after scale = %v (%v)", d.Spec.Replicas, err)
+	}
+	if rec = do(http.MethodPatch, "/api/deployments/sandbox/ghost/scale", `{"replicas":1}`); rec.Code != http.StatusNotFound {
+		t.Errorf("scale missing: %d, want 404", rec.Code)
+	}
+
+	if rec = do(http.MethodPatch, "/api/deployments/sandbox/web/mappos", `{"x":9,"y":1}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("mappos: %d %s", rec.Code, rec.Body.String())
+	}
+	d, _ = s.current().Client().AppsV1().Deployments("sandbox").Get(ctx, "web", metav1.GetOptions{})
+	if d.Annotations[kube.MapPosAnnotation] != "9,1" {
+		t.Errorf("annotation = %q", d.Annotations[kube.MapPosAnnotation])
 	}
 }
 

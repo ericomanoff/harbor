@@ -8,6 +8,27 @@
   </head>
   <body>
     <div id="game"></div>
+    <div id="build-form" class="overlay" hidden>
+      <form class="panel" autocomplete="off">
+        <h2>WAR FACTORY <span class="where"></span></h2>
+        <label>NAMESPACE <select name="ns"></select></label>
+        <label>NAME <input name="name" required maxlength="63" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?" placeholder="lowercase, dashes" /></label>
+        <label>IMAGE <input name="image" required value="nginx:1.27-alpine" /></label>
+        <div class="row">
+          <label>UNITS <input name="replicas" type="number" min="0" max="500" value="1" /></label>
+          <label>PORT <input name="port" type="number" min="1" max="65535" placeholder="none" /></label>
+        </div>
+        <div class="row">
+          <label>CPU/UNIT <input name="cpu" value="50m" /></label>
+          <label>MEM/UNIT <input name="mem" value="64Mi" /></label>
+        </div>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="submit">BUILD</button>
+          <button type="button" data-cancel>CANCEL</button>
+        </div>
+      </form>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
