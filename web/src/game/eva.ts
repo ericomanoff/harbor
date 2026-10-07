@@ -8,6 +8,7 @@ export class EvaFeed {
   private readonly seenDeps = new Set<string>();
   private readonly seenPods = new Set<string>();
   private readonly avail = new Map<string, number>();
+  private readonly relStatus = new Map<string, string>();
 
   constructor(private readonly store: ClusterStore) {}
 
@@ -24,6 +25,8 @@ export class EvaFeed {
           this.avail.set(k, d.available);
         }
         for (const k of s.pods.keys()) this.seenPods.add(k);
+        this.relStatus.clear();
+        for (const [k, r] of s.releases) this.relStatus.set(k, r.status);
         return s.context ? ['BATTLEFIELD CONTROL ESTABLISHED'] : [];
       }
       case 'deployment': {
@@ -52,6 +55,22 @@ export class EvaFeed {
         if (this.seenPods.has(e.key)) return [];
         this.seenPods.add(e.key);
         return [`UNIT DEPLOYED: ${name}`];
+      }
+      case 'release': {
+        const name = e.key.split('/')[1] ?? e.key;
+        if (e.op === 'delete') {
+          this.relStatus.delete(e.key);
+          return [`EXPANSION DISMANTLED: ${name}`];
+        }
+        const r = s.releases.get(e.key);
+        if (!r) return [];
+        const prev = this.relStatus.get(e.key);
+        this.relStatus.set(e.key, r.status);
+        if (prev === undefined) return [`BASE EXPANSION: ${name}`];
+        if (prev === r.status) return [];
+        if (r.status === 'failed') return [`EXPANSION FAILED: ${name}`];
+        if (r.status === 'deployed') return [`EXPANSION ONLINE: ${name} rev ${r.revision}`];
+        return [];
       }
       case 'event':
         return e.event.type === 'Warning' ? [`${e.event.reason}: ${e.event.name}`] : [];

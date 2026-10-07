@@ -3,6 +3,7 @@ package kube
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -46,6 +47,70 @@ func testCluster() []runtimeObject {
 			}}},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		},
+	}
+}
+
+func helmSecret(name string, rev int, status string) *corev1.Secret {
+	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		Name: "sh.helm.release.v1." + name + ".v" + fmt.Sprint(rev), Namespace: "sandbox",
+		Labels: map[string]string{"owner": "helm", "name": name, "version": fmt.Sprint(rev), "status": status},
+	}}
+}
+
+func TestWatcherTracksHelmReleases(t *testing.T) {
+	client := fake.NewClientset(append(testCluster(), helmSecret("outpost", 1, "superseded"), helmSecret("outpost", 2, "deployed"))...)
+	hub := NewHub()
+	w := NewWatcher("test", client, hub)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := w.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+
+	snap := w.Snapshot()
+	if len(snap.Releases) != 1 || snap.Releases[0].Name != "outpost" || snap.Releases[0].Revision != 2 || snap.Releases[0].Status != "deployed" {
+		t.Fatalf("releases = %+v", snap.Releases)
+	}
+
+	ch, unsub := hub.Subscribe(64)
+	defer unsub()
+	if _, err := client.CoreV1().Secrets("sandbox").Create(ctx, helmSecret("outpost", 3, "deployed"), metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	waitRelease(t, ch, func(r gen.HelmRelease, typ gen.WsMessageType) bool {
+		return typ == gen.WsMessageTypeModified && r.Revision == 3
+	})
+
+	for _, rev := range []int{1, 2, 3} {
+		if err := client.CoreV1().Secrets("sandbox").Delete(ctx, helmSecret("outpost", rev, "").Name, metav1.DeleteOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	waitRelease(t, ch, func(r gen.HelmRelease, typ gen.WsMessageType) bool {
+		return typ == gen.WsMessageTypeDeleted && r.Name == "outpost"
+	})
+}
+
+func waitRelease(t *testing.T, ch <-chan gen.WsMessage, pred func(gen.HelmRelease, gen.WsMessageType) bool) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case m := <-ch:
+			if m.Kind != gen.WsMessageKindHelmRelease {
+				continue
+			}
+			var r gen.HelmRelease
+			if err := json.Unmarshal(mustRaw(t, m), &r); err != nil {
+				t.Fatal(err)
+			}
+			if pred(r, m.Type) {
+				return
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for HelmRelease message")
+		}
 	}
 }
 

@@ -55,7 +55,7 @@ test-web: deps
 
 # Integration test against the kind cluster from `make kind-up`.
 test-kind:
-	HARBOR_KIND_TEST=1 go test ./internal/kube -run TestIntegrationKind -v -count=1
+	HARBOR_KIND_TEST=1 go test ./internal/kube -run "TestIntegrationKind" -v -count=1
 
 # End-to-end: Playwright drives the built game against the binary and kind.
 test-e2e: build

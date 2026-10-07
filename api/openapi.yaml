@@ -147,6 +147,202 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/helm/repos:
+    get:
+      operationId: listHelmRepos
+      summary: Chart repositories known to this machine (tech tree sources)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HelmRepo"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: addHelmRepo
+      summary: Add a chart repository and fetch its index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HelmRepo"
+      responses:
+        "204":
+          description: Added
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/helm/repos/update:
+    post:
+      operationId: updateHelmRepos
+      summary: Refresh every repository index
+      responses:
+        "204":
+          description: Updated
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/helm/charts:
+    get:
+      operationId: searchHelmCharts
+      summary: Charts matching a query across cached repository indexes
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HelmChart"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/helm/charts/values:
+    get:
+      operationId: getHelmChartValues
+      summary: Default values.yaml of a chart
+      parameters:
+        - name: chart
+          in: query
+          required: true
+          schema:
+            type: string
+          description: repo/name
+        - name: version
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelmValues"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/helm/releases:
+    get:
+      operationId: listHelmReleases
+      summary: Releases across all namespaces
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HelmRelease"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: installHelmRelease
+      summary: Install a chart (build a base expansion)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HelmInstallRequest"
+      responses:
+        "201":
+          description: Installed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelmRelease"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/helm/releases/{ns}/{name}:
+    delete:
+      operationId: uninstallHelmRelease
+      summary: Uninstall a release
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "204":
+          description: Uninstalled
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/helm/releases/{ns}/{name}/history:
+    get:
+      operationId: getHelmReleaseHistory
+      summary: Revisions of a release, newest last
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HelmRevision"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/helm/releases/{ns}/{name}/upgrade:
+    post:
+      operationId: upgradeHelmRelease
+      summary: Upgrade a release (new chart version and/or values)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HelmUpgradeRequest"
+      responses:
+        "200":
+          description: Upgraded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HelmRelease"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/helm/releases/{ns}/{name}/rollback:
+    post:
+      operationId: rollbackHelmRelease
+      summary: Roll a release back to a revision
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HelmRollbackRequest"
+      responses:
+        "204":
+          description: Rolled back
+        default:
+          $ref: "#/components/responses/Error"
+
 components:
   parameters:
     ContextNameParam:
@@ -302,6 +498,9 @@ components:
           description: >
             ReplicaSet for the current pod template. Pods whose ownerRS differs
             belong to an old rollout and are being replaced.
+        release:
+          type: string
+          description: Helm release that owns this Deployment (meta.helm.sh/release-name), if any.
         mapPos:
           $ref: "#/components/schemas/MapPos"
         conditions:
@@ -361,10 +560,14 @@ components:
 
     Snapshot:
       type: object
-      required: [context, nodes, namespaces, deployments, pods]
+      required: [context, nodes, namespaces, deployments, pods, releases]
       properties:
         context:
           type: string
+        releases:
+          type: array
+          items:
+            $ref: "#/components/schemas/HelmRelease"
         nodes:
           type: array
           items:
@@ -423,6 +626,125 @@ components:
           items:
             type: string
 
+    HelmRepo:
+      type: object
+      required: [name, url]
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+
+    HelmChart:
+      type: object
+      required: [repo, name, version, description]
+      properties:
+        repo:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        appVersion:
+          type: string
+        description:
+          type: string
+
+    HelmValues:
+      type: object
+      required: [chart, version, values]
+      properties:
+        chart:
+          type: string
+        version:
+          type: string
+        values:
+          type: string
+          description: values.yaml text.
+
+    HelmRelease:
+      type: object
+      description: >
+        A release as seen live from its storage secret (ns, name, revision,
+        status) and, when listed through Helm, its chart details.
+      required: [ns, name, revision, status]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        revision:
+          type: integer
+        status:
+          type: string
+          description: deployed, failed, pending-install, superseded, uninstalling, ...
+        chart:
+          type: string
+        chartVersion:
+          type: string
+        appVersion:
+          type: string
+        updated:
+          type: string
+          format: date-time
+        notes:
+          type: string
+
+    HelmRevision:
+      type: object
+      required: [revision, status, chart, updated, description]
+      properties:
+        revision:
+          type: integer
+        status:
+          type: string
+        chart:
+          type: string
+        updated:
+          type: string
+          format: date-time
+        description:
+          type: string
+
+    HelmInstallRequest:
+      type: object
+      required: [ns, name, chart]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        chart:
+          type: string
+          description: repo/name
+        version:
+          type: string
+        values:
+          type: string
+          description: values.yaml overrides.
+        mapPos:
+          $ref: "#/components/schemas/MapPos"
+
+    HelmUpgradeRequest:
+      type: object
+      properties:
+        chart:
+          type: string
+          description: repo/name; defaults to the release's current chart.
+        version:
+          type: string
+        values:
+          type: string
+
+    HelmRollbackRequest:
+      type: object
+      required: [revision]
+      properties:
+        revision:
+          type: integer
+          minimum: 0
+          description: 0 means the previous revision.
+
     WsMessage:
       type: object
       description: One message on the /ws event stream.
@@ -433,7 +755,7 @@ components:
           enum: [snapshot, added, modified, deleted]
         kind:
           type: string
-          enum: [Node, Namespace, Deployment, Pod, Event, Snapshot]
+          enum: [Node, Namespace, Deployment, Pod, Event, HelmRelease, Snapshot]
         obj:
           description: Wire model of the given kind; a Snapshot when type is snapshot.
           oneOf:
@@ -442,4 +764,5 @@ components:
             - $ref: "#/components/schemas/Deployment"
             - $ref: "#/components/schemas/Pod"
             - $ref: "#/components/schemas/Event"
+            - $ref: "#/components/schemas/HelmRelease"
             - $ref: "#/components/schemas/Snapshot"

@@ -226,3 +226,27 @@ func TestCurrentReplicaSet(t *testing.T) {
 		t.Errorf("no sets = %q, want empty", got)
 	}
 }
+
+func TestConvertHelmSecret(t *testing.T) {
+	sec := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		Name: "sh.helm.release.v1.outpost.v3", Namespace: "sandbox",
+		Labels: map[string]string{"owner": "helm", "name": "outpost", "version": "3", "status": "deployed", "modifiedAt": "1760000000"},
+	}}
+	r, ok := ConvertHelmSecret(sec)
+	if !ok || r.Ns != "sandbox" || r.Name != "outpost" || r.Revision != 3 || r.Status != "deployed" || r.Updated == nil || r.Updated.Unix() != 1760000000 {
+		t.Errorf("%+v %v", r, ok)
+	}
+	if _, ok := ConvertHelmSecret(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"owner": "other"}}}); ok {
+		t.Error("non-helm secret accepted")
+	}
+}
+
+func TestConvertDeploymentRelease(t *testing.T) {
+	d := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "web", Annotations: map[string]string{"meta.helm.sh/release-name": "outpost"}}}
+	if got := ConvertDeployment(d); got.Release == nil || *got.Release != "outpost" {
+		t.Errorf("release = %v", got.Release)
+	}
+	if got := ConvertDeployment(&appsv1.Deployment{}); got.Release != nil {
+		t.Errorf("no annotation should mean no release, got %v", *got.Release)
+	}
+}

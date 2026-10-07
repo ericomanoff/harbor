@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { deleteDeployment, deletePod, scaleDeployment } from '../api/client';
+import { deleteDeployment, deletePod, helm, scaleDeployment, type HelmRelease } from '../api/client';
+import { openTechTree } from '../ui/techTree';
 import { eva, link, mode, selection, settings, store, type LinkStatus } from '../app';
 import { FONT, GAME_HEIGHT, GAME_WIDTH, MAP_W, PALETTE, SIDEBAR_W } from '../config';
 import { sellPlan } from '../game/commands';
@@ -81,7 +82,10 @@ export class HudScene extends Phaser.Scene {
     this.add.text(X + BUILD.w / 2, BUILD.y + BUILD.h / 2 + 8, 'WAR FACTORY', { ...TEXT, fontSize: '9px', color: '#e8e8d0' }).setOrigin(0.5);
     this.add.zone(X, BUILD.y, BUILD.w, BUILD.h).setOrigin(0).setInteractive({ useHandCursor: true })
       .on('pointerdown', () => mode.set(mode.current === 'place' ? 'idle' : 'place'));
-    this.add.text(X + W - BUILD.w / 2, BUILD.y + BUILD.h / 2, 'TECH TREE\n(helm, soon)', { ...TEXT, fontSize: '9px', color: '#555550', align: 'center' }).setOrigin(0.5);
+    this.drawTechCameo();
+    this.add.text(X + W - BUILD.w / 2, BUILD.y + BUILD.h / 2 + 8, 'TECH TREE', { ...TEXT, fontSize: '9px', color: '#e8e8d0' }).setOrigin(0.5);
+    this.add.zone(X + W - BUILD.w, BUILD.y, BUILD.w, BUILD.h).setOrigin(0).setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => openTechTree());
 
     this.add.text(X, INFO.y + 2, 'SELECTION', { ...TEXT, color: '#8a8a70' });
     this.infoText = this.add.text(X, INFO.y + 16, '', { ...TEXT, wordWrap: { width: W } });
@@ -152,6 +156,32 @@ export class HudScene extends Phaser.Scene {
     g.fillStyle(0x3a3a30, 1).fillRect(ix, iy + 8, 28, 12);
     g.fillStyle(PALETTE.amber, 1).fillRect(ix + 2, iy, 6, 10).fillRect(ix + 11, iy + 3, 6, 7);
     g.fillStyle(0x000000, 1).fillRect(ix + 20, iy + 13, 6, 7);
+  }
+
+  private drawTechCameo(): void {
+    const g = this.add.graphics();
+    const x = X + W - BUILD.w;
+    g.fillStyle(0x101010, 1).fillRect(x, BUILD.y, BUILD.w, BUILD.h);
+    g.lineStyle(1, PALETTE.bevelLight, 1).strokeRect(x + 0.5, BUILD.y + 0.5, BUILD.w - 1, BUILD.h - 1);
+    // Cameo icon: a radar mast with a dish.
+    const cx = x + BUILD.w / 2;
+    const iy = BUILD.y + 6;
+    g.fillStyle(0x3a3a30, 1).fillRect(cx - 10, iy + 14, 20, 6);
+    g.fillStyle(0x6a6a5a, 1).fillRect(cx - 1, iy + 4, 2, 12);
+    g.lineStyle(2, PALETTE.radarGreen, 1).arc(cx, iy + 6, 7, Math.PI * 1.1, Math.PI * 1.9).strokePath();
+    g.fillStyle(PALETTE.radarGreen, 1).fillCircle(cx, iy + 6, 2);
+  }
+
+  private readonly relDetails = new Map<string, HelmRelease>();
+
+  /** Fetch chart details for a release once; the stream only carries status. */
+  private async loadReleaseDetails(key: string): Promise<void> {
+    try {
+      for (const r of await helm.listReleases()) this.relDetails.set(`${r.ns}/${r.name}`, r);
+    } catch {
+      /* sidebar shows live status only */
+    }
+    if (selection.keys.has(`r:${key}`)) this.refreshInfo();
   }
 
   private map(): MapScene {
@@ -272,7 +302,7 @@ export class HudScene extends Phaser.Scene {
     }
     const keys = [...selection.keys];
     if (keys.length === 0) {
-      this.infoText.setText('Click a structure or unit.\nDrag to box-select units.\nDrag a structure to move it.\nTab cycles the selection.\n\n[B] place a War Factory\n[/] locate  [F] filter  [M] sound\nRight-drag pans, wheel zooms,\nH homes the camera.');
+      this.infoText.setText('Click a structure or unit.\nDrag to box-select units.\nDrag a structure to move it.\nTab cycles the selection.\n\n[B] build  [T] tech tree\n[/] locate [F] filter [M] snd\nRight-drag pans, wheel zooms,\nH homes the camera.');
       this.setActions();
       return;
     }
@@ -294,6 +324,28 @@ export class HudScene extends Phaser.Scene {
         { label: 'BUILD UNIT  (+1)', enabled: true, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas + 1); this.eva(`UNIT ORDERED: ${d.name}`); } },
         { label: 'RETIRE UNIT  (-1)', enabled: d.replicas > 0, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas - 1); this.eva(`UNIT RETIRED: ${d.name}`); } },
         { label: 'SELL STRUCTURE', confirm: 'CONFIRM: SELL AND LOSE UNITS?', enabled: true, run: async () => { await deleteDeployment(d.ns, d.name); this.eva(`STRUCTURE SOLD: ${d.name}`); selection.clear(); } },
+      );
+      return;
+    }
+    if (keys.length === 1 && k0.startsWith('r:')) {
+      const key = k0.slice(2);
+      const live = store.releases.get(key);
+      if (!live) return;
+      const det = this.relDetails.get(key);
+      if (!det || det.revision !== live.revision) void this.loadReleaseDetails(key);
+      this.infoText.setText([
+        'BASE EXPANSION (helm)',
+        live.name,
+        `ns: ${live.ns}`,
+        `status: ${live.status}  rev ${live.revision}`,
+        det?.chart ? `chart: ${det.chart}-${det.chartVersion ?? ''}` : 'chart: …',
+        det?.appVersion ? `app: ${det.appVersion}` : '',
+        live.updated ? `updated: ${new Date(live.updated).toLocaleString()}` : '',
+      ].filter(Boolean).join('\n'));
+      this.setActions(
+        { label: 'UPGRADE (tech tree)', enabled: true, run: async () => openTechTree({ upgrade: key }) },
+        { label: 'ROLLBACK (previous)', confirm: 'CONFIRM ROLLBACK?', enabled: live.revision > 1, run: async () => { await helm.rollback(live.ns, live.name, 0); this.eva(`ROLLBACK ORDERED: ${live.name}`); } },
+        { label: 'SELL EXPANSION', confirm: 'CONFIRM: UNINSTALL RELEASE?', enabled: true, run: async () => { await helm.uninstall(live.ns, live.name); this.eva(`EXPANSION SOLD: ${live.name}`); selection.clear(); } },
       );
       return;
     }
@@ -344,6 +396,7 @@ export class HudScene extends Phaser.Scene {
     for (const line of this.feed.announce(e)) this.eva(line);
     if (e.type === 'snapshot') this.contextText.setText(store.context ? `THEATER: ${store.context}` : 'NO THEATER');
     if (e.type === 'snapshot' || e.type === 'namespace') this.refreshToggle();
+    if (e.type === 'release') this.relDetails.delete(e.key);
     if (e.type === 'snapshot' || e.type === 'node') this.drawPower();
     if (e.type === 'event' && e.event.type === 'Warning') this.map().flashFor(e.event);
     this.refreshInfo();

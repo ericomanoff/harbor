@@ -7,6 +7,7 @@ package gen
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -31,12 +32,13 @@ func (e HealthStatus) Valid() bool {
 
 // Defines values for WsMessageKind.
 const (
-	WsMessageKindDeployment WsMessageKind = "Deployment"
-	WsMessageKindEvent      WsMessageKind = "Event"
-	WsMessageKindNamespace  WsMessageKind = "Namespace"
-	WsMessageKindNode       WsMessageKind = "Node"
-	WsMessageKindPod        WsMessageKind = "Pod"
-	WsMessageKindSnapshot   WsMessageKind = "Snapshot"
+	WsMessageKindDeployment  WsMessageKind = "Deployment"
+	WsMessageKindEvent       WsMessageKind = "Event"
+	WsMessageKindHelmRelease WsMessageKind = "HelmRelease"
+	WsMessageKindNamespace   WsMessageKind = "Namespace"
+	WsMessageKindNode        WsMessageKind = "Node"
+	WsMessageKindPod         WsMessageKind = "Pod"
+	WsMessageKindSnapshot    WsMessageKind = "Snapshot"
 )
 
 // Valid indicates whether the value is a known member of the WsMessageKind enum.
@@ -45,6 +47,8 @@ func (e WsMessageKind) Valid() bool {
 	case WsMessageKindDeployment:
 		return true
 	case WsMessageKindEvent:
+		return true
+	case WsMessageKindHelmRelease:
 		return true
 	case WsMessageKindNamespace:
 		return true
@@ -130,9 +134,12 @@ type Deployment struct {
 	Image string `json:"image"`
 
 	// MapPos Tile coordinates on the map grid.
-	MapPos   *MapPos `json:"mapPos,omitempty"`
-	Name     string  `json:"name"`
-	Ns       string  `json:"ns"`
+	MapPos *MapPos `json:"mapPos,omitempty"`
+	Name   string  `json:"name"`
+	Ns     string  `json:"ns"`
+
+	// Release Helm release that owns this Deployment (meta.helm.sh/release-name), if any.
+	Release  *string `json:"release,omitempty"`
 	Replicas int     `json:"replicas"`
 	Updated  int     `json:"updated"`
 }
@@ -164,6 +171,83 @@ type Health struct {
 
 // HealthStatus defines model for Health.Status.
 type HealthStatus string
+
+// HelmChart defines model for HelmChart.
+type HelmChart struct {
+	AppVersion  *string `json:"appVersion,omitempty"`
+	Description string  `json:"description"`
+	Name        string  `json:"name"`
+	Repo        string  `json:"repo"`
+	Version     string  `json:"version"`
+}
+
+// HelmInstallRequest defines model for HelmInstallRequest.
+type HelmInstallRequest struct {
+	// Chart repo/name
+	Chart string `json:"chart"`
+
+	// MapPos Tile coordinates on the map grid.
+	MapPos *MapPos `json:"mapPos,omitempty"`
+	Name   string  `json:"name"`
+	Ns     string  `json:"ns"`
+
+	// Values values.yaml overrides.
+	Values  *string `json:"values,omitempty"`
+	Version *string `json:"version,omitempty"`
+}
+
+// HelmRelease A release as seen live from its storage secret (ns, name, revision, status) and, when listed through Helm, its chart details.
+type HelmRelease struct {
+	AppVersion   *string `json:"appVersion,omitempty"`
+	Chart        *string `json:"chart,omitempty"`
+	ChartVersion *string `json:"chartVersion,omitempty"`
+	Name         string  `json:"name"`
+	Notes        *string `json:"notes,omitempty"`
+	Ns           string  `json:"ns"`
+	Revision     int     `json:"revision"`
+
+	// Status deployed, failed, pending-install, superseded, uninstalling, ...
+	Status  string     `json:"status"`
+	Updated *time.Time `json:"updated,omitempty"`
+}
+
+// HelmRepo defines model for HelmRepo.
+type HelmRepo struct {
+	Name string `json:"name"`
+	Url  string `json:"url"`
+}
+
+// HelmRevision defines model for HelmRevision.
+type HelmRevision struct {
+	Chart       string    `json:"chart"`
+	Description string    `json:"description"`
+	Revision    int       `json:"revision"`
+	Status      string    `json:"status"`
+	Updated     time.Time `json:"updated"`
+}
+
+// HelmRollbackRequest defines model for HelmRollbackRequest.
+type HelmRollbackRequest struct {
+	// Revision 0 means the previous revision.
+	Revision int `json:"revision"`
+}
+
+// HelmUpgradeRequest defines model for HelmUpgradeRequest.
+type HelmUpgradeRequest struct {
+	// Chart repo/name; defaults to the release's current chart.
+	Chart   *string `json:"chart,omitempty"`
+	Values  *string `json:"values,omitempty"`
+	Version *string `json:"version,omitempty"`
+}
+
+// HelmValues defines model for HelmValues.
+type HelmValues struct {
+	Chart string `json:"chart"`
+
+	// Values values.yaml text.
+	Values  string `json:"values"`
+	Version string `json:"version"`
+}
 
 // KubeContext defines model for KubeContext.
 type KubeContext struct {
@@ -233,11 +317,12 @@ type ScaleRequest struct {
 
 // Snapshot defines model for Snapshot.
 type Snapshot struct {
-	Context     string       `json:"context"`
-	Deployments []Deployment `json:"deployments"`
-	Namespaces  []Namespace  `json:"namespaces"`
-	Nodes       []Node       `json:"nodes"`
-	Pods        []Pod        `json:"pods"`
+	Context     string        `json:"context"`
+	Deployments []Deployment  `json:"deployments"`
+	Namespaces  []Namespace   `json:"namespaces"`
+	Nodes       []Node        `json:"nodes"`
+	Pods        []Pod         `json:"pods"`
+	Releases    []HelmRelease `json:"releases"`
 }
 
 // WsMessage One message on the /ws event stream.
@@ -269,6 +354,18 @@ type NameParam = string
 // NamespaceParam defines model for NamespaceParam.
 type NamespaceParam = string
 
+// SearchHelmChartsParams defines parameters for SearchHelmCharts.
+type SearchHelmChartsParams struct {
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+}
+
+// GetHelmChartValuesParams defines parameters for GetHelmChartValues.
+type GetHelmChartValuesParams struct {
+	// Chart repo/name
+	Chart   string  `form:"chart" json:"chart"`
+	Version *string `form:"version,omitempty" json:"version,omitempty"`
+}
+
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
 type CreateDeploymentJSONRequestBody = CreateDeploymentRequest
 
@@ -277,6 +374,18 @@ type SetDeploymentMapPosJSONRequestBody = MapPos
 
 // ScaleDeploymentJSONRequestBody defines body for ScaleDeployment for application/json ContentType.
 type ScaleDeploymentJSONRequestBody = ScaleRequest
+
+// InstallHelmReleaseJSONRequestBody defines body for InstallHelmRelease for application/json ContentType.
+type InstallHelmReleaseJSONRequestBody = HelmInstallRequest
+
+// RollbackHelmReleaseJSONRequestBody defines body for RollbackHelmRelease for application/json ContentType.
+type RollbackHelmReleaseJSONRequestBody = HelmRollbackRequest
+
+// UpgradeHelmReleaseJSONRequestBody defines body for UpgradeHelmRelease for application/json ContentType.
+type UpgradeHelmReleaseJSONRequestBody = HelmUpgradeRequest
+
+// AddHelmRepoJSONRequestBody defines body for AddHelmRepo for application/json ContentType.
+type AddHelmRepoJSONRequestBody = HelmRepo
 
 // AsNode returns the union data inside the WsMessage_Obj as a Node
 func (t WsMessage_Obj) AsNode() (Node, error) {
@@ -408,6 +517,32 @@ func (t *WsMessage_Obj) MergeEvent(v Event) error {
 	return err
 }
 
+// AsHelmRelease returns the union data inside the WsMessage_Obj as a HelmRelease
+func (t WsMessage_Obj) AsHelmRelease() (HelmRelease, error) {
+	var body HelmRelease
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromHelmRelease overwrites any union data inside the WsMessage_Obj as the provided HelmRelease
+func (t *WsMessage_Obj) FromHelmRelease(v HelmRelease) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeHelmRelease performs a merge with any union data inside the WsMessage_Obj, using the provided HelmRelease
+func (t *WsMessage_Obj) MergeHelmRelease(v HelmRelease) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsSnapshot returns the union data inside the WsMessage_Obj as a Snapshot
 func (t WsMessage_Obj) AsSnapshot() (Snapshot, error) {
 	var body Snapshot
@@ -467,6 +602,39 @@ type ServerInterface interface {
 	// GetHealth Liveness and build info
 	// (GET /api/healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// SearchHelmCharts Charts matching a query across cached repository indexes
+	// (GET /api/helm/charts)
+	SearchHelmCharts(w http.ResponseWriter, r *http.Request, params SearchHelmChartsParams)
+	// GetHelmChartValues Default values.yaml of a chart
+	// (GET /api/helm/charts/values)
+	GetHelmChartValues(w http.ResponseWriter, r *http.Request, params GetHelmChartValuesParams)
+	// ListHelmReleases Releases across all namespaces
+	// (GET /api/helm/releases)
+	ListHelmReleases(w http.ResponseWriter, r *http.Request)
+	// InstallHelmRelease Install a chart (build a base expansion)
+	// (POST /api/helm/releases)
+	InstallHelmRelease(w http.ResponseWriter, r *http.Request)
+	// UninstallHelmRelease Uninstall a release
+	// (DELETE /api/helm/releases/{ns}/{name})
+	UninstallHelmRelease(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// GetHelmReleaseHistory Revisions of a release, newest last
+	// (GET /api/helm/releases/{ns}/{name}/history)
+	GetHelmReleaseHistory(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// RollbackHelmRelease Roll a release back to a revision
+	// (POST /api/helm/releases/{ns}/{name}/rollback)
+	RollbackHelmRelease(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// UpgradeHelmRelease Upgrade a release (new chart version and/or values)
+	// (POST /api/helm/releases/{ns}/{name}/upgrade)
+	UpgradeHelmRelease(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// ListHelmRepos Chart repositories known to this machine (tech tree sources)
+	// (GET /api/helm/repos)
+	ListHelmRepos(w http.ResponseWriter, r *http.Request)
+	// AddHelmRepo Add a chart repository and fetch its index
+	// (POST /api/helm/repos)
+	AddHelmRepo(w http.ResponseWriter, r *http.Request)
+	// UpdateHelmRepos Refresh every repository index
+	// (POST /api/helm/repos/update)
+	UpdateHelmRepos(w http.ResponseWriter, r *http.Request)
 	// DeletePod Repair a unit (delete the pod so its ReplicaSet replaces it)
 	// (DELETE /api/pods/{ns}/{name})
 	DeletePod(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
@@ -657,6 +825,295 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// SearchHelmCharts operation middleware
+func (siw *ServerInterfaceWrapper) SearchHelmCharts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchHelmChartsParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchHelmCharts(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHelmChartValues operation middleware
+func (siw *ServerInterfaceWrapper) GetHelmChartValues(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetHelmChartValuesParams
+
+	// ------------- Required query parameter "chart" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "chart", r.URL.Query(), &params.Chart, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "chart"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "chart", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHelmChartValues(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListHelmReleases operation middleware
+func (siw *ServerInterfaceWrapper) ListHelmReleases(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHelmReleases(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InstallHelmRelease operation middleware
+func (siw *ServerInterfaceWrapper) InstallHelmRelease(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InstallHelmRelease(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UninstallHelmRelease operation middleware
+func (siw *ServerInterfaceWrapper) UninstallHelmRelease(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UninstallHelmRelease(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHelmReleaseHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetHelmReleaseHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHelmReleaseHistory(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RollbackHelmRelease operation middleware
+func (siw *ServerInterfaceWrapper) RollbackHelmRelease(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RollbackHelmRelease(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpgradeHelmRelease operation middleware
+func (siw *ServerInterfaceWrapper) UpgradeHelmRelease(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpgradeHelmRelease(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListHelmRepos operation middleware
+func (siw *ServerInterfaceWrapper) ListHelmRepos(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHelmRepos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddHelmRepo operation middleware
+func (siw *ServerInterfaceWrapper) AddHelmRepo(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddHelmRepo(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateHelmRepos operation middleware
+func (siw *ServerInterfaceWrapper) UpdateHelmRepos(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateHelmRepos(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeletePod operation middleware
 func (siw *ServerInterfaceWrapper) DeletePod(w http.ResponseWriter, r *http.Request) {
 
@@ -835,6 +1292,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/pods/{ns}/{name}", wrapper.DeletePod)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/scale", wrapper.ScaleDeployment)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/mappos", wrapper.SetDeploymentMapPos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/helm/repos", wrapper.ListHelmRepos)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/helm/repos", wrapper.AddHelmRepo)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/helm/repos/update", wrapper.UpdateHelmRepos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/helm/charts", wrapper.SearchHelmCharts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/helm/charts/values", wrapper.GetHelmChartValues)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/helm/releases", wrapper.ListHelmReleases)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/helm/releases", wrapper.InstallHelmRelease)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/helm/releases/{ns}/{name}", wrapper.UninstallHelmRelease)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/helm/releases/{ns}/{name}/history", wrapper.GetHelmReleaseHistory)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/helm/releases/{ns}/{name}/upgrade", wrapper.UpgradeHelmRelease)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/helm/releases/{ns}/{name}/rollback", wrapper.RollbackHelmRelease)
 
 	return m
 }

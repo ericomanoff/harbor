@@ -29,6 +29,11 @@ export function demoSnapshot(): Snapshot {
       dep('sandbox', 'crashy', 1, 0, 'busybox:1.36'),
       dep('default', 'api', 2, 1, 'ghcr.io/example/api:2.1', { updated: 1, currentRS: 'api-77' }),
       dep('kube-system', 'coredns', 2, 2, 'coredns:1.11'),
+      dep('sandbox', 'outpost-podinfo', 2, 2, 'ghcr.io/stefanprodan/podinfo:6.15.0', { release: 'outpost' }),
+      dep('sandbox', 'outpost-redis', 1, 1, 'redis:7', { release: 'outpost' }),
+    ],
+    releases: [
+      { ns: 'sandbox', name: 'outpost', revision: 2, status: 'deployed', chart: 'podinfo', chartVersion: '6.15.0', appVersion: '6.15.0' },
     ],
     pods: [
       pod('sandbox', 'nginx-7d9-a1', 'harbor-worker', 'nginx'),
@@ -41,6 +46,9 @@ export function demoSnapshot(): Snapshot {
       pod('kube-system', 'coredns-1', 'harbor-control-plane', 'coredns'),
       pod('kube-system', 'coredns-2', 'harbor-control-plane', 'coredns'),
       pod('kube-system', 'kube-proxy-a', 'harbor-worker', ''),
+      pod('sandbox', 'outpost-podinfo-1', 'harbor-worker', 'outpost-podinfo'),
+      pod('sandbox', 'outpost-podinfo-2', 'harbor-worker2', 'outpost-podinfo'),
+      pod('sandbox', 'outpost-redis-1', 'harbor-worker', 'outpost-redis'),
     ],
   };
 }

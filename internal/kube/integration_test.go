@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,8 +48,9 @@ func TestIntegrationKind(t *testing.T) {
 		ctxName, len(snap.Nodes), len(snap.Namespaces), len(snap.Deployments), len(snap.Pods))
 
 	// The sample workloads from deploy/kind should be present and resolved.
+	// (Other tests leave terminating pods behind in sandbox; ignore those.)
 	for _, p := range snap.Pods {
-		if p.Ns == "sandbox" && p.Deployment == nil {
+		if p.Ns == "sandbox" && (strings.HasPrefix(p.Name, "nginx-") || strings.HasPrefix(p.Name, "crashy-")) && p.Deployment == nil {
 			t.Errorf("pod %s/%s has no resolved deployment", p.Ns, p.Name)
 		}
 	}

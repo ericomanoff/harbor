@@ -5,6 +5,8 @@ import { GAME_HEIGHT, MAP_W, PALETTE } from '../config';
 import { BuildingView } from '../entities/Building';
 import { PlateauView } from '../entities/Plateau';
 import { UnitView } from '../entities/Unit';
+import { ReleaseView } from '../entities/Release';
+import { openTechTree } from '../ui/techTree';
 import { isSystemNamespace } from '../layout/colors';
 import { BUILD_CELL, TILE, cellAt, computeLayout, isCellFree, type Cell, type MapLayout } from '../layout/grid';
 import { nsKey, type ClusterEvent } from '../store/cluster';
@@ -23,6 +25,7 @@ const CLICK_SLOP = 4;
 
 export const buildingKey = (k: string): string => `b:${k}`;
 export const unitKey = (k: string): string => `u:${k}`;
+export const releaseKey = (k: string): string => `r:${k}`;
 
 interface GhostTarget {
   cell?: Cell & { plateau: string };
@@ -40,6 +43,7 @@ export class MapScene extends Phaser.Scene {
   private readonly plateaus = new Map<string, PlateauView>();
   private readonly buildings = new Map<string, BuildingView>();
   private readonly units = new Map<string, UnitView>();
+  private readonly releases = new Map<string, ReleaseView>();
   private dirty = true;
   private initialised = false;
 
@@ -97,7 +101,17 @@ export class MapScene extends Phaser.Scene {
       ev.preventDefault();
       this.openSearch();
     });
-    kb.on('keydown-F', () => !modal.open && openFilter());
+    // preventDefault keeps the hotkey's character out of the overlay's input.
+    kb.on('keydown-F', (ev: KeyboardEvent) => {
+      if (modal.open) return;
+      ev.preventDefault();
+      openFilter();
+    });
+    kb.on('keydown-T', (ev: KeyboardEvent) => {
+      if (modal.open) return;
+      ev.preventDefault();
+      openTechTree();
+    });
     kb.on('keydown-M', () => {
       if (modal.open) return;
       settings.sound = !settings.sound;
@@ -366,6 +380,7 @@ export class MapScene extends Phaser.Scene {
   private refreshSelection(): void {
     for (const b of this.buildings.values()) b.setSelected(selection.keys.has(buildingKey(b.key)));
     for (const u of this.units.values()) u.setSelected(selection.keys.has(unitKey(u.key)));
+    for (const r of this.releases.values()) r.setSelected(selection.keys.has(releaseKey(r.key)));
   }
 
   // ---- reconcile ---------------------------------------------------------
@@ -413,6 +428,22 @@ export class MapScene extends Phaser.Scene {
       }
     }
 
+    // Release perimeters.
+    const liveRels = new Set<string>();
+    for (const [key, box] of L.releases) {
+      liveRels.add(key);
+      const rel = store.releases.get(key);
+      const v = this.releases.get(key);
+      if (v) v.update(box, rel);
+      else this.releases.set(key, new ReleaseView(this, box, rel));
+    }
+    for (const [k, v] of this.releases) {
+      if (!liveRels.has(k)) {
+        v.destroy();
+        this.releases.delete(k);
+      }
+    }
+
     const livePods = new Set<string>();
     for (const p of pods) {
       const key = nsKey(p.ns, p.name);
@@ -438,7 +469,9 @@ export class MapScene extends Phaser.Scene {
 
     const stale = [...selection.keys].filter((k) => {
       const [kind, key] = [k.slice(0, 1), k.slice(2)];
-      return kind === 'b' ? !liveDeps.has(key) : !livePods.has(key);
+      if (kind === 'b') return !liveDeps.has(key);
+      if (kind === 'r') return !liveRels.has(key);
+      return !livePods.has(key);
     });
     if (stale.length) selection.set([...selection.keys].filter((k) => !stale.includes(k)));
     this.refreshSelection();

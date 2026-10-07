@@ -3,7 +3,7 @@ import type { Deployment, Node, Pod } from '../store/cluster';
 import { buildingCells, cellAt, computeLayout, isCellFree, layoutPlateaus, plateauWidth, unitCells } from './grid';
 
 const node = (name: string, cpu = 4000, ready = true): Node => ({ name, ready, cpuAlloc: cpu, memAlloc: 0, cpuReq: 0, memReq: 0, labels: {} });
-const dep = (ns: string, name: string, mapPos?: { x: number; y: number }): Deployment => ({ ns, name, replicas: 1, available: 1, updated: 1, image: 'x', conditions: [], ...(mapPos ? { mapPos } : {}) });
+const dep = (ns: string, name: string, mapPos?: { x: number; y: number }, release?: string): Deployment => ({ ns, name, replicas: 1, available: 1, updated: 1, image: 'x', conditions: [], ...(mapPos ? { mapPos } : {}), ...(release ? { release } : {}) });
 const pod = (ns: string, name: string, nodeName: string, deployment?: string): Pod => ({ ns, name, node: nodeName, phase: 'Running', ready: true, restarts: 0, created: 'x', ...(deployment ? { deployment } : {}) });
 
 describe('plateaus', () => {
@@ -83,6 +83,25 @@ describe('computeLayout', () => {
     expect(l.units.get('a/web-2')).toMatchObject({ kind: 'queue', x: b.x + 3, y: b.y });
     expect(l.units.get('a/orphan')).toMatchObject({ kind: 'void' });
     expect(l.units.get('a/orphan')!.y).toBeGreaterThanOrEqual(l.voidY);
+  });
+
+  it('places a release\'s structures as a block and boxes them', () => {
+    const deps = [dep('a', 'solo'), dep('a', 'out-web', undefined, 'outpost'), dep('a', 'out-db', undefined, 'outpost'), dep('a', 'out-cache', undefined, 'outpost')];
+    const l = computeLayout(nodes, deps, []);
+    const members = ['a/out-cache', 'a/out-db', 'a/out-web'].map((k) => l.buildings.get(k)!);
+    // All on one plateau, in consecutive cells (same row or wrapped), and boxed.
+    expect(new Set(members.map((m) => m.plateau)).size).toBe(1);
+    const box = l.releases.get('a/outpost')!;
+    expect(box).toMatchObject({ ns: 'a', name: 'outpost' });
+    for (const m of members) {
+      expect(m.x).toBeGreaterThanOrEqual(box.x);
+      expect(m.x + 3).toBeLessThanOrEqual(box.x + box.w);
+      expect(m.y).toBeGreaterThanOrEqual(box.y);
+      expect(m.y + 3).toBeLessThanOrEqual(box.y + box.h);
+    }
+    expect(l.releases.has('a/solo')).toBe(false);
+    // Deterministic and independent of the solo structure.
+    expect([...computeLayout(nodes, deps, []).releases]).toEqual([...l.releases]);
   });
 
   it('with no nodes everything lands in the void strip and the world still has a size', () => {

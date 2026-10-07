@@ -32,8 +32,20 @@ export interface Placement extends Cell {
   plateau?: string;
 }
 
+/** Dashed base perimeter around a Helm release's structures, in tiles. */
+export interface ReleaseBox {
+  key: string;
+  ns: string;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface MapLayout {
   plateaus: PlateauLayout[];
+  releases: Map<string, ReleaseBox>;
   /** World size in tiles. */
   width: number;
   height: number;
@@ -89,7 +101,11 @@ export function unitCells(p: PlateauLayout): Cell[] {
 /** Linear probing from a hashed start; returns the index claimed or -1 when full. */
 function claim(taken: Set<number>, count: number, key: string): number {
   if (count === 0) return -1;
-  const start = hashString(key) % count;
+  return claimFrom(taken, count, hashString(key) % count);
+}
+
+function claimFrom(taken: Set<number>, count: number, start: number): number {
+  if (count === 0) return -1;
   for (let i = 0; i < count; i++) {
     const idx = (start + i) % count;
     if (!taken.has(idx)) {
@@ -130,6 +146,24 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
   }
   const voidTaken = new Set<number>();
   const voidCols = Math.max(1, Math.floor((width - 2 * MARGIN) / BUILD_CELL));
+  // Release members are placed as a block: the first by hash, the rest in
+  // the next free cells, so a base expansion reads as one compound.
+  const groups = new Map<string, Deployment[]>();
+  for (const d of sortedDeps) {
+    if (!d.release || buildings.has(nsKey(d.ns, d.name))) continue;
+    const gk = nsKey(d.ns, d.release);
+    groups.set(gk, [...(groups.get(gk) ?? []), d]);
+  }
+  for (const [gk, members] of [...groups].sort(([a], [b]) => a.localeCompare(b))) {
+    let next = cells.length ? hashString(gk) % cells.length : -1;
+    for (const d of members) {
+      const idx = claimFrom(takenCells, cells.length, Math.max(0, next));
+      if (idx < 0) break;
+      const c = cells[idx]!;
+      buildings.set(nsKey(d.ns, d.name), { x: c.x, y: c.y, kind: 'plateau', plateau: c.plateau });
+      next = idx + 1;
+    }
+  }
   for (const d of sortedDeps) {
     const key = nsKey(d.ns, d.name);
     if (buildings.has(key)) continue;
@@ -178,7 +212,26 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
     units.set(key, { x: MARGIN + (slot % voidUnitCols), y: voidY + VOID_ROWS - 1 - Math.floor(slot / voidUnitCols) % VOID_ROWS, kind: 'void' });
   }
 
-  return { plateaus, width, height, voidY, buildings, units };
+  // Perimeters: bounding box of each release's placed members.
+  const releases = new Map<string, ReleaseBox>();
+  for (const d of sortedDeps) {
+    if (!d.release) continue;
+    const b = buildings.get(nsKey(d.ns, d.name));
+    if (!b || b.kind !== 'plateau') continue;
+    const key = nsKey(d.ns, d.release);
+    const cur = releases.get(key);
+    if (!cur) {
+      releases.set(key, { key, ns: d.ns, name: d.release, x: b.x, y: b.y, w: BUILD_CELL, h: BUILD_CELL });
+    } else {
+      const x0 = Math.min(cur.x, b.x);
+      const y0 = Math.min(cur.y, b.y);
+      const x1 = Math.max(cur.x + cur.w, b.x + BUILD_CELL);
+      const y1 = Math.max(cur.y + cur.h, b.y + BUILD_CELL);
+      releases.set(key, { ...cur, x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+    }
+  }
+
+  return { plateaus, releases, width, height, voidY, buildings, units };
 }
 
 /** The building cell whose 3x3 footprint contains tile (tx, ty), if any. */

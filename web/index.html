@@ -47,6 +47,54 @@
         </div>
       </div>
     </div>
+    <div id="tech" class="overlay" hidden>
+      <div class="panel wide">
+        <h2>TECH TREE <span class="where">helm</span></h2>
+        <div class="tabs">
+          <button type="button" data-tab="charts">CHARTS</button>
+          <button type="button" data-tab="repos">REPOS</button>
+          <button type="button" data-tab="releases">EXPANSIONS</button>
+        </div>
+        <div data-pane="charts" hidden>
+          <input type="text" name="q" placeholder="search charts (empty = all)" autocomplete="off" />
+          <div class="rows"></div>
+        </div>
+        <div data-pane="repos" hidden>
+          <div class="rows"></div>
+          <div class="row add">
+            <input type="text" name="rname" placeholder="name" autocomplete="off" />
+            <input type="text" name="rurl" placeholder="https://charts.example.com" autocomplete="off" />
+            <button type="button" data-add>ADD</button>
+            <button type="button" data-update>UPDATE ALL</button>
+          </div>
+        </div>
+        <div data-pane="releases" hidden>
+          <div class="rows"></div>
+        </div>
+        <div data-pane="form" hidden>
+          <h3></h3>
+          <form autocomplete="off">
+            <div class="row">
+              <label>CHART <input name="chart" /></label>
+              <label>VERSION <input name="version" placeholder="latest" /></label>
+            </div>
+            <div class="row">
+              <label>RELEASE NAME <input name="name" required maxlength="53" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?" /></label>
+              <label>NAMESPACE <select name="ns"></select></label>
+            </div>
+            <label>VALUES (yaml) <textarea name="values" rows="10" spellcheck="false"></textarea></label>
+            <div class="actions">
+              <button type="submit">DEPLOY</button>
+              <button type="button" data-back>BACK</button>
+            </div>
+          </form>
+        </div>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="button" data-close>CLOSE</button>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

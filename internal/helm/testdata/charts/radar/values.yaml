@@ -1,0 +1,5 @@
+# Default values for the radar test chart.
+replicaCount: 1
+image:
+  repository: nginx
+  tag: 1.27-alpine

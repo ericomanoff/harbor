@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, createDeployment, deleteDeployment, deletePod, formatHealth, getHealth, scaleDeployment, setMapPos } from './client';
+import { ApiError, createDeployment, deleteDeployment, deletePod, formatHealth, getHealth, helm, scaleDeployment, setMapPos } from './client';
 
 const fakeFetch = (status: number, body?: unknown) =>
   vi.fn(async () => new Response(body === undefined ? null : JSON.stringify(body), { status })) as unknown as typeof fetch;
@@ -62,5 +62,19 @@ describe('actions', () => {
     const [url, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/deployments/a/web/mappos');
     expect(init.method).toBe('PATCH');
+  });
+});
+
+describe('helm', () => {
+  it('encodes chart refs and release paths', async () => {
+    const f = fakeFetch(200, []);
+    await helm.searchCharts('pod info', f);
+    await helm.chartValues('podinfo/podinfo', '6.15.0', f);
+    await helm.rollback('sand box', 'outpost', 0, f);
+    const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+    expect(calls[0]?.[0]).toBe('/api/helm/charts?q=pod%20info');
+    expect(calls[1]?.[0]).toBe('/api/helm/charts/values?chart=podinfo%2Fpodinfo&version=6.15.0');
+    expect(calls[2]?.[0]).toBe('/api/helm/releases/sand%20box/outpost/rollback');
+    expect(JSON.parse(calls[2]?.[1].body as string)).toEqual({ revision: 0 });
   });
 });

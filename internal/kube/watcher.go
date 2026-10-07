@@ -11,6 +11,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -44,6 +45,11 @@ type Watcher struct {
 	podIndexer  cache.Indexer
 	deployments appslisters.DeploymentLister
 	replicasets appslisters.ReplicaSetLister
+
+	// Helm release secrets live in their own factory so the label selector
+	// does not narrow the other informers.
+	helmFactory informers.SharedInformerFactory
+	secrets     corelisters.SecretLister
 
 	synced   atomic.Bool
 	stop     chan struct{}
@@ -94,6 +100,12 @@ func NewWatcher(contextName string, client kubernetes.Interface, hub *Hub) *Watc
 		AddFunc:    w.onEvent,
 		UpdateFunc: func(_, obj any) { w.onEvent(obj) },
 	})
+
+	w.helmFactory = informers.NewSharedInformerFactoryWithOptions(client, resyncEvery,
+		informers.WithTweakListOptions(func(o *metav1.ListOptions) { o.LabelSelector = HelmSecretSelector }))
+	secInf := w.helmFactory.Core().V1().Secrets()
+	w.secrets = secInf.Lister()
+	addHandlers(secInf.Informer(), w.onHelmSecret, w.onHelmSecret)
 	return w
 }
 
@@ -133,11 +145,15 @@ func podNodeIndex(obj any) ([]string, error) {
 // ends. A context deadline is the only way out when RBAC denies a list.
 func (w *Watcher) Start(ctx context.Context) error {
 	w.factory.Start(w.stop)
+	w.helmFactory.Start(w.stop)
 	done := make(chan map[string]bool, 1)
 	go func() {
 		res := map[string]bool{}
 		for typ, ok := range w.factory.WaitForCacheSync(w.stop) {
 			res[typ.String()] = ok
+		}
+		for typ, ok := range w.helmFactory.WaitForCacheSync(w.stop) {
+			res["helm:"+typ.String()] = ok
 		}
 		done <- res
 	}()
@@ -165,6 +181,7 @@ func (w *Watcher) Stop() {
 	w.stopOnce.Do(func() {
 		close(w.stop)
 		w.factory.Shutdown()
+		w.helmFactory.Shutdown()
 	})
 }
 
@@ -177,6 +194,7 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 		Namespaces:  []gen.Namespace{},
 		Deployments: []gen.Deployment{},
 		Pods:        []gen.Pod{},
+		Releases:    []gen.HelmRelease{},
 	}
 	if nodes, err := w.nodes.List(labels.Everything()); err == nil {
 		for _, n := range nodes {
@@ -198,6 +216,7 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 			snap.Pods = append(snap.Pods, w.convertPod(p))
 		}
 	}
+	snap.Releases = w.releases()
 	sort.Slice(snap.Nodes, func(i, j int) bool { return snap.Nodes[i].Name < snap.Nodes[j].Name })
 	sort.Slice(snap.Namespaces, func(i, j int) bool { return snap.Namespaces[i].Name < snap.Namespaces[j].Name })
 	sort.Slice(snap.Deployments, func(i, j int) bool {
@@ -209,6 +228,50 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 		return a.Ns < b.Ns || (a.Ns == b.Ns && a.Name < b.Name)
 	})
 	return snap
+}
+
+// releases folds every Helm storage secret down to the newest revision per
+// release, sorted by namespace and name.
+func (w *Watcher) releases() []gen.HelmRelease {
+	secs, err := w.secrets.List(labels.Everything())
+	if err != nil {
+		return []gen.HelmRelease{}
+	}
+	latest := map[string]gen.HelmRelease{}
+	for _, s := range secs {
+		r, ok := ConvertHelmSecret(s)
+		if !ok {
+			continue
+		}
+		key := r.Ns + "/" + r.Name
+		if cur, seen := latest[key]; !seen || r.Revision > cur.Revision {
+			latest[key] = r
+		}
+	}
+	out := make([]gen.HelmRelease, 0, len(latest))
+	for _, r := range latest {
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Ns < out[j].Ns || (out[i].Ns == out[j].Ns && out[i].Name < out[j].Name)
+	})
+	return out
+}
+
+// onHelmSecret republishes the release a storage secret belongs to, or its
+// deletion when no revision of it remains.
+func (w *Watcher) onHelmSecret(s *corev1.Secret) {
+	r, ok := ConvertHelmSecret(s)
+	if !ok {
+		return
+	}
+	for _, cur := range w.releases() {
+		if cur.Ns == r.Ns && cur.Name == r.Name {
+			w.publish(gen.WsMessageTypeModified, cur)
+			return
+		}
+	}
+	w.publish(gen.WsMessageTypeDeleted, gen.HelmRelease{Ns: r.Ns, Name: r.Name, Revision: r.Revision, Status: "uninstalled"})
 }
 
 func (w *Watcher) podsOnNode(name string) []*corev1.Pod {

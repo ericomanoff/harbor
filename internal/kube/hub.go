@@ -82,6 +82,8 @@ func NewMessage(t gen.WsMessageType, v any) gen.WsMessage {
 		kind, err = gen.WsMessageKindPod, obj.FromPod(x)
 	case gen.Event:
 		kind, err = gen.WsMessageKindEvent, obj.FromEvent(x)
+	case gen.HelmRelease:
+		kind, err = gen.WsMessageKindHelmRelease, obj.FromHelmRelease(x)
 	case gen.Snapshot:
 		kind, err = gen.WsMessageKindSnapshot, obj.FromSnapshot(x)
 	default:

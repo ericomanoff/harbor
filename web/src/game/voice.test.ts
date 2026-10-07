@@ -9,6 +9,8 @@ describe('voiceLineFor', () => {
     expect(voiceLineFor('UNABLE TO COMPLY: 404')).toBe('Unable to comply');
     expect(voiceLineFor('BackOff: crashy-1')).toBe('Unit under attack');
     expect(voiceLineFor('INSUFFICIENT POWER')).toBe('Insufficient power');
+    expect(voiceLineFor('EXPANSION ONLINE: outpost rev 2')).toBe('Base expansion complete');
+    expect(voiceLineFor('EXPANSION FAILED: outpost')).toBe('Base expansion failed');
   });
   it('stays silent for lines without a voice', () => {
     expect(voiceLineFor('UNIT ORDERED: x')).toBe('Training');

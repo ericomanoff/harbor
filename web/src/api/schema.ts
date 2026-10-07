@@ -157,6 +157,161 @@ export interface paths {
         patch: operations["setDeploymentMapPos"];
         trace?: never;
     };
+    "/api/helm/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chart repositories known to this machine (tech tree sources) */
+        get: operations["listHelmRepos"];
+        put?: never;
+        /** Add a chart repository and fetch its index */
+        post: operations["addHelmRepo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/helm/repos/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh every repository index */
+        post: operations["updateHelmRepos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/helm/charts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Charts matching a query across cached repository indexes */
+        get: operations["searchHelmCharts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/helm/charts/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Default values.yaml of a chart */
+        get: operations["getHelmChartValues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/helm/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Releases across all namespaces */
+        get: operations["listHelmReleases"];
+        put?: never;
+        /** Install a chart (build a base expansion) */
+        post: operations["installHelmRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/helm/releases/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Uninstall a release */
+        delete: operations["uninstallHelmRelease"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/helm/releases/{ns}/{name}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revisions of a release, newest last */
+        get: operations["getHelmReleaseHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/helm/releases/{ns}/{name}/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upgrade a release (new chart version and/or values) */
+        post: operations["upgradeHelmRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/helm/releases/{ns}/{name}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Roll a release back to a revision */
+        post: operations["rollbackHelmRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -227,6 +382,8 @@ export interface components {
             image: string;
             /** @description ReplicaSet for the current pod template. Pods whose ownerRS differs belong to an old rollout and are being replaced. */
             currentRS?: string;
+            /** @description Helm release that owns this Deployment (meta.helm.sh/release-name), if any. */
+            release?: string;
             mapPos?: components["schemas"]["MapPos"];
             conditions: components["schemas"]["Condition"][];
         };
@@ -259,6 +416,7 @@ export interface components {
         };
         Snapshot: {
             context: string;
+            releases: components["schemas"]["HelmRelease"][];
             nodes: components["schemas"]["Node"][];
             namespaces: components["schemas"]["Namespace"][];
             deployments: components["schemas"]["Deployment"][];
@@ -282,14 +440,73 @@ export interface components {
             /** @description Pod names to retire first when scaling down ("sell this unit"). Implemented with the controller.kubernetes.io/pod-deletion-cost annotation, so the ReplicaSet removes these before any others. */
             retireFirst?: string[];
         };
+        HelmRepo: {
+            name: string;
+            url: string;
+        };
+        HelmChart: {
+            repo: string;
+            name: string;
+            version: string;
+            appVersion?: string;
+            description: string;
+        };
+        HelmValues: {
+            chart: string;
+            version: string;
+            /** @description values.yaml text. */
+            values: string;
+        };
+        /** @description A release as seen live from its storage secret (ns, name, revision, status) and, when listed through Helm, its chart details. */
+        HelmRelease: {
+            ns: string;
+            name: string;
+            revision: number;
+            /** @description deployed, failed, pending-install, superseded, uninstalling, ... */
+            status: string;
+            chart?: string;
+            chartVersion?: string;
+            appVersion?: string;
+            /** Format: date-time */
+            updated?: string;
+            notes?: string;
+        };
+        HelmRevision: {
+            revision: number;
+            status: string;
+            chart: string;
+            /** Format: date-time */
+            updated: string;
+            description: string;
+        };
+        HelmInstallRequest: {
+            ns: string;
+            name: string;
+            /** @description repo/name */
+            chart: string;
+            version?: string;
+            /** @description values.yaml overrides. */
+            values?: string;
+            mapPos?: components["schemas"]["MapPos"];
+        };
+        HelmUpgradeRequest: {
+            /** @description repo/name; defaults to the release's current chart. */
+            chart?: string;
+            version?: string;
+            values?: string;
+        };
+        HelmRollbackRequest: {
+            /** @description 0 means the previous revision. */
+            revision: number;
+        };
         /** @description One message on the /ws event stream. */
         WsMessage: {
             /** @enum {string} */
             type: "snapshot" | "added" | "modified" | "deleted";
             /** @enum {string} */
-            kind: "Node" | "Namespace" | "Deployment" | "Pod" | "Event" | "Snapshot";
+            kind: "Node" | "Namespace" | "Deployment" | "Pod" | "Event" | "HelmRelease" | "Snapshot";
             /** @description Wire model of the given kind; a Snapshot when type is snapshot. */
-            obj?: components["schemas"]["Node"] | components["schemas"]["Namespace"] | components["schemas"]["Deployment"] | components["schemas"]["Pod"] | components["schemas"]["Event"] | components["schemas"]["Snapshot"];
+            obj?: components["schemas"]["Node"] | components["schemas"]["Namespace"] | components["schemas"]["Deployment"] | components["schemas"]["Pod"] | components["schemas"]["Event"] | components["schemas"]["HelmRelease"] | components["schemas"]["Snapshot"];
         };
     };
     responses: {
@@ -509,6 +726,263 @@ export interface operations {
         };
         responses: {
             /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listHelmRepos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelmRepo"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    addHelmRepo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HelmRepo"];
+            };
+        };
+        responses: {
+            /** @description Added */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateHelmRepos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    searchHelmCharts: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelmChart"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getHelmChartValues: {
+        parameters: {
+            query: {
+                /** @description repo/name */
+                chart: string;
+                version?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelmValues"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listHelmReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelmRelease"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    installHelmRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HelmInstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Installed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelmRelease"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    uninstallHelmRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uninstalled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getHelmReleaseHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelmRevision"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    upgradeHelmRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HelmUpgradeRequest"];
+            };
+        };
+        responses: {
+            /** @description Upgraded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelmRelease"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    rollbackHelmRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HelmRollbackRequest"];
+            };
+        };
+        responses: {
+            /** @description Rolled back */
             204: {
                 headers: {
                     [name: string]: unknown;

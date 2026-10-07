@@ -1,0 +1,6 @@
+apiVersion: v2
+name: radar
+description: A tiny test chart that renders one Deployment.
+type: application
+version: 0.1.0
+appVersion: "1.27"

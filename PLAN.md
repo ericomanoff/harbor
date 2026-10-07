@@ -1,6 +1,6 @@
 # Harbor: a Command & Conquer style GUI for Kubernetes and Helm
 
-Status: Phases 0-4 complete (updated 2026-10-07). Next: Phase 5, Helm.
+Status: Phases 0-5 complete (updated 2026-10-07). Next: Phase 6.
 
 ## Progress
 
@@ -11,8 +11,8 @@ Status: Phases 0-4 complete (updated 2026-10-07). Next: Phase 5, Helm.
 | 2     | Done        | 2026-10-07. Store + WebSocket reconnect, deterministic layout, plateaus/buildings/units, camera, selection, radar, EVA log. Live: `kubectl scale` 3→5→3 showed units deploy and die within ~2 s. |
 | 3     | Done        | 2026-10-07. War Factory cameo + placement ghost, HTML build form, create/scale/mappos endpoints, build/retire/sell commands (sell retires the exact pods via pod-deletion-cost), power bar, building drag-move. Live: built, spawned 5, sold 2, restarted, site persisted. |
 | 4     | Done        | 2026-10-07. Generated pixel-art sprites (8-facing tank, factory, scaffold, fire, explosion), rollout hatching + badge, warning flashes, sell structure (confirm) and repair unit, Tab cycling, "/" locate overlay, F namespace filter, M synthesised sfx + EVA voice (speechSynthesis, fixed vocabulary). Regression suite: pure game modules, kind round trip, Playwright e2e round incl. search and filter. |
-| 5     | Next        | Helm tech tree.                                                       |
-| 6     | Not started |                                                                       |
+| 5     | Done        | 2026-10-07. Helm v3.22 SDK in-process: repos, chart search, default values, install/upgrade/rollback/uninstall/history; releases tracked live from Helm storage secrets; release-owned Deployments placed as a block inside a dashed base perimeter; T opens the tech tree overlay (charts/repos/expansions, install and upgrade forms with a values editor); release selection on the map with UPGRADE/ROLLBACK/SELL. Tests: in-memory Helm store, API round trip, kind integration with the real secrets driver. |
+| 6     | Next        | Extended world.                                                       |                                                                       |
 
 Deviations from the original plan so far:
 
@@ -54,8 +54,19 @@ Deviations from the original plan so far:
 - Audio is fully synthesised (WebAudio beeps, browser speechSynthesis for a
   fixed EVA vocabulary that never reads names). Off by default; the M toggle
   doubles as the user gesture browsers need before playing sound.
-- Overlays (build form, locate, filter) are plain HTML over the canvas and
-  set a modal flag the scenes check before handling keys.
+- Overlays (build form, locate, filter, tech tree) are plain HTML over the
+  canvas and set a modal flag the scenes check before handling keys; hotkeys
+  that open an overlay call preventDefault so the key does not type itself
+  into the overlay's input.
+- Helm: releases reach the frontend live by watching Helm's storage secrets
+  (`owner=helm` label) and reading name/version/status from their labels;
+  chart details come from the SDK on demand. Repository config follows
+  Helm's own paths, so repos added with the helm CLI appear in the tech
+  tree. Upgrade without a chart reuses the chart stored in the release.
+  Helm's map-position is stored as a release label (`x_y`, since labels
+  cannot hold commas) but the perimeter is derived from member Deployments.
+- Helm v3.22 pins k8s.io/* at the versions client-go already used, so no
+  module conflicts; Helm 4's SDK was not adopted yet.
 
 Decisions already made:
 
@@ -297,7 +308,7 @@ Each phase ends with something you can run against the kind cluster.
 - Namespace filter toggles, search box, keyboard shortcuts (H to home camera,
   Tab to cycle selection).
 
-### Phase 5: Helm tech tree (2-3 sessions)
+### Phase 5: Helm tech tree (2-3 sessions) — DONE 2026-10-07
 
 - `internal/helm` with repo add/update, search, show values, install, upgrade,
   uninstall, list, history, rollback. Pinned Helm module.

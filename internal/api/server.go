@@ -15,6 +15,7 @@ import (
 
 	"github.com/ericomanoff/harbor/internal/api/gen"
 	"github.com/ericomanoff/harbor/internal/assets"
+	"github.com/ericomanoff/harbor/internal/helm"
 	"github.com/ericomanoff/harbor/internal/kube"
 )
 
@@ -32,9 +33,11 @@ type Server struct {
 	// Injection points for tests.
 	listContexts func() ([]gen.KubeContext, string, error)
 	newWatcher   func(ctx context.Context, name string, hub *kube.Hub) (*kube.Watcher, error)
+	newHelm      func(contextName string) *helm.Client
 
 	mu      sync.Mutex
 	watcher *kube.Watcher
+	helm    *helm.Client
 }
 
 var _ gen.ServerInterface = (*Server)(nil)
@@ -46,6 +49,7 @@ func NewServer() *Server {
 		hub:          kube.NewHub(),
 		listContexts: kube.ListContexts,
 		newWatcher:   connectWatcher,
+		newHelm:      helm.New,
 	}
 }
 
@@ -103,6 +107,7 @@ func (s *Server) SelectContextByName(ctx context.Context, name string) error {
 	s.mu.Lock()
 	old := s.watcher
 	s.watcher = w
+	s.helm = s.newHelm(name)
 	s.mu.Unlock()
 	if old != nil {
 		old.Stop()
@@ -129,6 +134,12 @@ func (s *Server) current() *kube.Watcher {
 	return s.watcher
 }
 
+func (s *Server) currentHelm() *helm.Client {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.helm
+}
+
 // snapshot returns the active cluster state, or an empty snapshot with no
 // context when nothing is selected yet.
 func (s *Server) snapshot() gen.Snapshot {
@@ -140,6 +151,7 @@ func (s *Server) snapshot() gen.Snapshot {
 		Namespaces:  []gen.Namespace{},
 		Deployments: []gen.Deployment{},
 		Pods:        []gen.Pod{},
+		Releases:    []gen.HelmRelease{},
 	}
 }
 

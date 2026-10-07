@@ -4,6 +4,13 @@ export type Health = components['schemas']['Health'];
 export type CreateDeploymentRequest = components['schemas']['CreateDeploymentRequest'];
 export type Deployment = components['schemas']['Deployment'];
 export type MapPos = components['schemas']['MapPos'];
+export type HelmRepo = components['schemas']['HelmRepo'];
+export type HelmChart = components['schemas']['HelmChart'];
+export type HelmValues = components['schemas']['HelmValues'];
+export type HelmRelease = components['schemas']['HelmRelease'];
+export type HelmRevision = components['schemas']['HelmRevision'];
+export type HelmInstallRequest = components['schemas']['HelmInstallRequest'];
+export type HelmUpgradeRequest = components['schemas']['HelmUpgradeRequest'];
 
 /** An error answer from the backend, with its HTTP status and message. */
 export class ApiError extends Error {
@@ -62,3 +69,22 @@ export function deleteDeployment(ns: string, name: string, fetchFn: typeof fetch
 export function deletePod(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {
   return request<void>('DELETE', `/api/pods/${encodeURIComponent(ns)}/${encodeURIComponent(name)}`, undefined, fetchFn);
 }
+
+const enc = encodeURIComponent;
+
+export const helm = {
+  listRepos: (f: typeof fetch = fetch) => request<HelmRepo[]>('GET', '/api/helm/repos', undefined, f),
+  addRepo: (repo: HelmRepo, f: typeof fetch = fetch) => request<void>('POST', '/api/helm/repos', repo, f),
+  updateRepos: (f: typeof fetch = fetch) => request<void>('POST', '/api/helm/repos/update', undefined, f),
+  searchCharts: (q: string, f: typeof fetch = fetch) => request<HelmChart[]>('GET', `/api/helm/charts?q=${enc(q)}`, undefined, f),
+  chartValues: (chart: string, version?: string, f: typeof fetch = fetch) =>
+    request<HelmValues>('GET', `/api/helm/charts/values?chart=${enc(chart)}${version ? `&version=${enc(version)}` : ''}`, undefined, f),
+  listReleases: (f: typeof fetch = fetch) => request<HelmRelease[]>('GET', '/api/helm/releases', undefined, f),
+  install: (req: HelmInstallRequest, f: typeof fetch = fetch) => request<HelmRelease>('POST', '/api/helm/releases', req, f),
+  upgrade: (ns: string, name: string, req: HelmUpgradeRequest, f: typeof fetch = fetch) =>
+    request<HelmRelease>('POST', `/api/helm/releases/${enc(ns)}/${enc(name)}/upgrade`, req, f),
+  rollback: (ns: string, name: string, revision: number, f: typeof fetch = fetch) =>
+    request<void>('POST', `/api/helm/releases/${enc(ns)}/${enc(name)}/rollback`, { revision }, f),
+  uninstall: (ns: string, name: string, f: typeof fetch = fetch) => request<void>('DELETE', `/api/helm/releases/${enc(ns)}/${enc(name)}`, undefined, f),
+  history: (ns: string, name: string, f: typeof fetch = fetch) => request<HelmRevision[]>('GET', `/api/helm/releases/${enc(ns)}/${enc(name)}/history`, undefined, f),
+};

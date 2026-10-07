@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-radar
+  labels:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-radar
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-radar
+    spec:
+      containers:
+        - name: radar
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

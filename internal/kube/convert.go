@@ -20,6 +20,32 @@ const MapPosAnnotation = "harbor.dev/map-pos"
 // Deployment and each of its ReplicaSets.
 const revisionAnnotation = "deployment.kubernetes.io/revision"
 
+// Helm stamps every resource it manages with the owning release.
+const helmReleaseAnnotation = "meta.helm.sh/release-name"
+
+// HelmSecretSelector matches Helm's release storage secrets.
+const HelmSecretSelector = "owner=helm"
+
+// ConvertHelmSecret reads the release summary Helm keeps in the labels of a
+// storage secret (sh.helm.release.v1.<name>.v<revision>). The payload is
+// not decoded; chart details come from the Helm SDK on demand.
+func ConvertHelmSecret(s *corev1.Secret) (gen.HelmRelease, bool) {
+	name := s.Labels["name"]
+	if s.Labels["owner"] != "helm" || name == "" {
+		return gen.HelmRelease{}, false
+	}
+	rev, err := strconv.Atoi(s.Labels["version"])
+	if err != nil {
+		return gen.HelmRelease{}, false
+	}
+	out := gen.HelmRelease{Ns: s.Namespace, Name: name, Revision: rev, Status: s.Labels["status"]}
+	if ts, err := strconv.ParseInt(s.Labels["modifiedAt"], 10, 64); err == nil {
+		t := time.Unix(ts, 0).UTC()
+		out.Updated = &t
+	}
+	return out, true
+}
+
 // CurrentReplicaSet returns the name of the ReplicaSet that matches the
 // Deployment's current revision, or the highest-revision one it owns, or "".
 func CurrentReplicaSet(d *appsv1.Deployment, sets []*appsv1.ReplicaSet) string {
@@ -140,6 +166,7 @@ func ConvertDeployment(d *appsv1.Deployment) gen.Deployment {
 	if mp, ok := ParseMapPos(d.Annotations[MapPosAnnotation]); ok {
 		out.MapPos = &mp
 	}
+	out.Release = optString(d.Annotations[helmReleaseAnnotation])
 	return out
 }
 
