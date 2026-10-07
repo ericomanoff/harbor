@@ -25,11 +25,20 @@ Open http://127.0.0.1:5173. For the single-binary experience:
 make run       # builds web + Go, serves on http://127.0.0.1:8080
 ```
 
+The binary connects to your kubeconfig's current context at startup. Flags:
+`-context NAME` watches another context, `-no-connect` waits for the UI to
+pick one, `-addr` changes the loopback address. Watch the raw event stream:
+
+```sh
+websocat ws://127.0.0.1:8080/ws
+```
+
 ## Development
 
 ```sh
 make gen       # after editing api/openapi.yaml
 make test      # go vet + go test + tsc + vitest
+make test-kind # integration test against the kind cluster
 make kind-down
 ```
 

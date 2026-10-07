@@ -1,14 +1,15 @@
 # Harbor: a Command & Conquer style GUI for Kubernetes and Helm
 
-Status: Phase 0 complete, Phase 1 in progress (updated 2026-10-07).
+Status: Phases 0 and 1 complete pending live-cluster verification (updated 2026-10-07).
 
 ## Progress
 
 | Phase | Status      | Notes                                                                 |
 |-------|-------------|-----------------------------------------------------------------------|
 | 0     | Done        | 2026-10-07. Go server + embedded Vite/Phaser app, OpenAPI codegen both sides, Makefile, kind config, tests. |
-| 1     | In progress | Backend read path: contexts, informers, wire conversion, WebSocket hub. |
-| 2-6   | Not started |                                                                       |
+| 1     | Done*       | 2026-10-07. Contexts, informers for 6 kinds, wire conversion, hub, /ws, /api/snapshot, startup auto-connect. *Unit-tested against a fake clientset; `make test-kind` still needs a running cluster. |
+| 2     | Next        | The map.                                                              |
+| 3-6   | Not started |                                                                       |
 
 Deviations from the original plan so far:
 
@@ -16,8 +17,16 @@ Deviations from the original plan so far:
   compiler API that openapi-typescript depends on.
 - OpenAPI parameter components are suffixed `Param` (`NamespaceParam`) because
   oapi-codegen cannot have a parameter and a schema both named `Namespace`.
-- The kind cluster has not been created yet; Docker was not running at the
-  time. `make kind-up` is ready.
+- The kind cluster has not been created yet; Docker was not running during
+  Phases 0 and 1. `make kind-up` then `make test-kind` verifies Phase 1 live.
+- client-go v0.37 requires Go 1.26, so go.mod says 1.26 and the Go toolchain
+  auto-downloads it (GOTOOLCHAIN=auto). The locally installed go is 1.25.
+- The backend auto-connects to the kubeconfig current-context at startup
+  (`-context` overrides, `-no-connect` disables) so the map is live without a
+  click. Failure to connect is logged, not fatal.
+- Events older than two minutes when first seen are not broadcast, so a fresh
+  client is not flooded with history; a dropped-message counter on the hub
+  covers slow WebSocket clients.
 
 Decisions already made:
 
@@ -211,7 +220,7 @@ Each phase ends with something you can run against the kind cluster.
 - Done when: one command starts both servers and the browser shows a black
   Phaser canvas served by Go.
 
-### Phase 1: Backend read path (1-2 sessions) — IN PROGRESS
+### Phase 1: Backend read path (1-2 sessions) — DONE 2026-10-07 (live check pending)
 
 - Context listing and selection.
 - Informers for Node, Namespace, Deployment, ReplicaSet, Pod, Event. Wire-model

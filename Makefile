@@ -4,6 +4,7 @@
 #   make run       build everything and serve from the Go binary (http://127.0.0.1:8080)
 #   make gen       regenerate Go and TypeScript code from api/openapi.yaml
 #   make test      Go tests + frontend tests
+#   make test-kind integration test against the kind cluster
 #   make kind-up   create the local kind cluster with a sample workload
 #   make kind-down delete it
 
@@ -12,7 +13,7 @@ VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev
 LDFLAGS  := -X github.com/ericomanoff/harbor/internal/api.Version=$(VERSION)
 KIND_CLUSTER := harbor
 
-.PHONY: all gen web build run dev test test-go test-web kind-up kind-down clean deps
+.PHONY: all gen web build run dev test test-go test-web test-kind kind-up kind-down clean deps
 
 all: build
 
@@ -50,6 +51,10 @@ test-go:
 
 test-web: deps
 	cd web && npx tsc --noEmit && npm test
+
+# Integration test against the kind cluster from `make kind-up`.
+test-kind:
+	HARBOR_KIND_TEST=1 go test ./internal/kube -run TestIntegrationKind -v -count=1
 
 kind-up:
 	kind create cluster --name $(KIND_CLUSTER) --config deploy/kind/kind-config.yaml
