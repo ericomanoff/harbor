@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, createDeployment, formatHealth, getHealth, scaleDeployment, setMapPos } from './client';
+import { ApiError, createDeployment, deleteDeployment, deletePod, formatHealth, getHealth, scaleDeployment, setMapPos } from './client';
 
 const fakeFetch = (status: number, body?: unknown) =>
   vi.fn(async () => new Response(body === undefined ? null : JSON.stringify(body), { status })) as unknown as typeof fetch;
@@ -43,6 +43,17 @@ describe('actions', () => {
     await scaleDeployment('a', 'web', 3, [], f);
     const [, init2] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[1] as [string, RequestInit];
     expect(JSON.parse(init2.body as string)).toEqual({ replicas: 3 });
+  });
+
+  it('deletes deployments and pods with no body', async () => {
+    const f = fakeFetch(204);
+    await deleteDeployment('a', 'web', f);
+    await deletePod('a', 'web-1', f);
+    const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+    expect(calls[0]?.[0]).toBe('/api/deployments/a/web');
+    expect(calls[0]?.[1].method).toBe('DELETE');
+    expect(calls[0]?.[1].body).toBeUndefined();
+    expect(calls[1]?.[0]).toBe('/api/pods/a/web-1');
   });
 
   it('patches the map position', async () => {

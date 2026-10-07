@@ -95,4 +95,20 @@ func TestCreateScaleAndMapPosAgainstFake(t *testing.T) {
 		t.Errorf("round trip through ConvertDeployment: %+v", got.MapPos)
 	}
 	var _ *appsv1.Deployment = d
+
+	if err := DeletePod(ctx, client, "sandbox", "web-a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CoreV1().Pods("sandbox").Get(ctx, "web-a", metav1.GetOptions{}); err == nil {
+		t.Error("pod should be gone")
+	}
+	if err := DeleteDeployment(ctx, client, "sandbox", "web"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.AppsV1().Deployments("sandbox").Get(ctx, "web", metav1.GetOptions{}); err == nil {
+		t.Error("deployment should be gone")
+	}
+	if err := DeleteDeployment(ctx, client, "sandbox", "web"); err == nil {
+		t.Error("deleting twice should fail with NotFound")
+	}
 }

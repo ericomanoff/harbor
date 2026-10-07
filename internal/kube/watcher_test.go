@@ -27,12 +27,12 @@ func testCluster() []runtimeObject {
 		},
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "sandbox"}, Status: corev1.NamespaceStatus{Phase: corev1.NamespaceActive}},
 		&appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Name: "nginx", Namespace: "sandbox"},
+			ObjectMeta: metav1.ObjectMeta{Name: "nginx", Namespace: "sandbox", Annotations: map[string]string{revisionAnnotation: "1"}},
 			Spec:       appsv1.DeploymentSpec{Replicas: &one},
 		},
 		&appsv1.ReplicaSet{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "nginx-abc", Namespace: "sandbox",
+				Name: "nginx-abc", Namespace: "sandbox", Annotations: map[string]string{revisionAnnotation: "1"},
 				OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "nginx"}},
 			},
 		},
@@ -76,6 +76,46 @@ func TestWatcherSnapshotResolvesOwnersAndRequests(t *testing.T) {
 	p := snap.Pods[0]
 	if p.Deployment == nil || *p.Deployment != "nginx" {
 		t.Errorf("pod.deployment = %v, want nginx (resolved through the ReplicaSet)", p.Deployment)
+	}
+	if d := snap.Deployments[0]; d.CurrentRS == nil || *d.CurrentRS != "nginx-abc" {
+		t.Errorf("deployment.currentRS = %v, want nginx-abc", d.CurrentRS)
+	}
+}
+
+func TestWatcherRepublishesDeploymentWhenNewReplicaSetAppears(t *testing.T) {
+	_, client, hub := startWatcher(t)
+	ch, cancel := hub.Subscribe(64)
+	defer cancel()
+	// Simulate a rollout: the controller bumps the revision and creates a new RS.
+	d, _ := client.AppsV1().Deployments("sandbox").Get(context.Background(), "nginx", metav1.GetOptions{})
+	d.Annotations[revisionAnnotation] = "2"
+	if _, err := client.AppsV1().Deployments("sandbox").Update(context.Background(), d, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	newRS := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{
+		Name: "nginx-def", Namespace: "sandbox", Annotations: map[string]string{revisionAnnotation: "2"},
+		OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: "nginx"}},
+	}}
+	if _, err := client.AppsV1().ReplicaSets("sandbox").Create(context.Background(), newRS, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case m := <-ch:
+			if m.Kind != gen.WsMessageKindDeployment {
+				continue
+			}
+			var got gen.Deployment
+			if err := json.Unmarshal(mustRaw(t, m), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.CurrentRS != nil && *got.CurrentRS == "nginx-def" {
+				return
+			}
+		case <-deadline:
+			t.Fatal("deployment was not republished with the new ReplicaSet")
+		}
 	}
 }
 

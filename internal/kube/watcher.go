@@ -87,7 +87,8 @@ func NewWatcher(contextName string, client kubernetes.Interface, hub *Hub) *Watc
 		UpdateFunc: func(oldObj, _ any) { w.onPodMoved(oldObj) },
 	})
 	_, _ = rsInf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: w.onReplicaSetAdded,
+		AddFunc:    w.onReplicaSetAdded,
+		UpdateFunc: func(_, obj any) { w.republishOwner(obj) },
 	})
 	_, _ = evInf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    w.onEvent,
@@ -189,7 +190,7 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 	}
 	if deps, err := w.deployments.List(labels.Everything()); err == nil {
 		for _, d := range deps {
-			snap.Deployments = append(snap.Deployments, ConvertDeployment(d))
+			snap.Deployments = append(snap.Deployments, w.convertDeployment(d))
 		}
 	}
 	if pods, err := w.pods.List(labels.Everything()); err == nil {
@@ -240,6 +241,34 @@ func (w *Watcher) convertPod(p *corev1.Pod) gen.Pod {
 	return ConvertPod(p, w.deploymentFor(p))
 }
 
+// convertDeployment adds the current ReplicaSet so the map can tell a
+// rollout's new units from the old ones.
+func (w *Watcher) convertDeployment(d *appsv1.Deployment) gen.Deployment {
+	out := ConvertDeployment(d)
+	sets, err := w.replicasets.ReplicaSets(d.Namespace).List(labels.Everything())
+	if err == nil {
+		if rs := CurrentReplicaSet(d, sets); rs != "" {
+			out.CurrentRS = &rs
+		}
+	}
+	return out
+}
+
+// republishOwner re-emits the Deployment owning a changed ReplicaSet.
+func (w *Watcher) republishOwner(obj any) {
+	rs, ok := obj.(*appsv1.ReplicaSet)
+	if !ok {
+		return
+	}
+	name := OwnerOfKind(rs.OwnerReferences, "Deployment")
+	if name == "" {
+		return
+	}
+	if d, err := w.deployments.Deployments(rs.Namespace).Get(name); err == nil {
+		w.onDeployment(d)
+	}
+}
+
 // publish drops changes seen before the initial sync: clients get those via
 // Snapshot, and replaying thousands of adds would only flood them.
 func (w *Watcher) publish(t gen.WsMessageType, v any) {
@@ -278,7 +307,7 @@ func (w *Watcher) onNamespaceDeleted(ns *corev1.Namespace) {
 }
 
 func (w *Watcher) onDeployment(d *appsv1.Deployment) {
-	w.publish(gen.WsMessageTypeModified, ConvertDeployment(d))
+	w.publish(gen.WsMessageTypeModified, w.convertDeployment(d))
 }
 
 func (w *Watcher) onDeploymentDeleted(d *appsv1.Deployment) {
@@ -324,6 +353,7 @@ func (w *Watcher) onReplicaSetAdded(obj any) {
 			w.publish(gen.WsMessageTypeModified, w.convertPod(p))
 		}
 	}
+	w.republishOwner(rs)
 }
 
 func (w *Watcher) onEvent(obj any) {

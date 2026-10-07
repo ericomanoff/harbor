@@ -7,7 +7,8 @@ import { PlateauView } from '../entities/Plateau';
 import { UnitView } from '../entities/Unit';
 import { isSystemNamespace } from '../layout/colors';
 import { BUILD_CELL, TILE, cellAt, computeLayout, isCellFree, type Cell, type MapLayout } from '../layout/grid';
-import { nsKey } from '../store/cluster';
+import { nsKey, type ClusterEvent } from '../store/cluster';
+import { isObsolete } from '../game/unitState';
 import { openBuildForm } from '../ui/buildForm';
 
 const EDGE = 14;
@@ -87,6 +88,8 @@ export class MapScene extends Phaser.Scene {
       if (mode.current === 'place') mode.set('idle');
       else selection.clear();
     });
+    kb.addCapture('TAB');
+    kb.on('keydown-TAB', (ev: KeyboardEvent) => !modal.open && this.cycleSelection(ev.shiftKey ? -1 : 1));
 
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (p.x >= MAP_W || modal.open) return;
@@ -126,6 +129,31 @@ export class MapScene extends Phaser.Scene {
 
   centerOnWorld(x: number, y: number): void {
     this.cameras.main.centerOn(x, y);
+  }
+
+  /** Tab: step through structures then units, panning to each. */
+  cycleSelection(dir: 1 | -1): void {
+    const order = [
+      ...[...this.buildings.keys()].sort().map((k) => buildingKey(k)),
+      ...[...this.units.keys()].sort().map((k) => unitKey(k)),
+    ];
+    if (order.length === 0) return;
+    const cur = [...selection.keys][0];
+    const idx = cur ? order.indexOf(cur) : -1;
+    const next = order[(idx + dir + order.length) % order.length]!;
+    selection.set([next]);
+    const v = next.startsWith('b:') ? this.buildings.get(next.slice(2)) : this.units.get(next.slice(2));
+    if (v) this.centerOnWorld(v.x + TILE, v.y + TILE);
+  }
+
+  /** Flash the unit or structure a Warning event names. */
+  flashFor(ev: ClusterEvent): void {
+    const now = this.time.now;
+    if (ev.kind === 'Pod') this.units.get(nsKey(ev.ns, ev.name))?.flash(now);
+    else if (ev.kind === 'Deployment') this.buildings.get(nsKey(ev.ns, ev.name))?.flash(now);
+    else if (ev.kind === 'ReplicaSet') {
+      for (const u of this.units.values()) if (u.pod.ns === ev.ns && u.pod.ownerRS === ev.name) u.flash(now);
+    }
   }
 
   private moveCamera(delta: number): void {
@@ -368,8 +396,9 @@ export class MapScene extends Phaser.Scene {
       if (!place) continue;
       livePods.add(key);
       const v = this.units.get(key);
+      const obsolete = isObsolete(p, p.deployment ? store.deployments.get(nsKey(p.ns, p.deployment)) : undefined);
       if (v && !v.dying) {
-        v.update(p, place);
+        v.update(p, place, obsolete);
       } else {
         const building = p.deployment ? this.buildings.get(nsKey(p.ns, p.deployment)) : undefined;
         const from = this.initialised && building ? building.door() : undefined;

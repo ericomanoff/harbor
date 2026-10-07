@@ -83,6 +83,32 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/deployments/{ns}/{name}:
+    delete:
+      operationId: deleteDeployment
+      summary: Sell a structure (delete the Deployment; its pods follow)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "204":
+          description: Deleted
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/pods/{ns}/{name}:
+    delete:
+      operationId: deletePod
+      summary: Repair a unit (delete the pod so its ReplicaSet replaces it)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "204":
+          description: Deleted
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/deployments/{ns}/{name}/scale:
     patch:
       operationId: scaleDeployment
@@ -271,6 +297,11 @@ components:
         image:
           type: string
           description: Image of the first container.
+        currentRS:
+          type: string
+          description: >
+            ReplicaSet for the current pod template. Pods whose ownerRS differs
+            belong to an old rollout and are being replaced.
         mapPos:
           $ref: "#/components/schemas/MapPos"
         conditions:

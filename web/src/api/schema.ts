@@ -89,6 +89,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/deployments/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Sell a structure (delete the Deployment; its pods follow) */
+        delete: operations["deleteDeployment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pods/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Repair a unit (delete the pod so its ReplicaSet replaces it) */
+        delete: operations["deletePod"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/deployments/{ns}/{name}/scale": {
         parameters: {
             query?: never;
@@ -191,6 +225,8 @@ export interface components {
             updated: number;
             /** @description Image of the first container. */
             image: string;
+            /** @description ReplicaSet for the current pod template. Pods whose ownerRS differs belong to an old rollout and are being replaced. */
+            currentRS?: string;
             mapPos?: components["schemas"]["MapPos"];
             conditions: components["schemas"]["Condition"][];
         };
@@ -382,6 +418,50 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Deployment"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteDeployment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deletePod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

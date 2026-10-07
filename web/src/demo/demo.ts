@@ -10,8 +10,8 @@ export function demoSnapshot(): Snapshot {
   const node = (name: string, cpu: number, ready = true) => ({
     name, ready, cpuAlloc: cpu, memAlloc: 8 * 1024 ** 3, cpuReq: 450, memReq: 512 * 1024 ** 2, labels: {},
   });
-  const dep = (ns: string, name: string, replicas: number, available: number, image: string) => ({
-    ns, name, replicas, available, updated: replicas, image, conditions: [],
+  const dep = (ns: string, name: string, replicas: number, available: number, image: string, extra: Record<string, unknown> = {}) => ({
+    ns, name, replicas, available, updated: replicas, image, conditions: [], ...extra,
   });
   const pod = (ns: string, name: string, nodeName: string, deployment: string, extra: Partial<Pod> = {}): Pod => ({
     ns, name, node: nodeName, phase: 'Running', ready: true, restarts: 0, created, deployment, ...extra,
@@ -27,7 +27,7 @@ export function demoSnapshot(): Snapshot {
     deployments: [
       dep('sandbox', 'nginx', 3, 3, 'nginx:1.27-alpine'),
       dep('sandbox', 'crashy', 1, 0, 'busybox:1.36'),
-      dep('default', 'api', 2, 1, 'ghcr.io/example/api:2.1'),
+      dep('default', 'api', 2, 1, 'ghcr.io/example/api:2.1', { updated: 1, currentRS: 'api-77' }),
       dep('kube-system', 'coredns', 2, 2, 'coredns:1.11'),
     ],
     pods: [
@@ -35,7 +35,8 @@ export function demoSnapshot(): Snapshot {
       pod('sandbox', 'nginx-7d9-b2', 'harbor-worker', 'nginx'),
       pod('sandbox', 'nginx-7d9-c3', 'harbor-worker2', 'nginx'),
       pod('sandbox', 'crashy-5f-x9', 'harbor-worker', 'crashy', { ready: false, restarts: 7, reason: 'CrashLoopBackOff' }),
-      pod('default', 'api-66-p1', 'harbor-control-plane', 'api'),
+      pod('default', 'api-66-p1', 'harbor-control-plane', 'api', { ownerRS: 'api-66' }),
+      pod('default', 'api-77-q1', 'harbor-control-plane', 'api', { ownerRS: 'api-77' }),
       pod('default', 'api-66-p2', '', 'api', { phase: 'Pending', ready: false }),
       pod('kube-system', 'coredns-1', 'harbor-control-plane', 'coredns'),
       pod('kube-system', 'coredns-2', 'harbor-control-plane', 'coredns'),

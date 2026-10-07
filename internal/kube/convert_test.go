@@ -198,3 +198,31 @@ func TestConvertEventTimestampFallback(t *testing.T) {
 		t.Error("lastTimestamp should win")
 	}
 }
+
+func TestCurrentReplicaSet(t *testing.T) {
+	d := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+		Name: "web", Namespace: "a", Annotations: map[string]string{revisionAnnotation: "3"},
+	}}
+	rs := func(name, ns, owner, rev string) *appsv1.ReplicaSet {
+		return &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{
+			Name: name, Namespace: ns, Annotations: map[string]string{revisionAnnotation: rev},
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Deployment", Name: owner}},
+		}}
+	}
+	sets := []*appsv1.ReplicaSet{
+		rs("web-old", "a", "web", "2"),
+		rs("web-new", "a", "web", "3"),
+		rs("other-9", "a", "other", "9"),
+		rs("web-elsewhere", "b", "web", "3"),
+	}
+	if got := CurrentReplicaSet(d, sets); got != "web-new" {
+		t.Errorf("by revision = %q, want web-new", got)
+	}
+	d.Annotations = nil
+	if got := CurrentReplicaSet(d, sets); got != "web-new" {
+		t.Errorf("highest fallback = %q, want web-new", got)
+	}
+	if got := CurrentReplicaSet(d, nil); got != "" {
+		t.Errorf("no sets = %q, want empty", got)
+	}
+}

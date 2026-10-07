@@ -16,6 +16,31 @@ import (
 // MapPosAnnotation stores where the player placed a Deployment on the map.
 const MapPosAnnotation = "harbor.dev/map-pos"
 
+// revisionAnnotation is set by the deployment controller on both the
+// Deployment and each of its ReplicaSets.
+const revisionAnnotation = "deployment.kubernetes.io/revision"
+
+// CurrentReplicaSet returns the name of the ReplicaSet that matches the
+// Deployment's current revision, or the highest-revision one it owns, or "".
+func CurrentReplicaSet(d *appsv1.Deployment, sets []*appsv1.ReplicaSet) string {
+	want := d.Annotations[revisionAnnotation]
+	best := ""
+	bestRev := -1
+	for _, rs := range sets {
+		if rs.Namespace != d.Namespace || OwnerOfKind(rs.OwnerReferences, "Deployment") != d.Name {
+			continue
+		}
+		rev := rs.Annotations[revisionAnnotation]
+		if want != "" && rev == want {
+			return rs.Name
+		}
+		if n, err := strconv.Atoi(rev); err == nil && n > bestRev {
+			best, bestRev = rs.Name, n
+		}
+	}
+	return best
+}
+
 // ParseMapPos decodes "x,y". Anything else returns ok=false.
 func ParseMapPos(s string) (gen.MapPos, bool) {
 	x, y, ok := strings.Cut(strings.TrimSpace(s), ",")

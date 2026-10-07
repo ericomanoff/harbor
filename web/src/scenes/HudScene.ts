@@ -1,10 +1,13 @@
 import Phaser from 'phaser';
-import { scaleDeployment } from '../api/client';
+import { deleteDeployment, deletePod, scaleDeployment } from '../api/client';
 import { eva, link, mode, selection, settings, store, type LinkStatus } from '../app';
 import { FONT, GAME_HEIGHT, GAME_WIDTH, MAP_W, PALETTE, SIDEBAR_W } from '../config';
+import { sellPlan } from '../game/commands';
+import { EvaFeed, clipLine } from '../game/eva';
+import { computePower, formatPower, type PowerLevel } from '../game/power';
 import { hexString, isSystemNamespace, namespaceColor } from '../layout/colors';
 import { BUILD_CELL, TILE } from '../layout/grid';
-import { nsKey, type StoreEvent } from '../store/cluster';
+import type { StoreEvent } from '../store/cluster';
 import { Button } from '../ui/Button';
 import type { MapScene } from './MapScene';
 
@@ -15,10 +18,12 @@ const POWER = { y: 38, h: 8 };
 const RADAR = { x: X, y: 52, w: W, h: 104 };
 const BUILD = { y: 176, h: 44, w: 88 };
 const INFO = { y: 232, h: 222 };
-const CMD = { y: INFO.y + INFO.h - 52, h: 22 };
+/** Three command rows at the bottom of the selection panel. */
+export const CMD = { x: X + 2, w: W - 4, h: 22, gap: 4, y: INFO.y + INFO.h - 3 * 22 - 2 * 4 - 4 };
 const TOGGLE_Y = 462;
 const LOG = { y: 476, h: 116 };
 const LOG_LINES = 9;
+const CONFIRM_MS = 4000;
 
 const TEXT = { fontFamily: FONT, fontSize: '10px', color: '#c8c8b0' };
 
@@ -26,6 +31,8 @@ interface Action {
   label: string;
   enabled: boolean;
   run?: () => Promise<void>;
+  /** Dangerous actions ask for a second click within CONFIRM_MS. */
+  confirm?: string;
 }
 
 /** The C&C sidebar: power, radar, build strip, selection and commands, EVA log. */
@@ -39,13 +46,11 @@ export class HudScene extends Phaser.Scene {
   private infoText!: Phaser.GameObjects.Text;
   private toggleText!: Phaser.GameObjects.Text;
   private logText!: Phaser.GameObjects.Text;
-  private primary!: Button;
-  private secondary!: Button;
-  private actions: { primary?: Action; secondary?: Action } = {};
+  private buttons!: Button[];
+  private actions: (Action | undefined)[] = [];
+  private pendingConfirm?: { index: number; until: number };
+  private feed = new EvaFeed(store);
   readonly log: string[] = [];
-  private readonly seenDeps = new Set<string>();
-  private readonly seenPods = new Set<string>();
-  private readonly avail = new Map<string, number>();
 
   constructor() {
     super('Hud');
@@ -74,8 +79,9 @@ export class HudScene extends Phaser.Scene {
 
     this.add.text(X, INFO.y + 2, 'SELECTION', { ...TEXT, color: '#8a8a70' });
     this.infoText = this.add.text(X, INFO.y + 16, '', { ...TEXT, wordWrap: { width: W } });
-    this.primary = new Button(this, X + 2, CMD.y, W - 4, CMD.h, '', () => this.run(this.actions.primary));
-    this.secondary = new Button(this, X + 2, CMD.y + CMD.h + 4, W - 4, CMD.h, '', () => this.run(this.actions.secondary), PALETTE.amber);
+    const colors = [PALETTE.radarGreen, PALETTE.amber, PALETTE.alert];
+    this.buttons = colors.map((color, i) =>
+      new Button(this, CMD.x, CMD.y + i * (CMD.h + CMD.gap), CMD.w, CMD.h, '', () => void this.run(i), color));
 
     this.toggleText = this.add.text(X, TOGGLE_Y, '', { ...TEXT, color: hexString(PALETTE.amber) })
       .setInteractive({ useHandCursor: true })
@@ -103,6 +109,13 @@ export class HudScene extends Phaser.Scene {
     this.time.addEvent({ delay: 150, loop: true, callback: () => this.drawRadar() });
   }
 
+  update(time: number): void {
+    if (this.pendingConfirm && time > this.pendingConfirm.until) {
+      this.pendingConfirm = undefined;
+      this.refreshButtons();
+    }
+  }
+
   private drawChrome(): void {
     const g = this.add.graphics();
     g.fillStyle(PALETTE.black, 1).fillRect(MAP_W, 0, SIDEBAR_W, GAME_HEIGHT);
@@ -124,7 +137,6 @@ export class HudScene extends Phaser.Scene {
     g.clear();
     g.fillStyle(active ? 0x1a2a14 : 0x101010, 1).fillRect(X, BUILD.y, BUILD.w, BUILD.h);
     g.lineStyle(1, active ? PALETTE.radarGreen : PALETTE.bevelLight, 1).strokeRect(X + 0.5, BUILD.y + 0.5, BUILD.w - 1, BUILD.h - 1);
-    // Cameo icon: a little factory.
     const ix = X + BUILD.w / 2 - 14;
     const iy = BUILD.y + 6;
     g.fillStyle(0x3a3a30, 1).fillRect(ix, iy + 8, 28, 12);
@@ -177,25 +189,18 @@ export class HudScene extends Phaser.Scene {
     this.map().centerOnWorld((p.x - ox) / s, (p.y - oy) / s);
   }
 
-  /** Power = CPU requests over allocatable across ready nodes, C&C style. */
   private drawPower(): void {
-    let req = 0;
-    let alloc = 0;
-    for (const n of store.nodes.values()) {
-      if (!n.ready) continue;
-      req += n.cpuReq;
-      alloc += n.cpuAlloc;
-    }
-    const frac = alloc > 0 ? req / alloc : 0;
-    const color = frac < 0.6 ? PALETTE.radarGreen : frac < 0.85 ? PALETTE.amber : PALETTE.alert;
+    const p = computePower(store.nodes.values());
+    const colors: Record<PowerLevel, number> = { ok: PALETTE.radarGreen, low: PALETTE.amber, critical: PALETTE.alert };
+    const color = colors[p.level];
     const x = X + 26;
     const w = W - 26 - 54;
     const g = this.power;
     g.clear();
     g.fillStyle(0x000000, 1).fillRect(x, POWER.y, w, POWER.h);
     g.lineStyle(1, PALETTE.bevelDark, 1).strokeRect(x + 0.5, POWER.y + 0.5, w - 1, POWER.h - 1);
-    g.fillStyle(color, 1).fillRect(x + 1, POWER.y + 1, Math.max(0, Math.min(1, frac) * (w - 2)), POWER.h - 2);
-    this.powerText.setText(alloc ? `${Math.round(frac * 100)}%  ${(req / 1000).toFixed(1)}/${(alloc / 1000).toFixed(0)} cpu` : 'no power').setColor(hexString(color));
+    g.fillStyle(color, 1).fillRect(x + 1, POWER.y + 1, Math.max(0, Math.min(1, p.frac) * (w - 2)), POWER.h - 2);
+    this.powerText.setText(formatPower(p)).setColor(hexString(color));
   }
 
   private setLink(s: LinkStatus): void {
@@ -211,8 +216,16 @@ export class HudScene extends Phaser.Scene {
 
   // ---- selection and commands -------------------------------------------
 
-  private async run(a?: Action): Promise<void> {
+  private async run(i: number): Promise<void> {
+    const a = this.actions[i];
     if (!a?.run || !a.enabled) return;
+    if (a.confirm && this.pendingConfirm?.index !== i) {
+      this.pendingConfirm = { index: i, until: this.time.now + CONFIRM_MS };
+      this.refreshButtons();
+      return;
+    }
+    this.pendingConfirm = undefined;
+    this.refreshButtons();
     try {
       await a.run();
     } catch (e) {
@@ -220,10 +233,18 @@ export class HudScene extends Phaser.Scene {
     }
   }
 
-  private setActions(primary?: Action, secondary?: Action): void {
-    this.actions = { primary, secondary };
-    this.primary.setVisible(!!primary).setLabel(primary?.label ?? '').setEnabled(!!primary?.enabled);
-    this.secondary.setVisible(!!secondary).setLabel(secondary?.label ?? '').setEnabled(!!secondary?.enabled);
+  private setActions(...actions: (Action | undefined)[]): void {
+    this.actions = actions;
+    this.pendingConfirm = undefined;
+    this.refreshButtons();
+  }
+
+  private refreshButtons(): void {
+    this.buttons.forEach((b, i) => {
+      const a = this.actions[i];
+      const confirming = this.pendingConfirm?.index === i;
+      b.setVisible(!!a).setLabel(confirming ? (a?.confirm ?? '') : (a?.label ?? '')).setEnabled(!!a?.enabled);
+    });
   }
 
   private refreshInfo(): void {
@@ -234,7 +255,7 @@ export class HudScene extends Phaser.Scene {
     }
     const keys = [...selection.keys];
     if (keys.length === 0) {
-      this.infoText.setText('Click a structure or unit.\nDrag to box-select units.\nDrag a structure to move it.\n\n[B] place a War Factory.\nRight-drag pans, wheel zooms,\nH homes the camera.');
+      this.infoText.setText('Click a structure or unit.\nDrag to box-select units.\nDrag a structure to move it.\nTab cycles the selection.\n\n[B] place a War Factory.\nRight-drag pans, wheel zooms,\nH homes the camera.');
       this.setActions();
       return;
     }
@@ -242,24 +263,28 @@ export class HudScene extends Phaser.Scene {
     if (keys.length === 1 && k0.startsWith('b:')) {
       const d = store.deployments.get(k0.slice(2));
       if (!d) return;
+      const rolling = d.replicas > 0 && d.updated < d.replicas;
       this.infoText.setText([
         'WAR FACTORY',
         d.name,
         `ns: ${d.ns}`,
         `image: ${d.image}`,
         `units: ${d.available}/${d.replicas} ready`,
-        `updated: ${d.updated}`,
+        rolling ? `ROLLOUT: ${d.updated}/${d.replicas} on new template` : `updated: ${d.updated}`,
         d.mapPos ? `site ${d.mapPos.x},${d.mapPos.y}` : 'auto-placed (drag to site)',
       ].join('\n'));
       this.setActions(
         { label: 'BUILD UNIT  (+1)', enabled: true, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas + 1); this.eva(`UNIT ORDERED: ${d.name}`); } },
         { label: 'RETIRE UNIT  (-1)', enabled: d.replicas > 0, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas - 1); this.eva(`UNIT RETIRED: ${d.name}`); } },
+        { label: 'SELL STRUCTURE', confirm: 'CONFIRM: SELL AND LOSE UNITS?', enabled: true, run: async () => { await deleteDeployment(d.ns, d.name); this.eva(`STRUCTURE SOLD: ${d.name}`); selection.clear(); } },
       );
       return;
     }
     const pods = keys.filter((k) => k.startsWith('u:')).map((k) => store.pods.get(k.slice(2))).filter((p) => !!p);
     if (pods.length === 1) {
       const p = pods[0]!;
+      const dep = p.deployment ? store.deployments.get(`${p.ns}/${p.deployment}`) : undefined;
+      const old = !!(dep?.currentRS && p.ownerRS && p.ownerRS !== dep.currentRS);
       this.infoText.setText([
         'UNIT',
         p.name,
@@ -268,94 +293,46 @@ export class HudScene extends Phaser.Scene {
         `phase: ${p.phase}${p.ready ? ' READY' : ''}`,
         `restarts: ${p.restarts}`,
         p.reason ? `!! ${p.reason}` : '',
-        p.deployment ? `from: ${p.deployment}` : 'no factory',
+        p.deployment ? `from: ${p.deployment}${old ? ' (old template)' : ''}` : 'no factory',
       ].filter(Boolean).join('\n'));
     } else {
       this.infoText.setText(`${pods.length} UNITS SELECTED`);
     }
-    // Sell: group by factory, scale each down by the count, retiring exactly these pods.
-    const groups = new Map<string, { ns: string; dep: string; names: string[] }>();
-    let sellable = pods.length > 0;
-    for (const p of pods) {
-      if (!p.deployment) {
-        sellable = false;
-        break;
-      }
-      const g = groups.get(nsKey(p.ns, p.deployment)) ?? { ns: p.ns, dep: p.deployment, names: [] };
-      g.names.push(p.name);
-      groups.set(nsKey(p.ns, p.deployment), g);
-    }
-    this.setActions({
-      label: sellable ? `SELL ${pods.length} UNIT${pods.length > 1 ? 'S' : ''}` : 'NOT SELLABLE (no factory)',
-      enabled: sellable,
-      run: async () => {
-        for (const g of groups.values()) {
-          const d = store.deployments.get(nsKey(g.ns, g.dep));
-          if (!d) continue;
-          await scaleDeployment(g.ns, g.dep, Math.max(0, d.replicas - g.names.length), g.names);
-        }
-        this.eva(`UNIT${pods.length > 1 ? 'S' : ''} SOLD`);
-        selection.clear();
+    const plan = sellPlan(pods, store.deployments);
+    this.setActions(
+      {
+        label: plan.sellable ? `SELL ${pods.length} UNIT${pods.length > 1 ? 'S' : ''}` : 'NOT SELLABLE (no factory)',
+        enabled: plan.sellable,
+        run: async () => {
+          for (const g of plan.groups) await scaleDeployment(g.ns, g.deployment, g.target, g.names);
+          this.eva(`UNIT${pods.length > 1 ? 'S' : ''} SOLD`);
+          selection.clear();
+        },
       },
-    });
+      {
+        label: `REPAIR ${pods.length > 1 ? `${pods.length} UNITS` : 'UNIT'} (replace)`,
+        enabled: pods.length > 0,
+        run: async () => {
+          for (const p of pods) await deletePod(p.ns, p.name);
+          this.eva('REPAIR ORDERED');
+          selection.clear();
+        },
+      },
+    );
   }
 
   // ---- store feed --------------------------------------------------------
 
   private onStore(e: StoreEvent): void {
-    switch (e.type) {
-      case 'snapshot':
-        this.contextText.setText(store.context ? `THEATER: ${store.context}` : 'NO THEATER');
-        this.seenDeps.clear();
-        this.seenPods.clear();
-        this.avail.clear();
-        for (const [k, d] of store.deployments) {
-          this.seenDeps.add(k);
-          this.avail.set(k, d.available);
-        }
-        for (const k of store.pods.keys()) this.seenPods.add(k);
-        if (store.context) this.eva('BATTLEFIELD CONTROL ESTABLISHED');
-        this.drawPower();
-        break;
-      case 'node':
-        this.drawPower();
-        break;
-      case 'deployment': {
-        const d = store.deployments.get(e.key);
-        if (e.op === 'delete') {
-          this.seenDeps.delete(e.key);
-          this.avail.delete(e.key);
-          this.eva(`STRUCTURE SOLD: ${e.key}`);
-        } else if (!this.seenDeps.has(e.key)) {
-          this.seenDeps.add(e.key);
-          this.eva(`NEW CONSTRUCTION: ${e.key}`);
-        } else if (d && this.avail.get(e.key) === 0 && d.available > 0) {
-          this.eva(`CONSTRUCTION COMPLETE: ${d.name}`);
-        }
-        if (d) this.avail.set(e.key, d.available);
-        break;
-      }
-      case 'pod':
-        if (e.op === 'delete') {
-          this.seenPods.delete(e.key);
-          this.eva(`UNIT LOST: ${e.key.split('/')[1]}`);
-        } else if (!this.seenPods.has(e.key)) {
-          this.seenPods.add(e.key);
-          this.eva(`UNIT DEPLOYED: ${e.key.split('/')[1]}`);
-        }
-        break;
-      case 'event':
-        if (e.event.type === 'Warning') this.eva(`${e.event.reason}: ${e.event.name}`);
-        break;
-      default:
-        break;
-    }
+    for (const line of this.feed.announce(e)) this.eva(line);
+    if (e.type === 'snapshot') this.contextText.setText(store.context ? `THEATER: ${store.context}` : 'NO THEATER');
+    if (e.type === 'snapshot' || e.type === 'node') this.drawPower();
+    if (e.type === 'event' && e.event.type === 'Warning') this.map().flashFor(e.event);
     this.refreshInfo();
   }
 
   private eva(line: string): void {
-    const max = 30;
-    this.log.push(line.length > max ? `${line.slice(0, max - 1)}…` : line);
+    this.log.push(clipLine(line));
     if (this.log.length > LOG_LINES) this.log.splice(0, this.log.length - LOG_LINES);
     this.logText.setText(this.log.join('\n'));
   }

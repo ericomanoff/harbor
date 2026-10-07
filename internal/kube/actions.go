@@ -139,3 +139,15 @@ func annotationPatch(key, value string) []byte {
 	b, _ := json.Marshal(map[string]any{"metadata": map[string]any{"annotations": map[string]string{key: value}}})
 	return b
 }
+
+// DeleteDeployment sells a structure. Background propagation lets the API
+// answer at once while the garbage collector removes the pods.
+func DeleteDeployment(ctx context.Context, client kubernetes.Interface, ns, name string) error {
+	policy := metav1.DeletePropagationBackground
+	return client.AppsV1().Deployments(ns).Delete(ctx, name, metav1.DeleteOptions{PropagationPolicy: &policy})
+}
+
+// DeletePod repairs a unit: the ReplicaSet replaces it with a fresh one.
+func DeletePod(ctx context.Context, client kubernetes.Interface, ns, name string) error {
+	return client.CoreV1().Pods(ns).Delete(ctx, name, metav1.DeleteOptions{})
+}

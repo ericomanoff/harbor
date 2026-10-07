@@ -1,0 +1,188 @@
+import { execFileSync } from 'node:child_process';
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * Plays one round against the live cluster: place a War Factory, order a
+ * unit, sell a unit, repair a unit, sell the structure. Each step is
+ * asserted through the game's own store (fed by the backend stream) and the
+ * final state through kubectl.
+ *
+ * Needs the harbor binary built (make build) and a reachable cluster; the
+ * Playwright webServer starts the binary on its own port.
+ */
+
+// Sidebar geometry, mirrored from HudScene. The viewport is exactly the
+// logical size so canvas coordinates equal page coordinates.
+const MAP_W = 760;
+const CAMEO = { x: MAP_W + 8 + 44, y: 176 + 22 };
+const CMD_Y0 = 232 + 222 - 3 * 22 - 2 * 4 - 4;
+const cmd = (i: number): { x: number; y: number } => ({ x: MAP_W + 8 + 2 + 90, y: CMD_Y0 + i * 26 + 11 });
+
+const NS = 'default';
+const NAME = `e2e-${Date.now().toString(36)}`;
+
+declare global {
+  interface Window {
+    harbor: {
+      store: { context: string; deployments: Map<string, unknown>; pods: Map<string, unknown> };
+      selection: { keys: Set<string> };
+      mode: { current: string };
+      game: { scene: { keys: Record<string, unknown> } };
+    };
+  }
+}
+
+function kubectl(...args: string[]): string {
+  return execFileSync('kubectl', ['--context', 'kind-harbor', ...args], { encoding: 'utf8' });
+}
+
+/**
+ * Pans the camera to a world point and returns where it lands on screen.
+ * The world is wider than the viewport, so targets must be brought into
+ * view before they can be clicked.
+ */
+async function focus(page: Page, worldX: number, worldY: number): Promise<{ x: number; y: number }> {
+  return page.evaluate(
+    async ([wx, wy]) => {
+      const m = window.harbor.game.scene.keys.Map as {
+        centerOnWorld(x: number, y: number): void;
+        cameras: { main: { worldView: { x: number; y: number }; zoom: number } };
+      };
+      m.centerOnWorld(wx, wy);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const cam = m.cameras.main;
+      return { x: (wx - cam.worldView.x) * cam.zoom, y: (wy - cam.worldView.y) * cam.zoom };
+    },
+    [worldX, worldY] as const,
+  );
+}
+
+async function deployment(page: Page): Promise<{ replicas: number; available: number } | undefined> {
+  return page.evaluate((key) => window.harbor.store.deployments.get(key) as { replicas: number; available: number } | undefined, `${NS}/${NAME}`);
+}
+
+async function podsOf(page: Page): Promise<{ name: string; ready: boolean }[]> {
+  return page.evaluate(
+    (name) => [...window.harbor.store.pods.values()].filter((p) => (p as { deployment?: string }).deployment === name) as { name: string; ready: boolean }[],
+    NAME,
+  );
+}
+
+test.afterEach(() => {
+  try {
+    kubectl('delete', 'deployment', NAME, '-n', NS, '--ignore-not-found');
+  } catch {
+    /* cluster gone; nothing to clean */
+  }
+});
+
+test('build, order, sell, repair and sell the structure', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => window.harbor?.store.context === 'kind-harbor', null, { timeout: 30_000 })
+    .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
+  await page.waitForFunction(() => {
+    const active = (k: string): boolean => !!(window.harbor.game.scene.keys[k] as { sys?: { isActive(): boolean } } | undefined)?.sys?.isActive();
+    return active('Map') && active('Hud');
+  });
+
+  // Enter placement mode from the cameo and pick a free building cell.
+  await page.mouse.click(CAMEO.x, CAMEO.y);
+  await expect.poll(() => page.evaluate(() => window.harbor.mode.current)).toBe('place');
+  const cell = await page.evaluate(() => {
+    const m = window.harbor.game.scene.keys.Map as {
+      layout: { plateaus: { x: number; y: number; w: number; node: string }[]; buildings: Map<string, { x: number; y: number; kind: string }> };
+    };
+    const taken = new Set([...m.layout.buildings.values()].filter((b) => b.kind === 'plateau').map((b) => `${b.x},${b.y}`));
+    for (const p of m.layout.plateaus) {
+      const cols = Math.floor((p.w - 2) / 3);
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = p.x + 1 + c * 3;
+          const y = p.y + 1 + r * 3;
+          if (!taken.has(`${x},${y}`)) return { x, y };
+        }
+      }
+    }
+    throw new Error('no free building cell');
+  });
+  const at = await focus(page, cell.x * 24 + 36, cell.y * 24 + 36);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.click(at.x, at.y);
+
+  const form = page.locator('#build-form');
+  await expect(form).toBeVisible();
+  await expect(form.locator('.where')).toHaveText(`site ${cell.x},${cell.y}`);
+  await form.locator('select[name=ns]').selectOption(NS);
+  await form.locator('input[name=name]').fill(NAME);
+  await form.locator('input[name=replicas]').fill('1');
+  await form.locator('button[type=submit]').click();
+  await expect(form).toBeHidden();
+
+  await page.waitForFunction((key) => {
+    const d = window.harbor.store.deployments.get(key) as { available: number } | undefined;
+    return d?.available === 1;
+  }, `${NS}/${NAME}`, { timeout: 120_000 });
+  expect(kubectl('get', 'deployment', NAME, '-n', NS, '-o', 'jsonpath={.metadata.annotations.harbor\\.dev/map-pos}')).toBe(`${cell.x},${cell.y}`);
+
+  // Select the factory (click its cell) and order one more unit.
+  let bAt = await focus(page, cell.x * 24 + 36, cell.y * 24 + 36);
+  await page.mouse.click(bAt.x, bAt.y);
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`b:${NS}/${NAME}`]);
+  await page.mouse.click(cmd(0).x, cmd(0).y);
+  await page.waitForFunction((key) => {
+    const d = window.harbor.store.deployments.get(key) as { replicas: number; available: number } | undefined;
+    return d?.replicas === 2 && d.available === 2;
+  }, `${NS}/${NAME}`, { timeout: 120_000 });
+
+  // Select one unit and sell it: exactly that pod must go.
+  const pods = await podsOf(page);
+  expect(pods).toHaveLength(2);
+  const victim = pods[0]!.name;
+  const unitPos = await page.evaluate((key) => {
+    const m = window.harbor.game.scene.keys.Map as { layout: { units: Map<string, { x: number; y: number }> } };
+    return m.layout.units.get(key)!;
+  }, `${NS}/${victim}`);
+  const uAt = await focus(page, unitPos.x * 24 + 12, unitPos.y * 24 + 12);
+  await page.mouse.click(uAt.x, uAt.y);
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${victim}`]);
+  await page.mouse.click(cmd(0).x, cmd(0).y);
+  await page.waitForFunction(
+    ([name, v]) => {
+      const live = [...window.harbor.store.pods.values()].filter((p) => (p as { deployment?: string }).deployment === name) as { name: string }[];
+      return live.length === 1 && live[0]!.name !== v;
+    },
+    [NAME, victim] as const,
+    { timeout: 120_000 },
+  );
+  expect((await deployment(page))?.replicas).toBe(1);
+
+  // Repair the remaining unit: a different pod replaces it, replicas unchanged.
+  const [remaining] = await podsOf(page);
+  const rPos = await page.evaluate((key) => {
+    const m = window.harbor.game.scene.keys.Map as { layout: { units: Map<string, { x: number; y: number }> } };
+    return m.layout.units.get(key)!;
+  }, `${NS}/${remaining!.name}`);
+  const rAt = await focus(page, rPos.x * 24 + 12, rPos.y * 24 + 12);
+  await page.mouse.click(rAt.x, rAt.y);
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${remaining!.name}`]);
+  await page.mouse.click(cmd(1).x, cmd(1).y);
+  await page.waitForFunction(
+    ([name, old]) => {
+      const live = [...window.harbor.store.pods.values()].filter((p) => (p as { deployment?: string }).deployment === name) as { name: string; ready: boolean }[];
+      return live.length === 1 && live[0]!.name !== old && live[0]!.ready;
+    },
+    [NAME, remaining!.name] as const,
+    { timeout: 120_000 },
+  );
+
+  // Sell the structure: needs a confirming second click.
+  bAt = await focus(page, cell.x * 24 + 36, cell.y * 24 + 36);
+  await page.mouse.click(bAt.x, bAt.y);
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`b:${NS}/${NAME}`]);
+  await page.mouse.click(cmd(2).x, cmd(2).y);
+  await page.waitForTimeout(300);
+  expect(await deployment(page)).toBeDefined(); // first click only arms the confirm
+  await page.mouse.click(cmd(2).x, cmd(2).y);
+  await page.waitForFunction((key) => !window.harbor.store.deployments.has(key), `${NS}/${NAME}`, { timeout: 60_000 });
+  expect(() => kubectl('get', 'deployment', NAME, '-n', NS)).toThrow();
+});

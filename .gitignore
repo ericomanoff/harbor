@@ -9,3 +9,6 @@
 # OS / editor
 .DS_Store
 *.log
+# Playwright
+/web/test-results/
+/web/playwright-report/

@@ -5,6 +5,7 @@
 #   make gen       regenerate Go and TypeScript code from api/openapi.yaml
 #   make test      Go tests + frontend tests
 #   make test-kind integration test against the kind cluster
+#   make test-e2e  Playwright plays a round in the real game against kind
 #   make kind-up   create the local kind cluster with a sample workload
 #   make kind-down delete it
 
@@ -13,7 +14,7 @@ VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev
 LDFLAGS  := -X github.com/ericomanoff/harbor/internal/api.Version=$(VERSION)
 KIND_CLUSTER := harbor
 
-.PHONY: all gen web build run dev test test-go test-web test-kind kind-up kind-down clean deps
+.PHONY: all gen web build run dev test test-go test-web test-kind test-e2e kind-up kind-down clean deps
 
 all: build
 
@@ -50,11 +51,15 @@ test-go:
 	go test ./...
 
 test-web: deps
-	cd web && npx tsc --noEmit && npm test
+	cd web && npm run typecheck && npm test
 
 # Integration test against the kind cluster from `make kind-up`.
 test-kind:
 	HARBOR_KIND_TEST=1 go test ./internal/kube -run TestIntegrationKind -v -count=1
+
+# End-to-end: Playwright drives the built game against the binary and kind.
+test-e2e: build
+	cd web && npx playwright test
 
 kind-up:
 	kind create cluster --name $(KIND_CLUSTER) --config deploy/kind/kind-config.yaml

@@ -123,6 +123,9 @@ type Deployment struct {
 	Available  int         `json:"available"`
 	Conditions []Condition `json:"conditions"`
 
+	// CurrentRS ReplicaSet for the current pod template. Pods whose ownerRS differs belong to an old rollout and are being replaced.
+	CurrentRS *string `json:"currentRS,omitempty"`
+
 	// Image Image of the first container.
 	Image string `json:"image"`
 
@@ -452,6 +455,9 @@ type ServerInterface interface {
 	// CreateDeployment Create a Deployment (place a War Factory)
 	// (POST /api/deployments)
 	CreateDeployment(w http.ResponseWriter, r *http.Request)
+	// DeleteDeployment Sell a structure (delete the Deployment; its pods follow)
+	// (DELETE /api/deployments/{ns}/{name})
+	DeleteDeployment(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
 	// SetDeploymentMapPos Persist the building's map tile as an annotation
 	// (PATCH /api/deployments/{ns}/{name}/mappos)
 	SetDeploymentMapPos(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
@@ -461,6 +467,9 @@ type ServerInterface interface {
 	// GetHealth Liveness and build info
 	// (GET /api/healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// DeletePod Repair a unit (delete the pod so its ReplicaSet replaces it)
+	// (DELETE /api/pods/{ns}/{name})
+	DeletePod(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
@@ -520,6 +529,41 @@ func (siw *ServerInterfaceWrapper) CreateDeployment(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateDeployment(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteDeployment operation middleware
+func (siw *ServerInterfaceWrapper) DeleteDeployment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteDeployment(w, r, ns, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -604,6 +648,41 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeletePod operation middleware
+func (siw *ServerInterfaceWrapper) DeletePod(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePod(w, r, ns, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -752,6 +831,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/contexts/{name}/select", wrapper.SelectContext)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/snapshot", wrapper.GetSnapshot)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/deployments", wrapper.CreateDeployment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/deployments/{ns}/{name}", wrapper.DeleteDeployment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/pods/{ns}/{name}", wrapper.DeletePod)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/scale", wrapper.ScaleDeployment)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/mappos", wrapper.SetDeploymentMapPos)
 

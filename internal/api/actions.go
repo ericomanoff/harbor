@@ -117,3 +117,33 @@ func (s *Server) SetDeploymentMapPos(w http.ResponseWriter, r *http.Request, ns 
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// DeleteDeployment sells a structure.
+func (s *Server) DeleteDeployment(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.DeleteDeployment(ctx, cur.Client(), ns, name); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeletePod repairs a unit by letting its ReplicaSet replace it.
+func (s *Server) DeletePod(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.DeletePod(ctx, cur.Client(), ns, name); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

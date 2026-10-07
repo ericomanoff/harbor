@@ -203,6 +203,8 @@ func TestActionsRequireAContext(t *testing.T) {
 		{http.MethodPost, "/api/deployments"},
 		{http.MethodPatch, "/api/deployments/default/web/scale"},
 		{http.MethodPatch, "/api/deployments/default/web/mappos"},
+		{http.MethodDelete, "/api/deployments/default/web"},
+		{http.MethodDelete, "/api/pods/default/web-1"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`)))
@@ -267,6 +269,16 @@ func TestCreateScaleMapPosRoundTrip(t *testing.T) {
 	d, _ = s.current().Client().AppsV1().Deployments("sandbox").Get(ctx, "web", metav1.GetOptions{})
 	if d.Annotations[kube.MapPosAnnotation] != "9,1" {
 		t.Errorf("annotation = %q", d.Annotations[kube.MapPosAnnotation])
+	}
+
+	if rec = do(http.MethodDelete, "/api/pods/sandbox/nope", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("delete missing pod: %d, want 404", rec.Code)
+	}
+	if rec = do(http.MethodDelete, "/api/deployments/sandbox/web", ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = do(http.MethodDelete, "/api/deployments/sandbox/web", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("delete twice: %d, want 404", rec.Code)
 	}
 }
 

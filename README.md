@@ -25,12 +25,16 @@ fake cluster with no backend.
 Controls: left-click selects, drag box-selects units, drag a structure to
 move it, right-drag pans, wheel zooms, arrows or WASD scroll, H homes the
 camera, N toggles system namespaces, B (or the WAR FACTORY cameo) starts
-placing a Deployment, Esc cancels or clears. Click the radar to jump.
+placing a Deployment, Tab cycles the selection, Esc cancels or clears. Click
+the radar to jump.
 
 Playing: place a War Factory on a free cell in a plateau's top rows and fill
 in the form to create a Deployment. Select the factory to build or retire
-units (scale replicas). Select units and SELL to scale down retiring exactly
-those pods. The power bar is CPU requests over allocatable across ready nodes.
+units (scale replicas), or SELL STRUCTURE (click twice) to delete it. Select
+units and SELL to scale down retiring exactly those pods, or REPAIR to delete
+them so the ReplicaSet replaces them. Units from an old rollout are hatched;
+Warning events flash their unit or structure. The power bar is CPU requests
+over allocatable across ready nodes.
 
 For the single-binary experience:
 
@@ -51,7 +55,8 @@ websocat ws://127.0.0.1:8080/ws
 ```sh
 make gen       # after editing api/openapi.yaml
 make test      # go vet + go test + tsc + vitest
-make test-kind # integration test against the kind cluster
+make test-kind # integration test against the kind cluster (~5 s)
+make test-e2e  # Playwright plays a round in the real game against kind (~10 s)
 make kind-down
 ```
 

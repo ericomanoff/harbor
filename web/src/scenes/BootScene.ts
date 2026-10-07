@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { store } from '../app';
 import { GAME_HEIGHT, GAME_WIDTH, PALETTE } from '../config';
 import { startDemo } from '../demo/demo';
+import { buildTextures } from '../gfx/sprites';
 import { connectWebSocket } from '../store/source';
 
 /**
@@ -22,6 +23,8 @@ export class BootScene extends Phaser.Scene {
     const mono = { fontFamily: 'monospace', fontSize: '28px', color: '#39ff14' };
     this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, 'HARBOR', mono).setOrigin(0.5);
     this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'ESTABLISHING BATTLEFIELD CONTROL...', { ...mono, fontSize: '14px' }).setOrigin(0.5);
+
+    buildTextures(this);
 
     const demo = new URLSearchParams(location.search).has('demo');
     if (demo) startDemo(store);

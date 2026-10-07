@@ -54,3 +54,11 @@ export function scaleDeployment(ns: string, name: string, replicas: number, reti
 export function setMapPos(ns: string, name: string, mp: MapPos, fetchFn: typeof fetch = fetch): Promise<void> {
   return request<void>('PATCH', `/api/deployments/${encodeURIComponent(ns)}/${encodeURIComponent(name)}/mappos`, mp, fetchFn);
 }
+
+export function deleteDeployment(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('DELETE', `/api/deployments/${encodeURIComponent(ns)}/${encodeURIComponent(name)}`, undefined, fetchFn);
+}
+
+export function deletePod(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('DELETE', `/api/pods/${encodeURIComponent(ns)}/${encodeURIComponent(name)}`, undefined, fetchFn);
+}

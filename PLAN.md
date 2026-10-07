@@ -1,6 +1,6 @@
 # Harbor: a Command & Conquer style GUI for Kubernetes and Helm
 
-Status: Phases 0-3 complete and verified against the kind cluster (updated 2026-10-07). First playable.
+Status: Phases 0-3 complete; Phase 4 in progress (updated 2026-10-07).
 
 ## Progress
 
@@ -10,7 +10,7 @@ Status: Phases 0-3 complete and verified against the kind cluster (updated 2026-
 | 1     | Done        | 2026-10-07. Contexts, informers for 6 kinds, wire conversion, hub, /ws, /api/snapshot, startup auto-connect. `make test-kind` passes against kind-harbor. |
 | 2     | Done        | 2026-10-07. Store + WebSocket reconnect, deterministic layout, plateaus/buildings/units, camera, selection, radar, EVA log. Live: `kubectl scale` 3→5→3 showed units deploy and die within ~2 s. |
 | 3     | Done        | 2026-10-07. War Factory cameo + placement ghost, HTML build form, create/scale/mappos endpoints, build/retire/sell commands (sell retires the exact pods via pod-deletion-cost), power bar, building drag-move. Live: built, spawned 5, sold 2, restarted, site persisted. |
-| 4     | Next        | Polish and feel.                                                      |
+| 4     | In progress | 2026-10-07: generated pixel-art sprites (8-facing tank, factory, scaffold, fire, explosion), rollout hatching + badge, warning flashes, sell structure (confirm) and repair unit, Tab cycling. Regression suite: pure game modules under test, kind integration round trip, Playwright e2e round. Left: audio/EVA voice, search box, namespace filter UI. |
 | 5-6   | Not started |                                                                       |
 
 Deviations from the original plan so far:
@@ -280,7 +280,7 @@ Each phase ends with something you can run against the kind cluster.
 - Done when: you can build a deployment, spawn five pods, sell two, all from
   the game, and the state survives a restart of the binary.
 
-### Phase 4: Polish and feel (2-3 sessions)
+### Phase 4: Polish and feel (2-3 sessions) — IN PROGRESS
 
 - Replace placeholders with original pixel-art sprites, build/sell/death
   animations, burning and crashloop effects, 8-facing unit movement.
@@ -343,11 +343,20 @@ harborV2/
 
 ## 6. Testing
 
-- Go: table-driven unit tests for wire conversion and placement validation;
-  handler tests with `httptest`; kind integration tests gated by env var.
-- Frontend: Vitest for the store, layout and placement logic (no Phaser).
-- End to end: a Playwright smoke test that builds a deployment in the game and
-  asserts it exists via kubectl. Runs in CI against kind.
+Four layers, fastest first. Run `make test` before every commit; the other
+two need the kind cluster.
+
+| Layer | Command | What it covers | Time |
+|-------|---------|----------------|------|
+| Go unit | `make test-go` | wire conversion, current-RS resolution, hub, watcher against a fake clientset, kube actions (create/scale/sell/mappos/delete), HTTP handlers incl. WebSocket and error mapping | ~2 s |
+| Frontend unit | `make test-web` | typecheck (app + e2e), store, layout/placement, colours, API client, and the pure game modules: unitState/isObsolete, power, sellPlan, EvaFeed | ~1 s |
+| Kind integration | `make test-kind` | real informers: snapshot shape, then create → ready → scale → sell a named pod → move → delete, each confirmed on the stream | ~5 s |
+| End to end | `make test-e2e` | Playwright plays a round in the built game against the binary and kind: place a factory via the cameo and form, order a unit, sell a unit, repair a unit, sell the structure with confirm; asserted via the store and kubectl | ~10 s |
+
+Rule of thumb when adding behaviour: put the decision in a pure module under
+`web/src/game` or `internal/kube` with a unit test, keep the Phaser scene a
+thin renderer of it, and extend the e2e round only when a new player action
+appears.
 
 ---
 
