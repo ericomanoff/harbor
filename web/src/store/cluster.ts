@@ -1,0 +1,109 @@
+import type { components } from '../api/schema';
+
+export type Node = components['schemas']['Node'];
+export type Namespace = components['schemas']['Namespace'];
+export type Deployment = components['schemas']['Deployment'];
+export type Pod = components['schemas']['Pod'];
+export type ClusterEvent = components['schemas']['Event'];
+export type Snapshot = components['schemas']['Snapshot'];
+export type WsMessage = components['schemas']['WsMessage'];
+
+/** Key for namespaced objects: "ns/name". */
+export const nsKey = (ns: string, name: string): string => `${ns}/${name}`;
+
+export type StoreEvent =
+  | { type: 'snapshot' }
+  | { type: 'node' | 'namespace' | 'deployment' | 'pod'; op: 'upsert' | 'delete'; key: string }
+  | { type: 'event'; event: ClusterEvent };
+
+const MAX_EVENTS = 100;
+
+/**
+ * Client-side mirror of the cluster. Fed by WsMessages; the map and HUD
+ * subscribe and re-render. No Phaser in here so it is unit-testable.
+ */
+export class ClusterStore {
+  context = '';
+  readonly nodes = new Map<string, Node>();
+  readonly namespaces = new Map<string, Namespace>();
+  readonly deployments = new Map<string, Deployment>();
+  readonly pods = new Map<string, Pod>();
+  readonly events: ClusterEvent[] = [];
+
+  private readonly listeners = new Set<(e: StoreEvent) => void>();
+
+  subscribe(fn: (e: StoreEvent) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private emit(e: StoreEvent): void {
+    for (const fn of this.listeners) fn(e);
+  }
+
+  /** Replaces all state. Used for the initial snapshot and context switches. */
+  replace(snap: Snapshot): void {
+    this.context = snap.context;
+    this.nodes.clear();
+    this.namespaces.clear();
+    this.deployments.clear();
+    this.pods.clear();
+    this.events.length = 0;
+    for (const n of snap.nodes) this.nodes.set(n.name, n);
+    for (const ns of snap.namespaces) this.namespaces.set(ns.name, ns);
+    for (const d of snap.deployments) this.deployments.set(nsKey(d.ns, d.name), d);
+    for (const p of snap.pods) this.pods.set(nsKey(p.ns, p.name), p);
+    this.emit({ type: 'snapshot' });
+  }
+
+  /** Applies one stream message. Unknown kinds are ignored. */
+  apply(msg: WsMessage): void {
+    if (msg.type === 'snapshot') {
+      this.replace(msg.obj as Snapshot);
+      return;
+    }
+    const del = msg.type === 'deleted';
+    const op = del ? 'delete' : 'upsert';
+    switch (msg.kind) {
+      case 'Node': {
+        const n = msg.obj as Node;
+        if (del) this.nodes.delete(n.name);
+        else this.nodes.set(n.name, n);
+        this.emit({ type: 'node', op, key: n.name });
+        break;
+      }
+      case 'Namespace': {
+        const ns = msg.obj as Namespace;
+        if (del) this.namespaces.delete(ns.name);
+        else this.namespaces.set(ns.name, ns);
+        this.emit({ type: 'namespace', op, key: ns.name });
+        break;
+      }
+      case 'Deployment': {
+        const d = msg.obj as Deployment;
+        const key = nsKey(d.ns, d.name);
+        if (del) this.deployments.delete(key);
+        else this.deployments.set(key, d);
+        this.emit({ type: 'deployment', op, key });
+        break;
+      }
+      case 'Pod': {
+        const p = msg.obj as Pod;
+        const key = nsKey(p.ns, p.name);
+        if (del) this.pods.delete(key);
+        else this.pods.set(key, p);
+        this.emit({ type: 'pod', op, key });
+        break;
+      }
+      case 'Event': {
+        const ev = msg.obj as ClusterEvent;
+        this.events.push(ev);
+        if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
+        this.emit({ type: 'event', event: ev });
+        break;
+      }
+      default:
+        break;
+    }
+  }
+}

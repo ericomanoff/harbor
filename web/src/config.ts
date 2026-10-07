@@ -1,6 +1,9 @@
 /** Logical render size. Scaled to the window with nearest-neighbour sampling. */
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 600;
+/** The C&C sidebar on the right; the map viewport is everything left of it. */
+export const SIDEBAR_W = 200;
+export const MAP_W = GAME_WIDTH - SIDEBAR_W;
 
 /** Sidebar palette, matched to the Tiberian Dawn / Red Alert 1 look. */
 export const PALETTE = {
@@ -11,4 +14,11 @@ export const PALETTE = {
   radarGround: 0x001a00,
   amber: 0xffb000,
   alert: 0xff2a2a,
+  ground: 0x0b0b06,
+  plateau: 0x4a4632,
+  plateauDown: 0x3a2424,
+  cliff: 0x8a7a50,
+  voidStrip: 0x1a1a14,
 } as const;
+
+export const FONT = 'monospace';

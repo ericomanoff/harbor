@@ -19,7 +19,14 @@ make kind-up   # local 3-node kind cluster with sample workloads (needs Docker)
 make dev       # backend on :8080, Vite with hot reload on :5173
 ```
 
-Open http://127.0.0.1:5173. For the single-binary experience:
+Open http://127.0.0.1:5173. Add `?demo` to the URL to run against a built-in
+fake cluster with no backend.
+
+Controls: left-click selects, drag box-selects units, right-drag pans, wheel
+zooms, arrows or WASD scroll, H homes the camera, N toggles system
+namespaces, Esc clears the selection. Click the radar to jump.
+
+For the single-binary experience:
 
 ```sh
 make run       # builds web + Go, serves on http://127.0.0.1:8080

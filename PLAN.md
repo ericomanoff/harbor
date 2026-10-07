@@ -1,15 +1,16 @@
 # Harbor: a Command & Conquer style GUI for Kubernetes and Helm
 
-Status: Phases 0 and 1 complete pending live-cluster verification (updated 2026-10-07).
+Status: Phases 0-2 complete and verified against the kind cluster (updated 2026-10-07).
 
 ## Progress
 
 | Phase | Status      | Notes                                                                 |
 |-------|-------------|-----------------------------------------------------------------------|
 | 0     | Done        | 2026-10-07. Go server + embedded Vite/Phaser app, OpenAPI codegen both sides, Makefile, kind config, tests. |
-| 1     | Done*       | 2026-10-07. Contexts, informers for 6 kinds, wire conversion, hub, /ws, /api/snapshot, startup auto-connect. *Unit-tested against a fake clientset; `make test-kind` still needs a running cluster. |
-| 2     | Next        | The map.                                                              |
-| 3-6   | Not started |                                                                       |
+| 1     | Done        | 2026-10-07. Contexts, informers for 6 kinds, wire conversion, hub, /ws, /api/snapshot, startup auto-connect. `make test-kind` passes against kind-harbor. |
+| 2     | Done        | 2026-10-07. Store + WebSocket reconnect, deterministic layout, plateaus/buildings/units, camera, selection, radar, EVA log. Live: `kubectl scale` 3→5→3 showed units deploy and die within ~2 s. |
+| 3     | Next        | Build and scale.                                                      |
+| 4-6   | Not started |                                                                       |
 
 Deviations from the original plan so far:
 
@@ -17,8 +18,9 @@ Deviations from the original plan so far:
   compiler API that openapi-typescript depends on.
 - OpenAPI parameter components are suffixed `Param` (`NamespaceParam`) because
   oapi-codegen cannot have a parameter and a schema both named `Namespace`.
-- The kind cluster has not been created yet; Docker was not running during
-  Phases 0 and 1. `make kind-up` then `make test-kind` verifies Phase 1 live.
+- A pre-existing 3-node kind cluster named `harbor` (OrbStack Docker) is
+  reused rather than recreated; `make kind-up` fails if it already exists, so
+  apply `deploy/kind/sample-workloads.yaml` by hand in that case.
 - client-go v0.37 requires Go 1.26, so go.mod says 1.26 and the Go toolchain
   auto-downloads it (GOTOOLCHAIN=auto). The locally installed go is 1.25.
 - The backend auto-connects to the kubeconfig current-context at startup
@@ -27,6 +29,13 @@ Deviations from the original plan so far:
 - Events older than two minutes when first seen are not broadcast, so a fresh
   client is not flooded with history; a dropped-message counter on the hub
   covers slow WebSocket clients.
+- `?demo` in the URL runs the map against a built-in fake cluster that
+  mutates itself, so map and art work never needs a backend.
+- `window.harbor` exposes the game, store, selection and settings for
+  devtools, and lets a hidden tab's game loop be stepped by hand (Chrome
+  stops animation frames in hidden tabs, which stalls Phaser).
+- Phaser containers reserve `body` and `state`; entity fields use `shape`
+  and `status` instead.
 
 Decisions already made:
 
@@ -220,7 +229,7 @@ Each phase ends with something you can run against the kind cluster.
 - Done when: one command starts both servers and the browser shows a black
   Phaser canvas served by Go.
 
-### Phase 1: Backend read path (1-2 sessions) — DONE 2026-10-07 (live check pending)
+### Phase 1: Backend read path (1-2 sessions) — DONE 2026-10-07
 
 - Context listing and selection.
 - Informers for Node, Namespace, Deployment, ReplicaSet, Pod, Event. Wire-model
@@ -231,7 +240,7 @@ Each phase ends with something you can run against the kind cluster.
 - Done when: `websocat ws://127.0.0.1:8080/ws` prints a snapshot and then live
   diffs while you `kubectl scale` something.
 
-### Phase 2: The map (2 sessions)
+### Phase 2: The map (2 sessions) — DONE 2026-10-07
 
 - Store wired to the WebSocket with reconnect and resnapshot.
 - MapScene: node plateaus laid out on a tile grid sized by allocatable CPU;
