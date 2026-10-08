@@ -6,6 +6,7 @@
 #   make test      Go tests + frontend tests
 #   make test-kind integration test against the kind cluster
 #   make test-e2e  Playwright plays a round in the real game against kind
+#   make dist      cross-compile binaries for macOS, Linux and Windows into dist/
 #   make kind-up   create the local kind cluster with a sample workload
 #   make kind-down delete it
 
@@ -14,7 +15,7 @@ VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev
 LDFLAGS  := -X github.com/ericomanoff/harbor/internal/api.Version=$(VERSION)
 KIND_CLUSTER := harbor
 
-.PHONY: all gen web build run dev test test-go test-web test-kind test-e2e kind-up kind-down clean deps
+.PHONY: all gen web build run dev test test-go test-web test-kind test-e2e kind-up kind-down clean deps dist
 
 all: build
 
@@ -69,6 +70,17 @@ kind-up:
 kind-down:
 	kind delete cluster --name $(KIND_CLUSTER)
 
+# Cross-compile single binaries with the embedded frontend.
+PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64
+dist: web
+	@mkdir -p dist
+	@for p in $(PLATFORMS); do \
+		os=$${p%/*}; arch=$${p#*/}; ext=""; [ $$os = windows ] && ext=.exe; \
+		echo "  $$os/$$arch"; \
+		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -trimpath -ldflags '-s -w $(LDFLAGS)' -o dist/harbor-$$os-$$arch$$ext ./cmd/harbor || exit 1; \
+	done
+	@ls -la dist
+
 clean:
-	rm -rf bin internal/assets/dist/* web/dist
+	rm -rf bin dist internal/assets/dist/* web/dist
 	@touch internal/assets/dist/.gitkeep

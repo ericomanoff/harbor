@@ -6,6 +6,7 @@ export type Deployment = components['schemas']['Deployment'];
 export type Pod = components['schemas']['Pod'];
 export type ClusterEvent = components['schemas']['Event'];
 export type HelmRelease = components['schemas']['HelmRelease'];
+export type Service = components['schemas']['Service'];
 export type Snapshot = components['schemas']['Snapshot'];
 export type WsMessage = components['schemas']['WsMessage'];
 
@@ -14,7 +15,7 @@ export const nsKey = (ns: string, name: string): string => `${ns}/${name}`;
 
 export type StoreEvent =
   | { type: 'snapshot' }
-  | { type: 'node' | 'namespace' | 'deployment' | 'pod' | 'release'; op: 'upsert' | 'delete'; key: string }
+  | { type: 'node' | 'namespace' | 'deployment' | 'pod' | 'release' | 'service'; op: 'upsert' | 'delete'; key: string }
   | { type: 'event'; event: ClusterEvent };
 
 const MAX_EVENTS = 100;
@@ -30,6 +31,7 @@ export class ClusterStore {
   readonly deployments = new Map<string, Deployment>();
   readonly pods = new Map<string, Pod>();
   readonly releases = new Map<string, HelmRelease>();
+  readonly services = new Map<string, Service>();
   readonly events: ClusterEvent[] = [];
 
   private readonly listeners = new Set<(e: StoreEvent) => void>();
@@ -51,12 +53,14 @@ export class ClusterStore {
     this.deployments.clear();
     this.pods.clear();
     this.releases.clear();
+    this.services.clear();
     this.events.length = 0;
     for (const n of snap.nodes) this.nodes.set(n.name, n);
     for (const ns of snap.namespaces) this.namespaces.set(ns.name, ns);
     for (const d of snap.deployments) this.deployments.set(nsKey(d.ns, d.name), d);
     for (const p of snap.pods) this.pods.set(nsKey(p.ns, p.name), p);
     for (const r of snap.releases ?? []) this.releases.set(nsKey(r.ns, r.name), r);
+    for (const svc of snap.services ?? []) this.services.set(nsKey(svc.ns, svc.name), svc);
     this.emit({ type: 'snapshot' });
   }
 
@@ -97,6 +101,14 @@ export class ClusterStore {
         if (del) this.pods.delete(key);
         else this.pods.set(key, p);
         this.emit({ type: 'pod', op, key });
+        break;
+      }
+      case 'Service': {
+        const svc = msg.obj as Service;
+        const key = nsKey(svc.ns, svc.name);
+        if (del) this.services.delete(key);
+        else this.services.set(key, svc);
+        this.emit({ type: 'service', op, key });
         break;
       }
       case 'HelmRelease': {

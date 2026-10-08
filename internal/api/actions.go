@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -146,4 +147,35 @@ func (s *Server) DeletePod(w http.ResponseWriter, r *http.Request, ns gen.Namesp
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetPodLogs returns the tail of a pod's log as plain text.
+func (s *Server) GetPodLogs(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam, params gen.GetPodLogsParams) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	container := ""
+	if params.Container != nil {
+		container = *params.Container
+	}
+	tail := int64(200)
+	if params.Tail != nil {
+		tail = int64(*params.Tail)
+		if tail < 1 || tail > 5000 {
+			writeError(w, http.StatusBadRequest, "tail must be 1-5000")
+			return
+		}
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	rc, err := kube.PodLogs(ctx, cur.Client(), ns, name, container, tail)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	defer rc.Close()
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, rc)
 }

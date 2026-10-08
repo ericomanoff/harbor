@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Deployment, Pod } from '../store/cluster';
 import { isObsolete, unitState } from './unitState';
 
-const pod = (over: Partial<Pod> = {}): Pod => ({ ns: 'a', name: 'p', node: 'n1', phase: 'Running', ready: true, restarts: 0, created: 'x', ...over });
+const pod = (over: Partial<Pod> = {}): Pod => ({ ns: 'a', name: 'p', node: 'n1', phase: 'Running', ready: true, restarts: 0, created: 'x', labels: {}, containers: [], ...over });
 
 describe('unitState', () => {
   it('maps phases and reasons to states', () => {

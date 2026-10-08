@@ -12,3 +12,4 @@
 # Playwright
 /web/test-results/
 /web/playwright-report/
+/dist/

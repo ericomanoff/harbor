@@ -6,6 +6,9 @@ import { BuildingView } from '../entities/Building';
 import { PlateauView } from '../entities/Plateau';
 import { UnitView } from '../entities/Unit';
 import { ReleaseView } from '../entities/Release';
+import { ServiceView } from '../entities/Service';
+import { podsForService, servicesForPod } from '../game/selector';
+import { openMissionSelect } from '../ui/missionSelect';
 import { openTechTree } from '../ui/techTree';
 import { isSystemNamespace } from '../layout/colors';
 import { BUILD_CELL, TILE, cellAt, computeLayout, isCellFree, type Cell, type MapLayout } from '../layout/grid';
@@ -26,6 +29,7 @@ const CLICK_SLOP = 4;
 export const buildingKey = (k: string): string => `b:${k}`;
 export const unitKey = (k: string): string => `u:${k}`;
 export const releaseKey = (k: string): string => `r:${k}`;
+export const serviceKey = (k: string): string => `s:${k}`;
 
 interface GhostTarget {
   cell?: Cell & { plateau: string };
@@ -44,6 +48,8 @@ export class MapScene extends Phaser.Scene {
   private readonly buildings = new Map<string, BuildingView>();
   private readonly units = new Map<string, UnitView>();
   private readonly releases = new Map<string, ReleaseView>();
+  private readonly services = new Map<string, ServiceView>();
+  private links!: Phaser.GameObjects.Graphics;
   private dirty = true;
   private initialised = false;
 
@@ -68,6 +74,7 @@ export class MapScene extends Phaser.Scene {
     this.ground = this.add.graphics().setDepth(-10);
     this.selBox = this.add.graphics().setDepth(100);
     this.ghost = this.add.graphics().setDepth(90);
+    this.links = this.add.graphics().setDepth(16);
 
     store.subscribe(() => {
       this.dirty = true;
@@ -112,6 +119,11 @@ export class MapScene extends Phaser.Scene {
       ev.preventDefault();
       openTechTree();
     });
+    kb.on('keydown-C', (ev: KeyboardEvent) => {
+      if (modal.open) return;
+      ev.preventDefault();
+      openMissionSelect();
+    });
     kb.on('keydown-M', () => {
       if (modal.open) return;
       settings.sound = !settings.sound;
@@ -146,6 +158,7 @@ export class MapScene extends Phaser.Scene {
     if (!modal.open) this.moveCamera(delta);
     for (const b of this.buildings.values()) b.tick(time);
     for (const u of this.units.values()) u.tick(time);
+    for (const s of this.services.values()) s.tick(time);
   }
 
   /** Zoom out until the whole world fits (never past ZOOM_MIN) and centre it. */
@@ -164,7 +177,7 @@ export class MapScene extends Phaser.Scene {
   /** "/" search overlay; picking a hit selects it and pans to it. */
   openSearch(): void {
     openSearch((hit) => {
-      const v = hit.kind === 'structure' ? this.buildings.get(hit.key.slice(2)) : this.units.get(hit.key.slice(2));
+      const v = hit.kind === 'structure' ? this.buildings.get(hit.key.slice(2)) : hit.kind === 'service' ? this.services.get(hit.key.slice(2)) : this.units.get(hit.key.slice(2));
       if (v) this.centerOnWorld(v.x + TILE, v.y + TILE);
     });
   }
@@ -381,6 +394,40 @@ export class MapScene extends Phaser.Scene {
     for (const b of this.buildings.values()) b.setSelected(selection.keys.has(buildingKey(b.key)));
     for (const u of this.units.values()) u.setSelected(selection.keys.has(unitKey(u.key)));
     for (const r of this.releases.values()) r.setSelected(selection.keys.has(releaseKey(r.key)));
+    for (const sv of this.services.values()) sv.setSelected(selection.keys.has(serviceKey(sv.key)));
+    this.drawLinks();
+  }
+
+  /** Power lines between selected services and their units (either side selected). */
+  private drawLinks(): void {
+    const g = this.links;
+    g.clear();
+    const pairs: [ServiceView, UnitView][] = [];
+    for (const k of selection.keys) {
+      if (k.startsWith('s:')) {
+        const sv = this.services.get(k.slice(2));
+        if (!sv) continue;
+        for (const p of podsForService(sv.svc, store.pods.values())) {
+          const u = this.units.get(nsKey(p.ns, p.name));
+          if (u && !u.dying) pairs.push([sv, u]);
+        }
+      } else if (k.startsWith('u:')) {
+        const u = this.units.get(k.slice(2));
+        if (!u) continue;
+        for (const sk of servicesForPod(u.pod, store.services.values())) {
+          const sv = this.services.get(sk);
+          if (sv) pairs.push([sv, u]);
+        }
+      }
+    }
+    for (const [sv, u] of pairs) {
+      const a = sv.centre();
+      const bx = u.x + TILE / 2;
+      const by = u.y + TILE / 2;
+      g.lineStyle(3, 0x000000, 0.6).lineBetween(a.x, a.y, bx, by);
+      g.lineStyle(1, PALETTE.radarGreen, 1).lineBetween(a.x, a.y, bx, by);
+      g.fillStyle(PALETTE.radarGreen, 1).fillCircle(bx, by, 2);
+    }
   }
 
   // ---- reconcile ---------------------------------------------------------
@@ -390,7 +437,8 @@ export class MapScene extends Phaser.Scene {
     const show = (ns: string): boolean => namespaceVisible(ns, settings);
     const deployments = [...store.deployments.values()].filter((d) => show(d.ns));
     const pods = [...store.pods.values()].filter((p) => show(p.ns));
-    this.layout = computeLayout([...store.nodes.values()], deployments, pods);
+    const services = [...store.services.values()].filter((sv) => show(sv.ns));
+    this.layout = computeLayout([...store.nodes.values()], deployments, pods, services);
     const L = this.layout;
 
     this.cameras.main.setBounds(0, 0, L.width * TILE, L.height * TILE);
@@ -444,6 +492,24 @@ export class MapScene extends Phaser.Scene {
       }
     }
 
+    // Services.
+    const liveSvcs = new Set<string>();
+    for (const sv of services) {
+      const key = nsKey(sv.ns, sv.name);
+      const place = L.services.get(key);
+      if (!place) continue;
+      liveSvcs.add(key);
+      const v = this.services.get(key);
+      if (v) v.update(sv, place);
+      else this.services.set(key, new ServiceView(this, key, sv, place));
+    }
+    for (const [k, v] of this.services) {
+      if (!liveSvcs.has(k)) {
+        v.destroy();
+        this.services.delete(k);
+      }
+    }
+
     const livePods = new Set<string>();
     for (const p of pods) {
       const key = nsKey(p.ns, p.name);
@@ -471,6 +537,7 @@ export class MapScene extends Phaser.Scene {
       const [kind, key] = [k.slice(0, 1), k.slice(2)];
       if (kind === 'b') return !liveDeps.has(key);
       if (kind === 'r') return !liveRels.has(key);
+      if (kind === 's') return !liveSvcs.has(key);
       return !livePods.has(key);
     });
     if (stale.length) selection.set([...selection.keys].filter((k) => !stale.includes(k)));

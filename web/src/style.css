@@ -228,3 +228,16 @@ html, body {
   color: #ffb000;
   letter-spacing: 1px;
 }
+
+.panel pre.log {
+  margin: 8px 0 0;
+  height: 380px;
+  overflow: auto;
+  background: #001a00;
+  color: #39ff14;
+  border: 1px solid #2c2c2c;
+  padding: 6px;
+  font: 11px monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

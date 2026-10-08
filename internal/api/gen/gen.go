@@ -38,6 +38,7 @@ const (
 	WsMessageKindNamespace   WsMessageKind = "Namespace"
 	WsMessageKindNode        WsMessageKind = "Node"
 	WsMessageKindPod         WsMessageKind = "Pod"
+	WsMessageKindService     WsMessageKind = "Service"
 	WsMessageKindSnapshot    WsMessageKind = "Snapshot"
 )
 
@@ -55,6 +56,8 @@ func (e WsMessageKind) Valid() bool {
 	case WsMessageKindNode:
 		return true
 	case WsMessageKindPod:
+		return true
+	case WsMessageKindService:
 		return true
 	case WsMessageKindSnapshot:
 		return true
@@ -289,11 +292,13 @@ type Node struct {
 
 // Pod defines model for Pod.
 type Pod struct {
-	Created time.Time `json:"created"`
+	Containers []string  `json:"containers"`
+	Created    time.Time `json:"created"`
 
 	// Deployment Owning Deployment name resolved through the ReplicaSet.
-	Deployment *string `json:"deployment,omitempty"`
-	Name       string  `json:"name"`
+	Deployment *string           `json:"deployment,omitempty"`
+	Labels     map[string]string `json:"labels"`
+	Name       string            `json:"name"`
 
 	// Node Scheduled node name, empty while Pending.
 	Node    string  `json:"node"`
@@ -315,6 +320,26 @@ type ScaleRequest struct {
 	RetireFirst *[]string `json:"retireFirst,omitempty"`
 }
 
+// Service A radar structure; its selector links it to the units it routes to.
+type Service struct {
+	ClusterIP string            `json:"clusterIP"`
+	Name      string            `json:"name"`
+	Ns        string            `json:"ns"`
+	Ports     []ServicePort     `json:"ports"`
+	Selector  map[string]string `json:"selector"`
+
+	// Type ClusterIP, NodePort, LoadBalancer or ExternalName.
+	Type string `json:"type"`
+}
+
+// ServicePort defines model for ServicePort.
+type ServicePort struct {
+	Name       *string `json:"name,omitempty"`
+	Port       int     `json:"port"`
+	Protocol   string  `json:"protocol"`
+	TargetPort string  `json:"targetPort"`
+}
+
 // Snapshot defines model for Snapshot.
 type Snapshot struct {
 	Context     string        `json:"context"`
@@ -323,6 +348,7 @@ type Snapshot struct {
 	Nodes       []Node        `json:"nodes"`
 	Pods        []Pod         `json:"pods"`
 	Releases    []HelmRelease `json:"releases"`
+	Services    []Service     `json:"services"`
 }
 
 // WsMessage One message on the /ws event stream.
@@ -364,6 +390,14 @@ type GetHelmChartValuesParams struct {
 	// Chart repo/name
 	Chart   string  `form:"chart" json:"chart"`
 	Version *string `form:"version,omitempty" json:"version,omitempty"`
+}
+
+// GetPodLogsParams defines parameters for GetPodLogs.
+type GetPodLogsParams struct {
+	Container *string `form:"container,omitempty" json:"container,omitempty"`
+
+	// Tail Lines from the end; default 200.
+	Tail *int `form:"tail,omitempty" json:"tail,omitempty"`
 }
 
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
@@ -481,6 +515,32 @@ func (t *WsMessage_Obj) FromPod(v Pod) error {
 
 // MergePod performs a merge with any union data inside the WsMessage_Obj, using the provided Pod
 func (t *WsMessage_Obj) MergePod(v Pod) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsService returns the union data inside the WsMessage_Obj as a Service
+func (t WsMessage_Obj) AsService() (Service, error) {
+	var body Service
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromService overwrites any union data inside the WsMessage_Obj as the provided Service
+func (t *WsMessage_Obj) FromService(v Service) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeService performs a merge with any union data inside the WsMessage_Obj, using the provided Service
+func (t *WsMessage_Obj) MergeService(v Service) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -638,6 +698,9 @@ type ServerInterface interface {
 	// DeletePod Repair a unit (delete the pod so its ReplicaSet replaces it)
 	// (DELETE /api/pods/{ns}/{name})
 	DeletePod(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// GetPodLogs Recent log lines of a pod's container (default container if unspecified)
+	// (GET /api/pods/{ns}/{name}/logs)
+	GetPodLogs(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam, params GetPodLogsParams)
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
@@ -1149,6 +1212,70 @@ func (siw *ServerInterfaceWrapper) DeletePod(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetPodLogs operation middleware
+func (siw *ServerInterfaceWrapper) GetPodLogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPodLogsParams
+
+	// ------------- Optional query parameter "container" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "container", r.URL.Query(), &params.Container, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "container"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "container", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "tail" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tail", r.URL.Query(), &params.Tail, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tail"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tail", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPodLogs(w, r, ns, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSnapshot operation middleware
 func (siw *ServerInterfaceWrapper) GetSnapshot(w http.ResponseWriter, r *http.Request) {
 
@@ -1289,6 +1416,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/snapshot", wrapper.GetSnapshot)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/deployments", wrapper.CreateDeployment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/deployments/{ns}/{name}", wrapper.DeleteDeployment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/pods/{ns}/{name}/logs", wrapper.GetPodLogs)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/pods/{ns}/{name}", wrapper.DeletePod)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/scale", wrapper.ScaleDeployment)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/mappos", wrapper.SetDeploymentMapPos)

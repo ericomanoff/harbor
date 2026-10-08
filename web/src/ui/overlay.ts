@@ -6,17 +6,24 @@ import type { ClusterStore } from '../store/cluster';
 export function openOverlay(id: string, onClose?: () => void): () => void {
   const root = document.getElementById(id);
   if (!root) throw new Error(`overlay ${id} missing`);
+  // Escape closes from anywhere (an overlay need not hold focus, e.g. logs);
+  // keys typed inside the overlay stop at its root so Phaser never sees them.
+  const onEscape = (ev: KeyboardEvent): void => {
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      close();
+    }
+  };
   const close = (): void => {
     if (root.hidden) return;
     root.hidden = true;
     root.onkeydown = null;
+    window.removeEventListener('keydown', onEscape, true);
     modal.set(false);
     onClose?.();
   };
-  root.onkeydown = (ev) => {
-    if (ev.key === 'Escape') close();
-    ev.stopPropagation();
-  };
+  root.onkeydown = (ev) => ev.stopPropagation();
+  window.addEventListener('keydown', onEscape, true);
   root.hidden = false;
   modal.set(true);
   return close;

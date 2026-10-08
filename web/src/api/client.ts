@@ -11,6 +11,7 @@ export type HelmRelease = components['schemas']['HelmRelease'];
 export type HelmRevision = components['schemas']['HelmRevision'];
 export type HelmInstallRequest = components['schemas']['HelmInstallRequest'];
 export type HelmUpgradeRequest = components['schemas']['HelmUpgradeRequest'];
+export type ContextList = components['schemas']['ContextList'];
 
 /** An error answer from the backend, with its HTTP status and message. */
 export class ApiError extends Error {
@@ -87,4 +88,24 @@ export const helm = {
     request<void>('POST', `/api/helm/releases/${enc(ns)}/${enc(name)}/rollback`, { revision }, f),
   uninstall: (ns: string, name: string, f: typeof fetch = fetch) => request<void>('DELETE', `/api/helm/releases/${enc(ns)}/${enc(name)}`, undefined, f),
   history: (ns: string, name: string, f: typeof fetch = fetch) => request<HelmRevision[]>('GET', `/api/helm/releases/${enc(ns)}/${enc(name)}/history`, undefined, f),
+};
+
+export async function getPodLogs(ns: string, name: string, tail = 200, container?: string, fetchFn: typeof fetch = fetch): Promise<string> {
+  const res = await fetchFn(`/api/pods/${enc(ns)}/${enc(name)}/logs?tail=${tail}${container ? `&container=${enc(container)}` : ''}`);
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const err = (await res.json()) as { message?: string };
+      if (err.message) msg = err.message;
+    } catch {
+      /* non-JSON */
+    }
+    throw new ApiError(res.status, msg);
+  }
+  return res.text();
+}
+
+export const contexts = {
+  list: (f: typeof fetch = fetch) => request<ContextList>('GET', '/api/contexts', undefined, f),
+  select: (name: string, f: typeof fetch = fetch) => request<void>('POST', `/api/contexts/${enc(name)}/select`, undefined, f),
 };

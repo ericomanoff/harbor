@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { deleteDeployment, deletePod, helm, scaleDeployment, type HelmRelease } from '../api/client';
 import { openTechTree } from '../ui/techTree';
+import { openLogs } from '../ui/logsPanel';
+import { openMissionSelect } from '../ui/missionSelect';
+import { podsForService } from '../game/selector';
 import { eva, link, mode, selection, settings, store, type LinkStatus } from '../app';
 import { FONT, GAME_HEIGHT, GAME_WIDTH, MAP_W, PALETTE, SIDEBAR_W } from '../config';
 import { sellPlan } from '../game/commands';
@@ -66,7 +69,9 @@ export class HudScene extends Phaser.Scene {
   create(): void {
     this.drawChrome();
     this.add.text(X, 6, 'HARBOR', { fontFamily: FONT, fontSize: '16px', color: hexString(PALETTE.radarGreen) });
-    this.contextText = this.add.text(X, 24, '', { ...TEXT, color: '#e8e8d0' });
+    this.contextText = this.add.text(X, 24, '', { ...TEXT, color: '#e8e8d0' })
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => openMissionSelect());
     this.linkText = this.add.text(GAME_WIDTH - PAD, 8, '', { ...TEXT, color: hexString(PALETTE.amber) }).setOrigin(1, 0);
 
     this.add.text(X, POWER.y - 1, 'PWR', { ...TEXT, fontSize: '9px', color: '#8a8a70' });
@@ -302,7 +307,7 @@ export class HudScene extends Phaser.Scene {
     }
     const keys = [...selection.keys];
     if (keys.length === 0) {
-      this.infoText.setText('Click a structure or unit.\nDrag to box-select units.\nDrag a structure to move it.\nTab cycles the selection.\n\n[B] build  [T] tech tree\n[/] locate [F] filter [M] snd\nRight-drag pans, wheel zooms,\nH homes the camera.');
+      this.infoText.setText('Click a structure or unit.\nDrag to box-select units.\nDrag a structure to move it.\nTab cycles the selection.\n\n[B] build  [T] tech  [C] theater\n[/] locate [F] filter [M] snd\nRight-drag pans, wheel zooms,\nH homes the camera.');
       this.setActions();
       return;
     }
@@ -325,6 +330,23 @@ export class HudScene extends Phaser.Scene {
         { label: 'RETIRE UNIT  (-1)', enabled: d.replicas > 0, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas - 1); this.eva(`UNIT RETIRED: ${d.name}`); } },
         { label: 'SELL STRUCTURE', confirm: 'CONFIRM: SELL AND LOSE UNITS?', enabled: true, run: async () => { await deleteDeployment(d.ns, d.name); this.eva(`STRUCTURE SOLD: ${d.name}`); selection.clear(); } },
       );
+      return;
+    }
+    if (keys.length === 1 && k0.startsWith('s:')) {
+      const sv = store.services.get(k0.slice(2));
+      if (!sv) return;
+      const linked = podsForService(sv, store.pods.values());
+      this.infoText.setText([
+        'RADAR (service)',
+        sv.name,
+        `ns: ${sv.ns}`,
+        `type: ${sv.type}`,
+        `ip: ${sv.clusterIP || '(none)'}`,
+        `ports: ${sv.ports.map((p) => `${p.port}→${p.targetPort}/${p.protocol}`).join(', ') || 'none'}`,
+        `routes to ${linked.length} unit${linked.length === 1 ? '' : 's'} (${linked.filter((p) => p.ready).length} ready)`,
+        Object.keys(sv.selector).length ? `selector: ${Object.entries(sv.selector).map(([k, v]) => `${k}=${v}`).join(',')}` : 'no selector',
+      ].join('\n'));
+      this.setActions();
       return;
     }
     if (keys.length === 1 && k0.startsWith('r:')) {
@@ -387,6 +409,7 @@ export class HudScene extends Phaser.Scene {
           selection.clear();
         },
       },
+      pods.length === 1 ? { label: 'UNIT INTEL (logs)', enabled: true, run: async () => openLogs(pods[0]!) } : undefined,
     );
   }
 

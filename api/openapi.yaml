@@ -96,6 +96,36 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/pods/{ns}/{name}/logs:
+    get:
+      operationId: getPodLogs
+      summary: Recent log lines of a pod's container (default container if unspecified)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+        - name: container
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: tail
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5000
+          description: Lines from the end; default 200.
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/pods/{ns}/{name}:
     delete:
       operationId: deletePod
@@ -510,12 +540,20 @@ components:
 
     Pod:
       type: object
-      required: [ns, name, node, phase, ready, restarts, created]
+      required: [ns, name, node, phase, ready, restarts, created, labels, containers]
       properties:
         ns:
           type: string
         name:
           type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        containers:
+          type: array
+          items:
+            type: string
         node:
           type: string
           description: Scheduled node name, empty while Pending.
@@ -536,6 +574,42 @@ components:
         created:
           type: string
           format: date-time
+
+    ServicePort:
+      type: object
+      required: [port, targetPort, protocol]
+      properties:
+        port:
+          type: integer
+        targetPort:
+          type: string
+        protocol:
+          type: string
+        name:
+          type: string
+
+    Service:
+      type: object
+      description: A radar structure; its selector links it to the units it routes to.
+      required: [ns, name, type, clusterIP, ports, selector]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          description: ClusterIP, NodePort, LoadBalancer or ExternalName.
+        clusterIP:
+          type: string
+        ports:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServicePort"
+        selector:
+          type: object
+          additionalProperties:
+            type: string
 
     Event:
       type: object
@@ -560,7 +634,7 @@ components:
 
     Snapshot:
       type: object
-      required: [context, nodes, namespaces, deployments, pods, releases]
+      required: [context, nodes, namespaces, deployments, pods, releases, services]
       properties:
         context:
           type: string
@@ -568,6 +642,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/HelmRelease"
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/Service"
         nodes:
           type: array
           items:
@@ -755,7 +833,7 @@ components:
           enum: [snapshot, added, modified, deleted]
         kind:
           type: string
-          enum: [Node, Namespace, Deployment, Pod, Event, HelmRelease, Snapshot]
+          enum: [Node, Namespace, Deployment, Pod, Service, Event, HelmRelease, Snapshot]
         obj:
           description: Wire model of the given kind; a Snapshot when type is snapshot.
           oneOf:
@@ -763,6 +841,7 @@ components:
             - $ref: "#/components/schemas/Namespace"
             - $ref: "#/components/schemas/Deployment"
             - $ref: "#/components/schemas/Pod"
+            - $ref: "#/components/schemas/Service"
             - $ref: "#/components/schemas/Event"
             - $ref: "#/components/schemas/HelmRelease"
             - $ref: "#/components/schemas/Snapshot"

@@ -3,7 +3,7 @@ import type { Deployment, Pod } from '../store/cluster';
 import { sellPlan } from './commands';
 
 const dep = (ns: string, name: string, replicas: number): Deployment => ({ ns, name, replicas, available: replicas, updated: replicas, image: 'x', conditions: [] });
-const pod = (ns: string, name: string, deployment?: string): Pod => ({ ns, name, node: 'n', phase: 'Running', ready: true, restarts: 0, created: 'x', ...(deployment ? { deployment } : {}) });
+const pod = (ns: string, name: string, deployment?: string): Pod => ({ ns, name, node: 'n', phase: 'Running', ready: true, restarts: 0, created: 'x', labels: {}, containers: [], ...(deployment ? { deployment } : {}) });
 
 describe('sellPlan', () => {
   const deps = new Map([

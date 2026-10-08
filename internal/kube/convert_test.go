@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/ericomanoff/harbor/internal/api/gen"
 )
@@ -248,5 +249,40 @@ func TestConvertDeploymentRelease(t *testing.T) {
 	}
 	if got := ConvertDeployment(&appsv1.Deployment{}); got.Release != nil {
 		t.Errorf("no annotation should mean no release, got %v", *got.Release)
+	}
+}
+
+func TestConvertService(t *testing.T) {
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "a"},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP, ClusterIP: "10.0.0.5",
+			Selector: map[string]string{"app": "web"},
+			Ports:    []corev1.ServicePort{{Name: "http", Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: corev1.ProtocolTCP}},
+		},
+	}
+	got := ConvertService(svc)
+	if got.Type != "ClusterIP" || got.ClusterIP != "10.0.0.5" || got.Selector["app"] != "web" {
+		t.Errorf("%+v", got)
+	}
+	if len(got.Ports) != 1 || got.Ports[0].Port != 80 || got.Ports[0].TargetPort != "8080" || got.Ports[0].Name == nil || *got.Ports[0].Name != "http" {
+		t.Errorf("ports = %+v", got.Ports)
+	}
+	if empty := ConvertService(&corev1.Service{}); empty.Selector == nil || empty.Ports == nil {
+		t.Error("selector and ports must be non-nil for JSON")
+	}
+}
+
+func TestConvertPodLabelsAndContainers(t *testing.T) {
+	p := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Labels: map[string]string{"app": "web"}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "web"}, {Name: "sidecar"}}},
+	}
+	got := ConvertPod(p, "")
+	if got.Labels["app"] != "web" || len(got.Containers) != 2 || got.Containers[1] != "sidecar" {
+		t.Errorf("%+v", got)
+	}
+	if bare := ConvertPod(&corev1.Pod{}, ""); bare.Labels == nil || bare.Containers == nil {
+		t.Error("labels and containers must be non-nil for JSON")
 	}
 }

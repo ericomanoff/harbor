@@ -1,6 +1,6 @@
 # Harbor: a Command & Conquer style GUI for Kubernetes and Helm
 
-Status: Phases 0-5 complete (updated 2026-10-07). Next: Phase 6.
+Status: Phases 0-5 complete; Phase 6 in progress (updated 2026-10-08).
 
 ## Progress
 
@@ -12,7 +12,7 @@ Status: Phases 0-5 complete (updated 2026-10-07). Next: Phase 6.
 | 3     | Done        | 2026-10-07. War Factory cameo + placement ghost, HTML build form, create/scale/mappos endpoints, build/retire/sell commands (sell retires the exact pods via pod-deletion-cost), power bar, building drag-move. Live: built, spawned 5, sold 2, restarted, site persisted. |
 | 4     | Done        | 2026-10-07. Generated pixel-art sprites (8-facing tank, factory, scaffold, fire, explosion), rollout hatching + badge, warning flashes, sell structure (confirm) and repair unit, Tab cycling, "/" locate overlay, F namespace filter, M synthesised sfx + EVA voice (speechSynthesis, fixed vocabulary). Regression suite: pure game modules, kind round trip, Playwright e2e round incl. search and filter. |
 | 5     | Done        | 2026-10-07. Helm v3.22 SDK in-process: repos, chart search, default values, install/upgrade/rollback/uninstall/history; releases tracked live from Helm storage secrets; release-owned Deployments placed as a block inside a dashed base perimeter; T opens the tech tree overlay (charts/repos/expansions, install and upgrade forms with a values editor); release selection on the map with UPGRADE/ROLLBACK/SELL. Tests: in-memory Helm store, API round trip, kind integration with the real secrets driver. |
-| 6     | Next        | Extended world.                                                       |                                                                       |
+| 6     | In progress | 2026-10-08: Services as radar dishes placed near their pods, power lines to the units they route to when either side is selected; UNIT INTEL logs panel (tail, follow, container select); C / THEATER opens the context picker; `make dist` cross-compiles for macOS/Linux/Windows. Left: Ingress, exec, fog of war, StatefulSets/DaemonSets/Jobs, Tauri. |                                                                       |
 
 Deviations from the original plan so far:
 
@@ -67,6 +67,16 @@ Deviations from the original plan so far:
   cannot hold commas) but the perimeter is derived from member Deployments.
 - Helm v3.22 pins k8s.io/* at the versions client-go already used, so no
   module conflicts; Helm 4's SDK was not adopted yet.
+- Fog of war as planned (per-namespace RBAC) does not fit cluster-wide
+  informers: a denied cluster-wide list fails the whole sync rather than one
+  namespace. Doing it properly means per-namespace informers for users
+  without cluster-scope list rights; deferred.
+- Services sit in the unit zone of the plateau hosting most of their pods
+  and claim their tile before units do, so they stay put as units churn.
+  Links are drawn only for the selected service or unit to avoid clutter.
+- Overlays close on Escape through a window-level capture listener (an
+  overlay like logs holds no focus); keys typed inside an overlay stop at
+  its root so Phaser never sees them.
 
 Decisions already made:
 
@@ -320,7 +330,7 @@ Each phase ends with something you can run against the kind cluster.
 - Release status (deployed, failed, pending) on the perimeter; upgrade and
   rollback from the selection panel.
 
-### Phase 6: Extended world (ongoing)
+### Phase 6: Extended world (ongoing) — IN PROGRESS
 
 - Services as radar structures with power-line links to selected pods;
   Ingress as gates.

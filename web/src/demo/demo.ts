@@ -14,7 +14,7 @@ export function demoSnapshot(): Snapshot {
     ns, name, replicas, available, updated: replicas, image, conditions: [], ...extra,
   });
   const pod = (ns: string, name: string, nodeName: string, deployment: string, extra: Partial<Pod> = {}): Pod => ({
-    ns, name, node: nodeName, phase: 'Running', ready: true, restarts: 0, created, deployment, ...extra,
+    ns, name, node: nodeName, phase: 'Running', ready: true, restarts: 0, created, deployment, labels: { app: deployment || name }, containers: [deployment || name], ...extra,
   });
   return {
     context: 'demo',
@@ -34,6 +34,11 @@ export function demoSnapshot(): Snapshot {
     ],
     releases: [
       { ns: 'sandbox', name: 'outpost', revision: 2, status: 'deployed', chart: 'podinfo', chartVersion: '6.15.0', appVersion: '6.15.0' },
+    ],
+    services: [
+      { ns: 'sandbox', name: 'nginx', type: 'ClusterIP', clusterIP: '10.96.0.10', ports: [{ port: 80, targetPort: '80', protocol: 'TCP', name: 'http' }], selector: { app: 'nginx' } },
+      { ns: 'sandbox', name: 'outpost-podinfo', type: 'LoadBalancer', clusterIP: '10.96.0.20', ports: [{ port: 9898, targetPort: 'http', protocol: 'TCP' }], selector: { app: 'outpost-podinfo' } },
+      { ns: 'kube-system', name: 'kube-dns', type: 'ClusterIP', clusterIP: '10.96.0.10', ports: [{ port: 53, targetPort: '53', protocol: 'UDP' }], selector: { app: 'coredns' } },
     ],
     pods: [
       pod('sandbox', 'nginx-7d9-a1', 'harbor-worker', 'nginx'),
@@ -61,11 +66,11 @@ export function startDemo(store: ClusterStore): () => void {
     tick++;
     const name = `nginx-7d9-z${tick}`;
     if (tick % 3 === 1) {
-      store.apply({ type: 'modified', kind: 'Pod', obj: { ns: 'sandbox', name, node: '', phase: 'Pending', ready: false, restarts: 0, created: new Date().toISOString(), deployment: 'nginx' } });
+      store.apply({ type: 'modified', kind: 'Pod', obj: { ns: 'sandbox', name, node: '', phase: 'Pending', ready: false, restarts: 0, created: new Date().toISOString(), deployment: 'nginx', labels: { app: 'nginx' }, containers: ['nginx'] } });
     } else if (tick % 3 === 2) {
-      store.apply({ type: 'modified', kind: 'Pod', obj: { ns: 'sandbox', name: `nginx-7d9-z${tick - 1}`, node: 'harbor-worker2', phase: 'Running', ready: true, restarts: 0, created: new Date().toISOString(), deployment: 'nginx' } });
+      store.apply({ type: 'modified', kind: 'Pod', obj: { ns: 'sandbox', name: `nginx-7d9-z${tick - 1}`, node: 'harbor-worker2', phase: 'Running', ready: true, restarts: 0, created: new Date().toISOString(), deployment: 'nginx', labels: { app: 'nginx' }, containers: ['nginx'] } });
     } else {
-      store.apply({ type: 'deleted', kind: 'Pod', obj: { ns: 'sandbox', name: `nginx-7d9-z${tick - 2}`, node: 'harbor-worker2', phase: 'Deleted', ready: false, restarts: 0, created: '' } });
+      store.apply({ type: 'deleted', kind: 'Pod', obj: { ns: 'sandbox', name: `nginx-7d9-z${tick - 2}`, node: 'harbor-worker2', phase: 'Deleted', ready: false, restarts: 0, created: '', labels: {}, containers: [] } });
       store.apply({ type: 'added', kind: 'Event', obj: { ns: 'sandbox', kind: 'Pod', name: 'crashy-5f-x9', type: 'Warning', reason: 'BackOff', message: 'Back-off restarting failed container', ts: new Date().toISOString() } });
     }
   }, 2500);

@@ -196,6 +196,30 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   );
   expect((await deployment(page))?.replicas).toBe(1);
 
+  // Unit intel: the logs panel shows nginx's startup output for the remaining unit.
+  const [intel] = await podsOf(page);
+  const iPos = await unitCentre(page, `${NS}/${intel!.name}`);
+  const iAt = await focus(page, iPos.x, iPos.y);
+  await page.mouse.click(iAt.x, iAt.y);
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${intel!.name}`]);
+  await page.mouse.click(cmd(2).x, cmd(2).y);
+  const logs = page.locator('#logs');
+  await expect(logs).toBeVisible();
+  await expect(logs.locator('.where')).toHaveText(`${NS}/${intel!.name}`);
+  await expect(logs.locator('pre')).toContainText('nginx', { timeout: 30_000 });
+  await page.keyboard.press('Escape');
+  await expect(logs).toBeHidden();
+
+  // Theater select lists the active context and refuses to re-select it.
+  await page.keyboard.press('c');
+  const mission = page.locator('#mission');
+  await expect(mission).toBeVisible();
+  const active = mission.locator('.row', { hasText: 'kind-harbor' }).locator('button');
+  await expect(active).toHaveText('ACTIVE');
+  await expect(active).toBeDisabled();
+  await mission.locator('button[data-close]').click();
+  await expect(mission).toBeHidden();
+
   // Repair the remaining unit: a different pod replaces it, replicas unchanged.
   const [remaining] = await podsOf(page);
   const rPos = await unitCentre(page, `${NS}/${remaining!.name}`);

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -150,4 +151,17 @@ func DeleteDeployment(ctx context.Context, client kubernetes.Interface, ns, name
 // DeletePod repairs a unit: the ReplicaSet replaces it with a fresh one.
 func DeletePod(ctx context.Context, client kubernetes.Interface, ns, name string) error {
 	return client.CoreV1().Pods(ns).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// PodLogs streams the tail of a container's log. An empty container means
+// the pod's default (first) container.
+func PodLogs(ctx context.Context, client kubernetes.Interface, ns, name, container string, tail int64) (io.ReadCloser, error) {
+	if tail <= 0 {
+		tail = 200
+	}
+	opts := &corev1.PodLogOptions{TailLines: &tail}
+	if container != "" {
+		opts.Container = container
+	}
+	return client.CoreV1().Pods(ns).GetLogs(name, opts).Stream(ctx)
 }

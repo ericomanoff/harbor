@@ -106,6 +106,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pods/{ns}/{name}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent log lines of a pod's container (default container if unspecified) */
+        get: operations["getPodLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pods/{ns}/{name}": {
         parameters: {
             query?: never;
@@ -390,6 +407,10 @@ export interface components {
         Pod: {
             ns: string;
             name: string;
+            labels: {
+                [key: string]: string;
+            };
+            containers: string[];
             /** @description Scheduled node name, empty while Pending. */
             node: string;
             phase: string;
@@ -402,6 +423,24 @@ export interface components {
             deployment?: string;
             /** Format: date-time */
             created: string;
+        };
+        ServicePort: {
+            port: number;
+            targetPort: string;
+            protocol: string;
+            name?: string;
+        };
+        /** @description A radar structure; its selector links it to the units it routes to. */
+        Service: {
+            ns: string;
+            name: string;
+            /** @description ClusterIP, NodePort, LoadBalancer or ExternalName. */
+            type: string;
+            clusterIP: string;
+            ports: components["schemas"]["ServicePort"][];
+            selector: {
+                [key: string]: string;
+            };
         };
         Event: {
             ns: string;
@@ -417,6 +456,7 @@ export interface components {
         Snapshot: {
             context: string;
             releases: components["schemas"]["HelmRelease"][];
+            services: components["schemas"]["Service"][];
             nodes: components["schemas"]["Node"][];
             namespaces: components["schemas"]["Namespace"][];
             deployments: components["schemas"]["Deployment"][];
@@ -504,9 +544,9 @@ export interface components {
             /** @enum {string} */
             type: "snapshot" | "added" | "modified" | "deleted";
             /** @enum {string} */
-            kind: "Node" | "Namespace" | "Deployment" | "Pod" | "Event" | "HelmRelease" | "Snapshot";
+            kind: "Node" | "Namespace" | "Deployment" | "Pod" | "Service" | "Event" | "HelmRelease" | "Snapshot";
             /** @description Wire model of the given kind; a Snapshot when type is snapshot. */
-            obj?: components["schemas"]["Node"] | components["schemas"]["Namespace"] | components["schemas"]["Deployment"] | components["schemas"]["Pod"] | components["schemas"]["Event"] | components["schemas"]["HelmRelease"] | components["schemas"]["Snapshot"];
+            obj?: components["schemas"]["Node"] | components["schemas"]["Namespace"] | components["schemas"]["Deployment"] | components["schemas"]["Pod"] | components["schemas"]["Service"] | components["schemas"]["Event"] | components["schemas"]["HelmRelease"] | components["schemas"]["Snapshot"];
         };
     };
     responses: {
@@ -657,6 +697,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPodLogs: {
+        parameters: {
+            query?: {
+                container?: string;
+                /** @description Lines from the end; default 200. */
+                tail?: number;
+            };
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
             };
             default: components["responses"]["Error"];
         };

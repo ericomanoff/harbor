@@ -95,6 +95,26 @@
         </div>
       </div>
     </div>
+    <div id="logs" class="overlay" hidden>
+      <div class="panel wide">
+        <h2>UNIT INTEL <span class="where"></span></h2>
+        <div class="row add">
+          <select name="container"></select>
+          <label class="inline"><input type="checkbox" name="follow" checked /> follow</label>
+          <button type="button" data-refresh>REFRESH</button>
+          <button type="button" data-close>CLOSE</button>
+        </div>
+        <pre class="log"></pre>
+      </div>
+    </div>
+    <div id="mission" class="overlay" hidden>
+      <div class="panel wide">
+        <h2>SELECT THEATER <span class="where">kubeconfig contexts</span></h2>
+        <div class="rows"></div>
+        <p class="err" hidden></p>
+        <div class="actions"><button type="button" data-close>CLOSE</button></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

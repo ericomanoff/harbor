@@ -152,6 +152,7 @@ func (s *Server) snapshot() gen.Snapshot {
 		Deployments: []gen.Deployment{},
 		Pods:        []gen.Pod{},
 		Releases:    []gen.HelmRelease{},
+		Services:    []gen.Service{},
 	}
 }
 

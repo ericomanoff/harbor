@@ -1,4 +1,5 @@
-import type { Deployment, Node, Pod } from '../store/cluster';
+import type { Deployment, Node, Pod, Service } from '../store/cluster';
+import { podsForService } from '../game/selector';
 import { nsKey } from '../store/cluster';
 import { hashString } from './hash';
 
@@ -53,6 +54,8 @@ export interface MapLayout {
   voidY: number;
   buildings: Map<string, Placement>;
   units: Map<string, Placement>;
+  /** Services: one tile each, among the units of the plateau most of their pods are on. */
+  services: Map<string, Placement>;
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -121,7 +124,7 @@ function claimFrom(taken: Set<number>, count: number, start: number): number {
  * yields the same picture, and adding one object moves nothing else unless
  * a hash collision forces a probe.
  */
-export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Pod[]): MapLayout {
+export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Pod[], services: Service[] = []): MapLayout {
   const plateaus = layoutPlateaus(nodes);
   const right = plateaus.reduce((m, p) => Math.max(m, p.x + p.w), 0);
   const bottom = plateaus.reduce((m, p) => Math.max(m, p.y + p.h), 0);
@@ -186,6 +189,30 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
   const voidUnitTaken = new Set<number>();
   const voidUnitCols = Math.max(1, width - 2 * MARGIN);
   const units = new Map<string, Placement>();
+
+  // Services first so they keep their tile when units come and go.
+  const serviceOut = new Map<string, Placement>();
+  const sortedSvcs = [...services].sort((a, b) => nsKey(a.ns, a.name).localeCompare(nsKey(b.ns, b.name)));
+  for (const svc of sortedSvcs) {
+    const key = nsKey(svc.ns, svc.name);
+    const count = new Map<string, number>();
+    for (const p of podsForService(svc, pods)) if (p.node && byNode.has(p.node)) count.set(p.node, (count.get(p.node) ?? 0) + 1);
+    const host = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? plateaus[0]?.node;
+    const plateau = host ? byNode.get(host) : undefined;
+    if (plateau) {
+      const cs = unitCellsByNode.get(plateau.node)!;
+      const idx = claim(unitTaken.get(plateau.node)!, cs.length, `svc:${key}`);
+      if (idx >= 0) {
+        const c = cs[idx]!;
+        serviceOut.set(key, { x: c.x, y: c.y, kind: 'plateau', plateau: plateau.node });
+        continue;
+      }
+    }
+    const v = claim(voidUnitTaken, voidUnitCols, `svc:${key}`);
+    const slot = v >= 0 ? v : voidUnitTaken.size;
+    serviceOut.set(key, { x: MARGIN + (slot % voidUnitCols), y: voidY, kind: 'void' });
+  }
+
   const sortedPods = [...pods].sort((a, b) => nsKey(a.ns, a.name).localeCompare(nsKey(b.ns, b.name)));
   for (const p of sortedPods) {
     const key = nsKey(p.ns, p.name);
@@ -231,7 +258,7 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
     }
   }
 
-  return { plateaus, releases, width, height, voidY, buildings, units };
+  return { plateaus, releases, width, height, voidY, buildings, units, services: serviceOut };
 }
 
 /** The building cell whose 3x3 footprint contains tile (tx, ty), if any. */

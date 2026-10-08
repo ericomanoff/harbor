@@ -14,11 +14,32 @@ export const TEX = {
   scaffold: 'scaffold',
   fire: 'fire',
   boom: 'boom',
+  dish: 'dish',
 } as const;
 
 export const ANIM = { fire: 'fire', boom: 'boom' } as const;
 
 const PIX: Record<string, number> = { w: 0xffffff, l: 0xb0b0b0, d: 0x707070, k: 0x101010 };
+
+/** 16x16 radar dish on a mast. */
+const DISH = [
+  '................',
+  '.....wwwwww.....',
+  '....wllllllw....',
+  '...wlddddddlw...',
+  '...wldkkkkdlw...',
+  '...wldkwwkdlw...',
+  '....wdkkkkdw....',
+  '.....wddddw.....',
+  '......wkkw......',
+  '.......kk.......',
+  '.......kk.......',
+  '.......kk.......',
+  '......kkkk......',
+  '....kkddddkk....',
+  '....kkkkkkkk....',
+  '................',
+];
 
 /** 16x16 tank, facing up. '.' is transparent. */
 const TANK = [
@@ -124,6 +145,7 @@ function effectTextures(scene: Phaser.Scene): void {
 /** Builds every texture and animation once; safe to call again. */
 export function buildTextures(scene: Phaser.Scene): void {
   pixelTexture(scene, TEX.tank, TANK);
+  pixelTexture(scene, TEX.dish, DISH);
   factoryTextures(scene);
   effectTextures(scene);
   if (!scene.anims.exists(ANIM.fire)) {

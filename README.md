@@ -25,7 +25,8 @@ fake cluster with no backend.
 Controls: left-click selects, drag box-selects units, drag a structure to
 move it, right-drag pans, wheel zooms, arrows or WASD scroll, H homes the
 camera, B (or the WAR FACTORY cameo) starts placing a Deployment, Tab cycles
-the selection, T opens the Helm tech tree, `/` opens the locate box, F opens the namespace filter, N
+the selection, T opens the Helm tech tree, C (or the THEATER line) picks a
+context, `/` opens the locate box, F opens the namespace filter, N
 toggles system namespaces, M toggles sound and the EVA voice, Esc cancels or
 clears. Click the radar to jump.
 
@@ -36,6 +37,10 @@ units and SELL to scale down retiring exactly those pods, or REPAIR to delete
 them so the ReplicaSet replaces them. Units from an old rollout are hatched;
 Warning events flash their unit or structure. The power bar is CPU requests
 over allocatable across ready nodes.
+
+Services appear as radar dishes near the units they route to; select either
+side to see the power lines between them. Select a unit and choose UNIT
+INTEL to tail its logs.
 
 Helm: open the tech tree (T or the TECH TREE cameo), add a chart repository
 under REPOS (for example `podinfo` at https://stefanprodan.github.io/podinfo),
@@ -65,6 +70,7 @@ make gen       # after editing api/openapi.yaml
 make test      # go vet + go test + tsc + vitest
 make test-kind # integration test against the kind cluster (~5 s)
 make test-e2e  # Playwright plays a round in the real game against kind (~10 s)
+make dist      # single binaries for macOS, Linux and Windows in dist/
 make kind-down
 ```
 

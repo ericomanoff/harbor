@@ -3,7 +3,7 @@ import type { Deployment, Pod } from '../store/cluster';
 import { searchObjects } from './search';
 
 const dep = (ns: string, name: string): Deployment => ({ ns, name, replicas: 1, available: 1, updated: 1, image: 'x', conditions: [] });
-const pod = (ns: string, name: string): Pod => ({ ns, name, node: 'n', phase: 'Running', ready: true, restarts: 0, created: 'x' });
+const pod = (ns: string, name: string): Pod => ({ ns, name, node: 'n', phase: 'Running', ready: true, restarts: 0, created: 'x', labels: {}, containers: [] });
 const store = {
   deployments: new Map([['sandbox/nginx', dep('sandbox', 'nginx')], ['default/api', dep('default', 'api')]]),
   pods: new Map([['sandbox/nginx-1', pod('sandbox', 'nginx-1')], ['default/api-x', pod('default', 'api-x')], ['kube-system/coredns-1', pod('kube-system', 'coredns-1')]]),

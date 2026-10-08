@@ -41,6 +41,7 @@ type Watcher struct {
 
 	nodes       corelisters.NodeLister
 	namespaces  corelisters.NamespaceLister
+	services    corelisters.ServiceLister
 	pods        corelisters.PodLister
 	podIndexer  cache.Indexer
 	deployments appslisters.DeploymentLister
@@ -73,6 +74,7 @@ func NewWatcher(contextName string, client kubernetes.Interface, hub *Hub) *Watc
 	depInf := f.Apps().V1().Deployments()
 	rsInf := f.Apps().V1().ReplicaSets()
 	evInf := f.Core().V1().Events()
+	svcInf := f.Core().V1().Services()
 
 	if err := podInf.Informer().AddIndexers(cache.Indexers{byNodeIndex: podNodeIndex}); err != nil {
 		panic(err) // only fails if the index name is already registered
@@ -84,11 +86,13 @@ func NewWatcher(contextName string, client kubernetes.Interface, hub *Hub) *Watc
 	w.podIndexer = podInf.Informer().GetIndexer()
 	w.deployments = depInf.Lister()
 	w.replicasets = rsInf.Lister()
+	w.services = svcInf.Lister()
 
 	addHandlers(nodeInf.Informer(), w.onNode, w.onNodeDeleted)
 	addHandlers(nsInf.Informer(), w.onNamespace, w.onNamespaceDeleted)
 	addHandlers(depInf.Informer(), w.onDeployment, w.onDeploymentDeleted)
 	addHandlers(podInf.Informer(), w.onPod, w.onPodDeleted)
+	addHandlers(svcInf.Informer(), w.onService, w.onServiceDeleted)
 	_, _ = podInf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(oldObj, _ any) { w.onPodMoved(oldObj) },
 	})
@@ -195,6 +199,12 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 		Deployments: []gen.Deployment{},
 		Pods:        []gen.Pod{},
 		Releases:    []gen.HelmRelease{},
+		Services:    []gen.Service{},
+	}
+	if svcs, err := w.services.List(labels.Everything()); err == nil {
+		for _, s := range svcs {
+			snap.Services = append(snap.Services, ConvertService(s))
+		}
 	}
 	if nodes, err := w.nodes.List(labels.Everything()); err == nil {
 		for _, n := range nodes {
@@ -225,6 +235,10 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 	})
 	sort.Slice(snap.Pods, func(i, j int) bool {
 		a, b := snap.Pods[i], snap.Pods[j]
+		return a.Ns < b.Ns || (a.Ns == b.Ns && a.Name < b.Name)
+	})
+	sort.Slice(snap.Services, func(i, j int) bool {
+		a, b := snap.Services[i], snap.Services[j]
 		return a.Ns < b.Ns || (a.Ns == b.Ns && a.Name < b.Name)
 	})
 	return snap
@@ -361,6 +375,14 @@ func (w *Watcher) republishNode(name string) {
 	w.onNode(n)
 }
 
+func (w *Watcher) onService(svc *corev1.Service) {
+	w.publish(gen.WsMessageTypeModified, ConvertService(svc))
+}
+
+func (w *Watcher) onServiceDeleted(svc *corev1.Service) {
+	w.publish(gen.WsMessageTypeDeleted, gen.Service{Ns: svc.Namespace, Name: svc.Name, Ports: []gen.ServicePort{}, Selector: map[string]string{}})
+}
+
 func (w *Watcher) onNamespace(ns *corev1.Namespace) {
 	w.publish(gen.WsMessageTypeModified, ConvertNamespace(ns))
 }
@@ -396,7 +418,7 @@ func (w *Watcher) onPodMoved(oldObj any) {
 }
 
 func (w *Watcher) onPodDeleted(p *corev1.Pod) {
-	w.publish(gen.WsMessageTypeDeleted, gen.Pod{Ns: p.Namespace, Name: p.Name, Node: p.Spec.NodeName, Phase: "Deleted"})
+	w.publish(gen.WsMessageTypeDeleted, gen.Pod{Ns: p.Namespace, Name: p.Name, Node: p.Spec.NodeName, Phase: "Deleted", Labels: map[string]string{}, Containers: []string{}})
 	w.republishNode(p.Spec.NodeName)
 }
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { Deployment, Node, Pod } from '../store/cluster';
+import type { Deployment, Node, Pod, Service } from '../store/cluster';
 import { buildingCells, cellAt, computeLayout, isCellFree, layoutPlateaus, plateauWidth, unitCells } from './grid';
 
 const node = (name: string, cpu = 4000, ready = true): Node => ({ name, ready, cpuAlloc: cpu, memAlloc: 0, cpuReq: 0, memReq: 0, labels: {} });
 const dep = (ns: string, name: string, mapPos?: { x: number; y: number }, release?: string): Deployment => ({ ns, name, replicas: 1, available: 1, updated: 1, image: 'x', conditions: [], ...(mapPos ? { mapPos } : {}), ...(release ? { release } : {}) });
-const pod = (ns: string, name: string, nodeName: string, deployment?: string): Pod => ({ ns, name, node: nodeName, phase: 'Running', ready: true, restarts: 0, created: 'x', ...(deployment ? { deployment } : {}) });
+const pod = (ns: string, name: string, nodeName: string, deployment?: string): Pod => ({ ns, name, node: nodeName, phase: 'Running', ready: true, restarts: 0, created: 'x', labels: {}, containers: [], ...(deployment ? { deployment } : {}) });
 
 describe('plateaus', () => {
   it('width grows with CPU within bounds', () => {
@@ -102,6 +102,19 @@ describe('computeLayout', () => {
     expect(l.releases.has('a/solo')).toBe(false);
     // Deterministic and independent of the solo structure.
     expect([...computeLayout(nodes, deps, []).releases]).toEqual([...l.releases]);
+  });
+
+  it('places a service on the plateau that hosts most of its pods, never on a unit', () => {
+    const svc: Service = { ns: 'a', name: 'web', type: 'ClusterIP', clusterIP: '1.1.1.1', ports: [], selector: { app: 'web' } };
+    const p = (name: string, nodeName: string) => ({ ...pod('a', name, nodeName, 'web'), labels: { app: 'web' } });
+    const pods = [p('web-1', 'w2'), p('web-2', 'w2'), p('web-3', 'w1')];
+    const l = computeLayout(nodes, [dep('a', 'web')], pods, [svc]);
+    const s = l.services.get('a/web')!;
+    expect(s).toMatchObject({ kind: 'plateau', plateau: 'w2' });
+    for (const u of l.units.values()) expect(`${u.x},${u.y}`).not.toBe(`${s.x},${s.y}`);
+    // Stable when a unit is added.
+    const l2 = computeLayout(nodes, [dep('a', 'web')], [...pods, p('web-4', 'w2')], [svc]);
+    expect(l2.services.get('a/web')).toEqual(s);
   });
 
   it('with no nodes everything lands in the void strip and the world still has a size', () => {

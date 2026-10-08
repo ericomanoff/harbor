@@ -132,6 +132,31 @@ func podRequests(p *corev1.Pod) (cpuMilli, memBytes int64) {
 	return cpuMilli, memBytes
 }
 
+// ConvertService summarises a Service; its selector is what links it to units.
+func ConvertService(svc *corev1.Service) gen.Service {
+	ports := make([]gen.ServicePort, 0, len(svc.Spec.Ports))
+	for _, p := range svc.Spec.Ports {
+		ports = append(ports, gen.ServicePort{
+			Port:       int(p.Port),
+			TargetPort: p.TargetPort.String(),
+			Protocol:   string(p.Protocol),
+			Name:       optString(p.Name),
+		})
+	}
+	selector := svc.Spec.Selector
+	if selector == nil {
+		selector = map[string]string{}
+	}
+	return gen.Service{
+		Ns:        svc.Namespace,
+		Name:      svc.Name,
+		Type:      string(svc.Spec.Type),
+		ClusterIP: svc.Spec.ClusterIP,
+		Ports:     ports,
+		Selector:  selector,
+	}
+}
+
 func ConvertNamespace(ns *corev1.Namespace) gen.Namespace {
 	return gen.Namespace{Name: ns.Name, Phase: string(ns.Status.Phase)}
 }
@@ -197,16 +222,26 @@ func ConvertPod(p *corev1.Pod, deployment string) gen.Pod {
 	if reason == "" && p.Status.Reason != "" { // e.g. Evicted
 		reason = p.Status.Reason
 	}
+	labels := p.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	containers := make([]string, 0, len(p.Spec.Containers))
+	for _, c := range p.Spec.Containers {
+		containers = append(containers, c.Name)
+	}
 	out := gen.Pod{
-		Ns:       p.Namespace,
-		Name:     p.Name,
-		Node:     p.Spec.NodeName,
-		Phase:    phase,
-		Ready:    ready,
-		Restarts: restarts,
-		Created:  p.CreationTimestamp.Time,
-		Reason:   optString(reason),
-		OwnerRS:  optString(OwnerOfKind(p.OwnerReferences, "ReplicaSet")),
+		Ns:         p.Namespace,
+		Name:       p.Name,
+		Node:       p.Spec.NodeName,
+		Phase:      phase,
+		Ready:      ready,
+		Restarts:   restarts,
+		Created:    p.CreationTimestamp.Time,
+		Labels:     labels,
+		Containers: containers,
+		Reason:     optString(reason),
+		OwnerRS:    optString(OwnerOfKind(p.OwnerReferences, "ReplicaSet")),
 	}
 	out.Deployment = optString(deployment)
 	return out

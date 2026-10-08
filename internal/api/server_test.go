@@ -282,6 +282,30 @@ func TestCreateScaleMapPosRoundTrip(t *testing.T) {
 	}
 }
 
+func TestPodLogs(t *testing.T) {
+	s := fakeServer(t)
+	if err := s.SelectContextByName(context.Background(), "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "web-1", Namespace: "sandbox"}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "web"}}}}
+	if _, err := s.current().Client().CoreV1().Pods("sandbox").Create(context.Background(), pod, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/pods/sandbox/web-1/logs?tail=50", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Content-Type"), "text/plain") {
+		t.Fatalf("logs: %d %s %q", rec.Code, rec.Body.String(), rec.Header().Get("Content-Type"))
+	}
+	if rec.Body.String() != "fake logs" { // what the fake clientset serves
+		t.Errorf("body = %q", rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/pods/sandbox/web-1/logs?tail=0", nil))
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("tail below minimum: %d, want 400", rec.Code)
+	}
+}
+
 func TestRootServesFrontendOrPlaceholder(t *testing.T) {
 	rec := httptest.NewRecorder()
 	NewHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
