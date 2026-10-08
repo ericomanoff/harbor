@@ -56,6 +56,7 @@ const (
 	WsMessageKindDeployment  WsMessageKind = "Deployment"
 	WsMessageKindEvent       WsMessageKind = "Event"
 	WsMessageKindHelmRelease WsMessageKind = "HelmRelease"
+	WsMessageKindIngress     WsMessageKind = "Ingress"
 	WsMessageKindNamespace   WsMessageKind = "Namespace"
 	WsMessageKindNode        WsMessageKind = "Node"
 	WsMessageKindPod         WsMessageKind = "Pod"
@@ -72,6 +73,8 @@ func (e WsMessageKind) Valid() bool {
 	case WsMessageKindEvent:
 		return true
 	case WsMessageKindHelmRelease:
+		return true
+	case WsMessageKindIngress:
 		return true
 	case WsMessageKindNamespace:
 		return true
@@ -360,6 +363,28 @@ type HelmValues struct {
 	Version string `json:"version"`
 }
 
+// Ingress The harbor mouth: a gate that channels outside traffic to lighthouses (Services).
+type Ingress struct {
+	// Addresses Load balancer IPs or hostnames once assigned.
+	Addresses []string      `json:"addresses"`
+	Class     *string       `json:"class,omitempty"`
+	Hosts     []string      `json:"hosts"`
+	Name      string        `json:"name"`
+	Ns        string        `json:"ns"`
+	Rules     []IngressRule `json:"rules"`
+	Tls       bool          `json:"tls"`
+}
+
+// IngressRule defines model for IngressRule.
+type IngressRule struct {
+	Host string `json:"host"`
+	Path string `json:"path"`
+
+	// Port Port number or name on the backend Service.
+	Port    string `json:"port"`
+	Service string `json:"service"`
+}
+
 // KubeContext defines model for KubeContext.
 type KubeContext struct {
 	Cluster   string  `json:"cluster"`
@@ -456,6 +481,7 @@ type ServicePort struct {
 type Snapshot struct {
 	Context     string        `json:"context"`
 	Deployments []Deployment  `json:"deployments"`
+	Ingresses   []Ingress     `json:"ingresses"`
 	Namespaces  []Namespace   `json:"namespaces"`
 	Nodes       []Node        `json:"nodes"`
 	Pods        []Pod         `json:"pods"`
@@ -738,6 +764,32 @@ func (t *WsMessage_Obj) MergeService(v Service) error {
 	return err
 }
 
+// AsIngress returns the union data inside the WsMessage_Obj as a Ingress
+func (t WsMessage_Obj) AsIngress() (Ingress, error) {
+	var body Ingress
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIngress overwrites any union data inside the WsMessage_Obj as the provided Ingress
+func (t *WsMessage_Obj) FromIngress(v Ingress) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIngress performs a merge with any union data inside the WsMessage_Obj, using the provided Ingress
+func (t *WsMessage_Obj) MergeIngress(v Ingress) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsEvent returns the union data inside the WsMessage_Obj as a Event
 func (t WsMessage_Obj) AsEvent() (Event, error) {
 	var body Event
@@ -882,6 +934,9 @@ type ServerInterface interface {
 	// UpdateHelmRepos Refresh every repository index
 	// (POST /api/helm/repos/update)
 	UpdateHelmRepos(w http.ResponseWriter, r *http.Request)
+	// DeleteIngress Close a gate (delete the Ingress)
+	// (DELETE /api/ingresses/{ns}/{name})
+	DeleteIngress(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
 	// DeletePod Repair a unit (delete the pod so its ReplicaSet replaces it)
 	// (DELETE /api/pods/{ns}/{name})
 	DeletePod(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
@@ -1373,6 +1428,41 @@ func (siw *ServerInterfaceWrapper) UpdateHelmRepos(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteIngress operation middleware
+func (siw *ServerInterfaceWrapper) DeleteIngress(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteIngress(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeletePod operation middleware
 func (siw *ServerInterfaceWrapper) DeletePod(w http.ResponseWriter, r *http.Request) {
 
@@ -1747,6 +1837,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}", wrapper.DeleteWorkload)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/scale", wrapper.ScaleWorkload)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/mappos", wrapper.SetWorkloadMapPos)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/ingresses/{ns}/{name}", wrapper.DeleteIngress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/pods/{ns}/{name}/logs", wrapper.GetPodLogs)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/pods/{ns}/{name}", wrapper.DeletePod)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/scale", wrapper.ScaleDeployment)

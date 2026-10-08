@@ -7,6 +7,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -333,5 +334,39 @@ func TestConvertPodOwner(t *testing.T) {
 	}
 	if bare := ConvertPod(&corev1.Pod{}, ""); bare.OwnerKind != nil {
 		t.Error("ownerless pod should have no owner")
+	}
+}
+
+func TestConvertIngress(t *testing.T) {
+	class := "nginx"
+	pt := netv1.PathTypePrefix
+	ing := &netv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: "gate", Namespace: "a"},
+		Spec: netv1.IngressSpec{
+			IngressClassName: &class,
+			TLS:              []netv1.IngressTLS{{Hosts: []string{"shop.example"}}},
+			Rules: []netv1.IngressRule{
+				{Host: "shop.example", IngressRuleValue: netv1.IngressRuleValue{HTTP: &netv1.HTTPIngressRuleValue{Paths: []netv1.HTTPIngressPath{
+					{Path: "/", PathType: &pt, Backend: netv1.IngressBackend{Service: &netv1.IngressServiceBackend{Name: "web", Port: netv1.ServiceBackendPort{Number: 80}}}},
+					{Path: "/api", PathType: &pt, Backend: netv1.IngressBackend{Service: &netv1.IngressServiceBackend{Name: "api", Port: netv1.ServiceBackendPort{Name: "http"}}}},
+				}}}},
+				{Host: "shop.example"}, // duplicate host, no http
+			},
+		},
+		Status: netv1.IngressStatus{LoadBalancer: netv1.IngressLoadBalancerStatus{Ingress: []netv1.IngressLoadBalancerIngress{{IP: "10.0.0.9"}, {Hostname: "lb.example"}}}},
+	}
+	got := ConvertIngress(ing)
+	if got.Class == nil || *got.Class != "nginx" || !got.Tls || len(got.Hosts) != 1 || got.Hosts[0] != "shop.example" {
+		t.Errorf("%+v", got)
+	}
+	if len(got.Rules) != 2 || got.Rules[0].Service != "web" || got.Rules[0].Port != "80" || got.Rules[1].Port != "http" || got.Rules[1].Path != "/api" {
+		t.Errorf("rules = %+v", got.Rules)
+	}
+	if len(got.Addresses) != 2 || got.Addresses[1] != "lb.example" {
+		t.Errorf("addresses = %v", got.Addresses)
+	}
+	bare := ConvertIngress(&netv1.Ingress{Spec: netv1.IngressSpec{DefaultBackend: &netv1.IngressBackend{Service: &netv1.IngressServiceBackend{Name: "fallback", Port: netv1.ServiceBackendPort{Number: 8080}}}}})
+	if len(bare.Rules) != 1 || bare.Rules[0].Service != "fallback" || bare.Rules[0].Path != "/*" || bare.Hosts == nil || bare.Addresses == nil {
+		t.Errorf("default backend = %+v", bare)
 	}
 }

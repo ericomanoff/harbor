@@ -12,6 +12,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
@@ -19,6 +20,7 @@ import (
 	appslisters "k8s.io/client-go/listers/apps/v1"
 	batchlisters "k8s.io/client-go/listers/batch/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	netlisters "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/ericomanoff/harbor/internal/api/gen"
@@ -51,6 +53,7 @@ type Watcher struct {
 	statefulsets appslisters.StatefulSetLister
 	daemonsets   appslisters.DaemonSetLister
 	jobs         batchlisters.JobLister
+	ingresses    netlisters.IngressLister
 
 	// Helm release secrets live in their own factory so the label selector
 	// does not narrow the other informers.
@@ -83,6 +86,7 @@ func NewWatcher(contextName string, client kubernetes.Interface, hub *Hub) *Watc
 	ssInf := f.Apps().V1().StatefulSets()
 	dsInf := f.Apps().V1().DaemonSets()
 	jobInf := f.Batch().V1().Jobs()
+	ingInf := f.Networking().V1().Ingresses()
 
 	if err := podInf.Informer().AddIndexers(cache.Indexers{byNodeIndex: podNodeIndex}); err != nil {
 		panic(err) // only fails if the index name is already registered
@@ -98,12 +102,16 @@ func NewWatcher(contextName string, client kubernetes.Interface, hub *Hub) *Watc
 	w.statefulsets = ssInf.Lister()
 	w.daemonsets = dsInf.Lister()
 	w.jobs = jobInf.Lister()
+	w.ingresses = ingInf.Lister()
 
 	addHandlers(nodeInf.Informer(), w.onNode, w.onNodeDeleted)
 	addHandlers(nsInf.Informer(), w.onNamespace, w.onNamespaceDeleted)
 	addHandlers(depInf.Informer(), w.onDeployment, w.onDeploymentDeleted)
 	addHandlers(podInf.Informer(), w.onPod, w.onPodDeleted)
 	addHandlers(svcInf.Informer(), w.onService, w.onServiceDeleted)
+	addHandlers(ingInf.Informer(), func(i *netv1.Ingress) { w.publish(gen.WsMessageTypeModified, ConvertIngress(i)) }, func(i *netv1.Ingress) {
+		w.publish(gen.WsMessageTypeDeleted, gen.Ingress{Ns: i.Namespace, Name: i.Name, Hosts: []string{}, Rules: []gen.IngressRule{}, Addresses: []string{}})
+	})
 	addHandlers(ssInf.Informer(), func(ss *appsv1.StatefulSet) { w.onWorkload(ConvertStatefulSet(ss)) }, func(ss *appsv1.StatefulSet) { w.onWorkloadDeleted(gen.WorkloadKindStatefulSet, ss.Namespace, ss.Name) })
 	addHandlers(dsInf.Informer(), func(ds *appsv1.DaemonSet) { w.onWorkload(ConvertDaemonSet(ds)) }, func(ds *appsv1.DaemonSet) { w.onWorkloadDeleted(gen.WorkloadKindDaemonSet, ds.Namespace, ds.Name) })
 	addHandlers(jobInf.Informer(), func(j *batchv1.Job) { w.onWorkload(ConvertJob(j)) }, func(j *batchv1.Job) { w.onWorkloadDeleted(gen.WorkloadKindJob, j.Namespace, j.Name) })
@@ -215,6 +223,12 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 		Releases:    []gen.HelmRelease{},
 		Services:    []gen.Service{},
 		Workloads:   []gen.Workload{},
+		Ingresses:   []gen.Ingress{},
+	}
+	if ings, err := w.ingresses.List(labels.Everything()); err == nil {
+		for _, i := range ings {
+			snap.Ingresses = append(snap.Ingresses, ConvertIngress(i))
+		}
 	}
 	if sss, err := w.statefulsets.List(labels.Everything()); err == nil {
 		for _, ss := range sss {
@@ -269,6 +283,10 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 	})
 	sort.Slice(snap.Services, func(i, j int) bool {
 		a, b := snap.Services[i], snap.Services[j]
+		return a.Ns < b.Ns || (a.Ns == b.Ns && a.Name < b.Name)
+	})
+	sort.Slice(snap.Ingresses, func(i, j int) bool {
+		a, b := snap.Ingresses[i], snap.Ingresses[j]
 		return a.Ns < b.Ns || (a.Ns == b.Ns && a.Name < b.Name)
 	})
 	sort.Slice(snap.Workloads, func(i, j int) bool {

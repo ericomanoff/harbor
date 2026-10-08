@@ -35,6 +35,9 @@ export function demoSnapshot(): Snapshot {
     releases: [
       { ns: 'sandbox', name: 'outpost', revision: 2, status: 'deployed', chart: 'podinfo', chartVersion: '6.15.0', appVersion: '6.15.0' },
     ],
+    ingresses: [
+      { ns: 'sandbox', name: 'shop', class: 'nginx', hosts: ['shop.example'], tls: true, addresses: ['10.96.0.1'], rules: [{ host: 'shop.example', path: '/', service: 'nginx', port: '80' }, { host: 'shop.example', path: '/api', service: 'outpost-podinfo', port: 'http' }] },
+    ],
     workloads: [
       { kind: 'StatefulSet', ns: 'sandbox', name: 'db', image: 'postgres:16', desired: 2, ready: 2, conditions: [] },
       { kind: 'DaemonSet', ns: 'kube-system', name: 'kube-proxy', image: 'kube-proxy', desired: 3, ready: 3, conditions: [] },

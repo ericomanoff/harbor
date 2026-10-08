@@ -84,6 +84,8 @@ func NewMessage(t gen.WsMessageType, v any) gen.WsMessage {
 		kind, err = gen.WsMessageKindWorkload, obj.FromWorkload(x)
 	case gen.Service:
 		kind, err = gen.WsMessageKindService, obj.FromService(x)
+	case gen.Ingress:
+		kind, err = gen.WsMessageKindIngress, obj.FromIngress(x)
 	case gen.Event:
 		kind, err = gen.WsMessageKindEvent, obj.FromEvent(x)
 	case gen.HelmRelease:

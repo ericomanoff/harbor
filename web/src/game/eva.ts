@@ -31,6 +31,7 @@ export class EvaFeed {
         for (const [k, r] of s.releases) this.relStatus.set(k, r.status);
         this.seenWl.clear();
         this.jobDone.clear();
+        for (const k of s.ingresses.keys()) this.seenWl.add(`ing:${k}`);
         for (const [k, w] of s.workloads) {
           this.seenWl.add(k);
           if (w.kind === 'Job') this.jobDone.set(k, !!w.complete);
@@ -83,6 +84,16 @@ export class EvaFeed {
           return [(w.failed ?? 0) > 0 && w.ready < w.desired ? `CATCH LOST: ${name}` : `CATCH LANDED: ${name}`];
         }
         return [];
+      }
+      case 'ingress': {
+        const name = e.key.split('/')[1] ?? e.key;
+        if (e.op === 'delete') {
+          this.seenWl.delete(`ing:${e.key}`);
+          return [`GATE CLOSED: ${name}`];
+        }
+        if (this.seenWl.has(`ing:${e.key}`)) return [];
+        this.seenWl.add(`ing:${e.key}`);
+        return [`GATE OPENED: ${name}`];
       }
       case 'release': {
         const name = e.key.split('/')[1] ?? e.key;

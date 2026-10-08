@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Deployment, Node, Pod, Service, Workload } from '../store/cluster';
-import { buildingCells, cellAt, computeLayout, isCellFree, layoutPlateaus, plateauWidth, unitCells } from './grid';
+import type { Deployment, Ingress, Node, Pod, Service, Workload } from '../store/cluster';
+import { GATE_W, buildingCells, cellAt, computeLayout, isCellFree, layoutPlateaus, plateauWidth, unitCells } from './grid';
 
 const node = (name: string, cpu = 4000, ready = true): Node => ({ name, ready, cpuAlloc: cpu, memAlloc: 0, cpuReq: 0, memReq: 0, labels: {} });
 const dep = (ns: string, name: string, mapPos?: { x: number; y: number }, release?: string): Deployment => ({ ns, name, replicas: 1, available: 1, updated: 1, image: 'x', conditions: [], ...(mapPos ? { mapPos } : {}), ...(release ? { release } : {}) });
@@ -128,6 +128,21 @@ describe('computeLayout', () => {
     // DaemonSets and Jobs get no structure.
     const l2 = computeLayout(nodes, [], [], [], [{ kind: 'DaemonSet', ns: 'a', name: 'agent', image: 'x', desired: 2, ready: 2, conditions: [] }]);
     expect(l2.buildings.size).toBe(0);
+  });
+
+  it('puts gates in the south breakwater without overlapping', () => {
+    const ing = (name: string): Ingress => ({ ns: 'a', name, hosts: [], rules: [], tls: false, addresses: [] });
+    const l = computeLayout(nodes, [], [], [], [], [ing('g1'), ing('g2'), ing('g3')]);
+    const gs = [...l.gates.values()];
+    expect(gs).toHaveLength(3);
+    for (const g of gs) {
+      expect(g.y).toBe(l.height - 1);
+      expect(g.x).toBeGreaterThanOrEqual(1);
+      expect(g.x + GATE_W).toBeLessThan(l.width);
+    }
+    const xs = gs.map((g) => g.x).sort((a, b) => a - b);
+    for (let i = 1; i < xs.length; i++) expect(xs[i]! - xs[i - 1]!).toBeGreaterThanOrEqual(GATE_W + 1);
+    expect([...computeLayout(nodes, [], [], [], [], [ing('g1'), ing('g2'), ing('g3')]).gates]).toEqual([...l.gates]);
   });
 
   it('with no nodes everything lands in the void strip and the world still has a size', () => {

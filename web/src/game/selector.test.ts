@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Pod, Service } from '../store/cluster';
-import { matchesSelector, podsForService, servicesForPod } from './selector';
+import type { Ingress, Pod, Service } from '../store/cluster';
+import { ingressesForService, matchesSelector, podsForService, servicesForIngress, servicesForPod } from './selector';
 
 const pod = (ns: string, name: string, labels: Record<string, string>): Pod => ({ ns, name, node: 'n', phase: 'Running', ready: true, restarts: 0, created: 'x', labels, containers: [] });
 const svc = (ns: string, name: string, selector: Record<string, string>): Service => ({ ns, name, type: 'ClusterIP', clusterIP: '1.2.3.4', ports: [], selector });
@@ -18,5 +18,22 @@ describe('selector', () => {
     expect(podsForService(services[0]!, pods).map((p) => p.name)).toEqual(['web-1']);
     expect(servicesForPod(pods[0]!, services)).toEqual(['a/web']);
     expect(servicesForPod(pods[1]!, services)).toEqual([]);
+  });
+});
+
+describe('gates', () => {
+  const gate: Ingress = { ns: 'a', name: 'gate', hosts: ['shop.example'], tls: true, addresses: [], rules: [
+    { host: 'shop.example', path: '/', service: 'web', port: '80' },
+    { host: 'shop.example', path: '/api', service: 'api', port: 'http' },
+    { host: 'shop.example', path: '/old', service: 'web', port: '80' },
+  ] };
+  it('lists the services a gate channels to, once each', () => {
+    expect(servicesForIngress(gate)).toEqual(['a/web', 'a/api']);
+  });
+  it('finds the gates for a service within its namespace', () => {
+    const web = svc('a', 'web', { app: 'web' });
+    const other = svc('b', 'web', { app: 'web' });
+    expect(ingressesForService(web, [gate])).toEqual(['a/gate']);
+    expect(ingressesForService(other, [gate])).toEqual([]);
   });
 });

@@ -201,3 +201,8 @@ func SetWorkloadMapPos(ctx context.Context, client kubernetes.Interface, kind ge
 	_, err := client.AppsV1().StatefulSets(ns).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
 	return err
 }
+
+// DeleteIngress closes a gate.
+func DeleteIngress(ctx context.Context, client kubernetes.Interface, ns, name string) error {
+	return client.NetworkingV1().Ingresses(ns).Delete(ctx, name, metav1.DeleteOptions{})
+}

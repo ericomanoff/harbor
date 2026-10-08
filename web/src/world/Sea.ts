@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { MAP_FONT, SEA } from '../config';
 import { ATLAS, TILES } from '../gfx/manifest';
 import { hashString } from '../layout/hash';
-import { SEA_PAD, TILE, TILE_SCALE, TILE_SRC, type MapLayout } from '../layout/grid';
+import { GATE_W, SEA_PAD, TILE, TILE_SCALE, TILE_SRC, type MapLayout } from '../layout/grid';
 
 /**
  * Open water for the whole world, a breakwater of rocks along the edge, and
@@ -15,14 +15,17 @@ export class Sea {
   private readonly rocks: Phaser.GameObjects.Image[] = [];
   private voidLabel?: Phaser.GameObjects.Text;
   private size = { w: 0, h: 0 };
+  private gateKey = '';
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   rebuild(L: MapLayout): void {
     const w = L.width * TILE;
     const h = L.height * TILE;
-    if (w !== this.size.w || h !== this.size.h) {
+    const gateKey = [...L.gates.values()].map((g) => g.x).sort((a, b) => a - b).join(',');
+    if (w !== this.size.w || h !== this.size.h || gateKey !== this.gateKey) {
       this.size = { w, h };
+      this.gateKey = gateKey;
       this.water?.destroy();
       this.waves?.destroy();
       // The pack's water is pale; tint it to sea blue and float the wave tile over it.
@@ -37,9 +40,10 @@ export class Sea {
         const f = rockFrames[hashString(`${tx},${ty}`) % rockFrames.length]!;
         this.rocks.push(this.scene.add.image(tx * TILE + TILE / 2, ty * TILE + TILE / 2, ATLAS.tiles.key, f).setScale(TILE_SCALE).setDepth(-15));
       };
+      const inGate = (tx: number): boolean => [...L.gates.values()].some((g) => tx >= g.x && tx < g.x + GATE_W);
       for (let x = 0; x < L.width; x += 2) {
         put(x, 0);
-        put(x + 1, L.height - 1);
+        if (!inGate(x + 1)) put(x + 1, L.height - 1); // the mouth stays open at the gates
       }
       for (let y = 2; y < L.height - 1; y += 2) {
         put(0, y);

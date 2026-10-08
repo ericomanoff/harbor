@@ -8,11 +8,12 @@ import { DockView } from '../entities/Dock';
 import { UnitView } from '../entities/Ship';
 import { ReleaseView } from '../entities/Anchorage';
 import { ServiceView } from '../entities/Lighthouse';
+import { GateView } from '../entities/Gate';
 import { Sea } from '../world/Sea';
 import { floatText, splash } from '../world/fx';
 import { maybeAutoStartTour, startTour } from '../tour/tour';
 import { splash as loadingSplash } from '../boot/splash';
-import { podsForService, servicesForPod } from '../game/selector';
+import { ingressesForService, podsForService, servicesForIngress, servicesForPod } from '../game/selector';
 import { openMissionSelect } from '../ui/missionSelect';
 import { openTechTree } from '../ui/techTree';
 import { isSystemNamespace } from '../layout/colors';
@@ -38,6 +39,7 @@ export const buildingKey = (k: string): string => `b:${k}`;
 export const unitKey = (k: string): string => `u:${k}`;
 export const releaseKey = (k: string): string => `r:${k}`;
 export const serviceKey = (k: string): string => `s:${k}`;
+export const gateKey = (k: string): string => `g:${k}`;
 
 interface GhostTarget {
   cell?: Cell & { plateau: string };
@@ -58,6 +60,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
   private readonly units = new Map<string, UnitView>();
   private readonly releases = new Map<string, ReleaseView>();
   private readonly services = new Map<string, ServiceView>();
+  private readonly gates = new Map<string, GateView>();
   private links!: Phaser.GameObjects.Graphics;
   private dirty = true;
   private initialised = false;
@@ -171,6 +174,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
     for (const b of this.buildings.values()) b.tick(time);
     for (const u of this.units.values()) u.tick(time);
     for (const s of this.services.values()) s.tick(time);
+    for (const gt of this.gates.values()) gt.tick(time);
   }
 
   /** Zoom out until the whole world fits inside the HUD margins and centre it. */
@@ -204,6 +208,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
     if (key.startsWith('u:')) return this.units.get(id)?.rect();
     if (key.startsWith('s:')) return this.services.get(id)?.rect();
     if (key.startsWith('r:')) return this.releases.get(id)?.plateRect();
+    if (key.startsWith('g:')) return this.gates.get(id)?.rect();
     if (key.startsWith('dock:')) {
       const p = this.layout.plateaus.find((pl) => pl.node === id);
       return p ? new Phaser.Geom.Rectangle(p.x * TILE, p.y * TILE, p.w * TILE, p.h * TILE) : undefined;
@@ -241,7 +246,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
   /** "/" search overlay; picking a hit selects it and pans to it. */
   openSearch(): void {
     openSearch((hit) => {
-      const v = hit.kind === 'structure' ? this.buildings.get(hit.key.slice(2)) : hit.kind === 'service' ? this.services.get(hit.key.slice(2)) : hit.kind === 'workload' ? undefined : this.units.get(hit.key.slice(2));
+      const v = hit.kind === 'structure' ? this.buildings.get(hit.key.slice(2)) : hit.kind === 'service' ? this.services.get(hit.key.slice(2)) : hit.kind === 'gate' ? this.gates.get(hit.key.slice(2)) : hit.kind === 'workload' ? undefined : this.units.get(hit.key.slice(2));
       if (v) this.centerOnWorld(v.x + TILE, v.y + TILE);
     });
   }
@@ -466,6 +471,12 @@ export class MapScene extends Phaser.Scene implements MapApi {
         return;
       }
     }
+    for (const gt of this.gates.values()) {
+      if (gt.rect().contains(end.x, end.y)) {
+        selection.set([gateKey(gt.key)]);
+        return;
+      }
+    }
     selection.clear();
   }
 
@@ -474,6 +485,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
     for (const u of this.units.values()) u.setSelected(selection.keys.has(unitKey(u.key)));
     for (const r of this.releases.values()) r.setSelected(selection.keys.has(releaseKey(r.key)));
     for (const sv of this.services.values()) sv.setSelected(selection.keys.has(serviceKey(sv.key)));
+    for (const gt of this.gates.values()) gt.setSelected(selection.keys.has(gateKey(gt.key)));
     this.drawLinks();
   }
 
@@ -507,6 +519,32 @@ export class MapScene extends Phaser.Scene implements MapApi {
       g.lineStyle(2, 0xffffff, 0.9).lineBetween(a.x, a.y, bx, by);
       g.fillStyle(0xffffff, 1).fillCircle(bx, by, 3);
     }
+    // Channels: gate ↔ lighthouse, when either side is selected.
+    const channels: [GateView, ServiceView][] = [];
+    for (const k of selection.keys) {
+      if (k.startsWith('g:')) {
+        const gt = this.gates.get(k.slice(2));
+        if (!gt) continue;
+        for (const sk of servicesForIngress(gt.ing)) {
+          const sv = this.services.get(sk);
+          if (sv) channels.push([gt, sv]);
+        }
+      } else if (k.startsWith('s:')) {
+        const sv = this.services.get(k.slice(2));
+        if (!sv) continue;
+        for (const gk of ingressesForService(sv.svc, store.ingresses.values())) {
+          const gt = this.gates.get(gk);
+          if (gt) channels.push([gt, sv]);
+        }
+      }
+    }
+    for (const [gt, sv] of channels) {
+      const a = gt.centre();
+      const b = sv.centre();
+      g.lineStyle(6, 0xffffff, 0.25).lineBetween(a.x, a.y, b.x, b.y);
+      g.lineStyle(2, 0xffd166, 0.95).lineBetween(a.x, a.y, b.x, b.y);
+      g.fillStyle(0xffd166, 1).fillCircle(b.x, b.y, 3);
+    }
   }
 
   // ---- reconcile ---------------------------------------------------------
@@ -518,7 +556,8 @@ export class MapScene extends Phaser.Scene implements MapApi {
     const pods = [...store.pods.values()].filter((p) => show(p.ns));
     const services = [...store.services.values()].filter((sv) => show(sv.ns));
     const workloads = [...store.workloads.values()].filter((w) => show(w.ns));
-    this.layout = computeLayout([...store.nodes.values()], deployments, pods, services, workloads);
+    const ingresses = [...store.ingresses.values()].filter((i) => show(i.ns));
+    this.layout = computeLayout([...store.nodes.values()], deployments, pods, services, workloads, ingresses);
     const L = this.layout;
 
     const pad = SEA_PAD * TILE;
@@ -594,6 +633,24 @@ export class MapScene extends Phaser.Scene implements MapApi {
       }
     }
 
+    // Gates in the breakwater.
+    const liveGates = new Set<string>();
+    for (const ing of ingresses) {
+      const key = nsKey(ing.ns, ing.name);
+      const place = L.gates.get(key);
+      if (!place) continue;
+      liveGates.add(key);
+      const v = this.gates.get(key);
+      if (v) v.update(ing, place);
+      else this.gates.set(key, new GateView(this, key, ing, place));
+    }
+    for (const [k, v] of this.gates) {
+      if (!liveGates.has(k)) {
+        v.destroy();
+        this.gates.delete(k);
+      }
+    }
+
     const livePods = new Set<string>();
     for (const p of pods) {
       const key = nsKey(p.ns, p.name);
@@ -628,6 +685,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
       if (kind === 'r') return !liveRels.has(key);
       if (kind === 's') return !liveSvcs.has(key);
       if (kind === 'w') return !store.workloads.has(key);
+      if (kind === 'g') return !liveGates.has(key);
       return !livePods.has(key);
     });
     if (stale.length) selection.set([...selection.keys].filter((k) => !stale.includes(k)));

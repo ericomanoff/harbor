@@ -157,6 +157,23 @@ export interface paths {
         patch: operations["setWorkloadMapPos"];
         trace?: never;
     };
+    "/api/ingresses/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Close a gate (delete the Ingress) */
+        delete: operations["deleteIngress"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pods/{ns}/{name}/logs": {
         parameters: {
             query?: never;
@@ -499,6 +516,24 @@ export interface components {
             release?: string;
             conditions: components["schemas"]["Condition"][];
         };
+        IngressRule: {
+            host: string;
+            path: string;
+            service: string;
+            /** @description Port number or name on the backend Service. */
+            port: string;
+        };
+        /** @description The harbor mouth: a gate that channels outside traffic to lighthouses (Services). */
+        Ingress: {
+            ns: string;
+            name: string;
+            class?: string;
+            hosts: string[];
+            rules: components["schemas"]["IngressRule"][];
+            tls: boolean;
+            /** @description Load balancer IPs or hostnames once assigned. */
+            addresses: string[];
+        };
         ServicePort: {
             port: number;
             targetPort: string;
@@ -530,6 +565,7 @@ export interface components {
         };
         Snapshot: {
             context: string;
+            ingresses: components["schemas"]["Ingress"][];
             workloads: components["schemas"]["Workload"][];
             releases: components["schemas"]["HelmRelease"][];
             services: components["schemas"]["Service"][];
@@ -620,9 +656,9 @@ export interface components {
             /** @enum {string} */
             type: "snapshot" | "added" | "modified" | "deleted";
             /** @enum {string} */
-            kind: "Node" | "Namespace" | "Deployment" | "Workload" | "Pod" | "Service" | "Event" | "HelmRelease" | "Snapshot";
+            kind: "Node" | "Namespace" | "Deployment" | "Workload" | "Pod" | "Service" | "Ingress" | "Event" | "HelmRelease" | "Snapshot";
             /** @description Wire model of the given kind; a Snapshot when type is snapshot. */
-            obj?: components["schemas"]["Node"] | components["schemas"]["Namespace"] | components["schemas"]["Deployment"] | components["schemas"]["Pod"] | components["schemas"]["Workload"] | components["schemas"]["Service"] | components["schemas"]["Event"] | components["schemas"]["HelmRelease"] | components["schemas"]["Snapshot"];
+            obj?: components["schemas"]["Node"] | components["schemas"]["Namespace"] | components["schemas"]["Deployment"] | components["schemas"]["Pod"] | components["schemas"]["Workload"] | components["schemas"]["Service"] | components["schemas"]["Ingress"] | components["schemas"]["Event"] | components["schemas"]["HelmRelease"] | components["schemas"]["Snapshot"];
         };
     };
     responses: {
@@ -846,6 +882,28 @@ export interface operations {
         };
         responses: {
             /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteIngress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
             204: {
                 headers: {
                     [name: string]: unknown;

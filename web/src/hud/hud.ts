@@ -1,4 +1,4 @@
-import { deleteDeployment, deletePod, helm, scaleDeployment, workloads as workloadApi, type HelmRelease } from '../api/client';
+import { deleteDeployment, deleteIngress, deletePod, helm, scaleDeployment, workloads as workloadApi, type HelmRelease } from '../api/client';
 import { hullNumber, shipVariant } from '../entities/Ship';
 import { eva, link, mode, modal, selection, settings, store, type LinkStatus } from '../app';
 import { sfx } from '../game/audio';
@@ -6,7 +6,7 @@ import { sellPlan } from '../game/commands';
 import { EvaFeed } from '../game/eva';
 import { filterSummary } from '../game/filter';
 import { computePower, formatPower, type PowerLevel } from '../game/power';
-import { podsForService } from '../game/selector';
+import { ingressesForService, podsForService, servicesForIngress } from '../game/selector';
 import { voiceLineFor } from '../game/voice';
 import { hexString, namespaceColor } from '../layout/colors';
 import { nsKey, wlKey, type StoreEvent, type Workload } from '../store/cluster';
@@ -305,8 +305,25 @@ export class Hud {
         `${sv.ns} · ${sv.type} · ${sv.clusterIP || 'no ip'}`,
         `ports ${sv.ports.map((p) => `${p.port}→${p.targetPort}/${p.protocol}`).join(', ') || 'none'}`,
         `guides ${linked.length} ship${linked.length === 1 ? '' : 's'} (${linked.filter((p) => p.ready).length} ready)`,
+        ingressesForService(sv, store.ingresses.values()).length ? `reached through gate ${ingressesForService(sv, store.ingresses.values()).map((k) => k.split('/')[1]).join(', ')}` : 'not reachable from outside',
         Object.keys(sv.selector).length ? `selector ${Object.entries(sv.selector).map(([k, v]) => `${k}=${v}`).join(',')}` : 'no selector',
       ], [], namespaceColor(sv.ns));
+      return;
+    }
+    if (keys.length === 1 && k0.startsWith('g:')) {
+      const ing = store.ingresses.get(k0.slice(2));
+      if (!ing) return;
+      const targets = servicesForIngress(ing);
+      this.setCard(`Gate ${ing.name}`, [
+        `${ing.ns} · Ingress${ing.class ? ` · class ${ing.class}` : ''}${ing.tls ? ' · 🔒 TLS' : ''}`,
+        ing.hosts.length ? `hosts ${ing.hosts.join(', ')}` : 'any host',
+        ...ing.rules.slice(0, 4).map((r) => `${r.host || '*'}${r.path || '/'} → lighthouse ${r.service}${r.port ? `:${r.port}` : ''}`),
+        ing.rules.length > 4 ? `… ${ing.rules.length - 4} more rules` : '',
+        ing.addresses.length ? `moored at ${ing.addresses.join(', ')}` : 'no address assigned yet',
+        `${targets.length} lighthouse${targets.length === 1 ? '' : 's'} lit from this gate`,
+      ], [
+        { label: 'Close the gate', kind: 'danger', confirm: 'Confirm: delete the Ingress?', enabled: true, run: async () => { await deleteIngress(ing.ns, ing.name); this.announce(`GATE CLOSED: ${ing.name}`); selection.clear(); } },
+      ], namespaceColor(ing.ns));
       return;
     }
     if (keys.length === 1 && k0.startsWith('r:')) {
@@ -455,6 +472,8 @@ export function navalise(line: string): string {
     .replace(/^TECH UNLOCKED: (.*)/, 'Chart library added: $1')
     .replace(/^TECH TREE UPDATED/, 'Chart libraries refreshed')
     .replace(/^THEATER CHANGED: (.*)/, 'Sailed to harbor $1')
+    .replace(/^GATE OPENED: (.*)/, 'Gate opened at the harbor mouth: $1')
+    .replace(/^GATE CLOSED: (.*)/, 'Gate closed: $1')
     .replace(/^FLEET SAILED: (.*)/, 'Fishing fleet sailed: $1')
     .replace(/^FLEET RECALLED: (.*)/, 'Fleet recalled: $1')
     .replace(/^CATCH LANDED: (.*)/, 'Catch landed: $1')

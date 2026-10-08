@@ -123,3 +123,7 @@ export const workloads = {
   setMapPos: (kind: WorkloadKind, ns: string, name: string, mp: MapPos, f: typeof fetch = fetch) =>
     request<void>('PATCH', `/api/workloads/${kind}/${enc(ns)}/${enc(name)}/mappos`, mp, f),
 };
+
+export function deleteIngress(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('DELETE', `/api/ingresses/${enc(ns)}/${enc(name)}`, undefined, fetchFn);
+}

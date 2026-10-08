@@ -1,4 +1,4 @@
-import type { Pod, Service } from '../store/cluster';
+import type { Ingress, Pod, Service } from '../store/cluster';
 import { nsKey } from '../store/cluster';
 
 /** Kubernetes equality selector: every selector key must match the labels. */
@@ -19,5 +19,22 @@ export function podsForService(svc: Service, pods: Iterable<Pod>): Pod[] {
 export function servicesForPod(pod: Pod, services: Iterable<Service>): string[] {
   const out: string[] = [];
   for (const s of services) if (s.ns === pod.ns && matchesSelector(pod.labels, s.selector)) out.push(nsKey(s.ns, s.name));
+  return out;
+}
+
+/** Service keys ("ns/name") a gate channels traffic to, deduplicated, in rule order. */
+export function servicesForIngress(ing: Ingress): string[] {
+  const out: string[] = [];
+  for (const r of ing.rules) {
+    const k = nsKey(ing.ns, r.service);
+    if (r.service && !out.includes(k)) out.push(k);
+  }
+  return out;
+}
+
+/** Gates whose rules point at the service. */
+export function ingressesForService(svc: Service, ingresses: Iterable<Ingress>): string[] {
+  const out: string[] = [];
+  for (const i of ingresses) if (i.ns === svc.ns && i.rules.some((r) => r.service === svc.name)) out.push(nsKey(i.ns, i.name));
   return out;
 }

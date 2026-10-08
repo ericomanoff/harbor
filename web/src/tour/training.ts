@@ -112,6 +112,12 @@ export function simulate(method: string, path: string, body: unknown): unknown {
     }
     return undefined;
   }
+  if ((m = /^\/api\/ingresses\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'DELETE') {
+    const ing = store.ingresses.get(nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)));
+    if (!ing) throw new Error('no such gate');
+    store.apply({ type: 'deleted', kind: 'Ingress', obj: ing });
+    return undefined;
+  }
   if (path === '/api/contexts') return { contexts: [{ name: 'training-harbor', cluster: 'training', user: 'cadet' }], current: 'training-harbor' };
   if (path === '/api/helm/repos' && method === 'GET') return [{ name: 'training', url: 'https://training.example/charts' }];
   if (path.startsWith('/api/helm/charts/values')) return { chart: 'training/podinfo', version: '6.15.0', values: 'replicaCount: 1\n' };

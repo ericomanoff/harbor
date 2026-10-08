@@ -27,7 +27,8 @@ on the land, pods are ships moored in the shallows, Services are lighthouses,
 Helm releases are anchorages ringed by a mooring boom. StatefulSets are
 tanker terminals launching numbered tankers, DaemonSets are tug companies
 with one tugboat per dock, Jobs are fishing fleets that come home when the
-catch is landed.
+catch is landed. Ingresses are gates in the breakwater at the harbor mouth;
+select one to see the channels to the lighthouses it routes to.
 
 The loading screen hails the backend first; if no harbor answers it offers
 Retry or the demo harbor. The first visit starts a welcome tour in a training harbor (nothing touches

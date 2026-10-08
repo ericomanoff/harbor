@@ -1,4 +1,4 @@
-import type { Deployment, Node, Pod, Service, Workload } from '../store/cluster';
+import type { Deployment, Ingress, Node, Pod, Service, Workload } from '../store/cluster';
 import { podsForService } from '../game/selector';
 import { nsKey } from '../store/cluster';
 import { hashString } from './hash';
@@ -87,7 +87,12 @@ export interface MapLayout {
   units: Map<string, Placement>;
   /** Services: one tile each, among the units of the plateau most of their pods are on. */
   services: Map<string, Placement>;
+  /** Ingresses: gates in the south breakwater, GATE_W tiles wide, keyed "ns/name". */
+  gates: Map<string, Placement>;
 }
+
+/** A gate spans this many tiles of breakwater (two towers and the opening). */
+export const GATE_W = 3;
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
@@ -155,7 +160,7 @@ function claimFrom(taken: Set<number>, count: number, start: number): number {
  * yields the same picture, and adding one object moves nothing else unless
  * a hash collision forces a probe.
  */
-export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Pod[], services: Service[] = [], workloads: Workload[] = []): MapLayout {
+export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Pod[], services: Service[] = [], workloads: Workload[] = [], ingresses: Ingress[] = []): MapLayout {
   const structures = structuresOf(deployments, workloads);
   const plateaus = layoutPlateaus(nodes);
   const right = plateaus.reduce((m, p) => Math.max(m, p.x + p.w), 0);
@@ -291,7 +296,18 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
     }
   }
 
-  return { plateaus, releases, width, height, voidY, buildings, units, services: serviceOut };
+  // Gates: slots of GATE_W tiles along the bottom edge, hashed with probing.
+  const gates = new Map<string, Placement>();
+  const slots = Math.max(1, Math.floor((width - 2 * MARGIN - 2) / (GATE_W + 1)));
+  const gateTaken = new Set<number>();
+  for (const ing of [...ingresses].sort((a, b) => nsKey(a.ns, a.name).localeCompare(nsKey(b.ns, b.name)))) {
+    const key = nsKey(ing.ns, ing.name);
+    const idx = claim(gateTaken, slots, `gate:${key}`);
+    const slot = idx >= 0 ? idx : gateTaken.size;
+    gates.set(key, { x: MARGIN + 1 + slot * (GATE_W + 1), y: height - 1, kind: 'void' });
+  }
+
+  return { plateaus, releases, width, height, voidY, buildings, units, services: serviceOut, gates };
 }
 
 /** The building cell whose 3x3 footprint contains tile (tx, ty), if any. */

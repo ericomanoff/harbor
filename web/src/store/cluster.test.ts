@@ -10,7 +10,7 @@ const snap: Snapshot = {
     { ns: 'sandbox', name: 'nginx-1', node: 'w1', phase: 'Running', ready: true, restarts: 0, created: '2026-10-07T00:00:00Z', deployment: 'nginx', labels: {}, containers: [] },
   ],
   releases: [{ ns: 'sandbox', name: 'outpost', revision: 1, status: 'deployed' }],
-  services: [], workloads: [],
+  services: [], workloads: [], ingresses: [],
 };
 
 describe('ClusterStore', () => {
@@ -71,7 +71,7 @@ describe('ClusterStore', () => {
   it('a second snapshot wipes state from the first', () => {
     const s = new ClusterStore();
     s.replace(snap);
-    s.replace({ context: 'other', nodes: [], namespaces: [], deployments: [], pods: [], releases: [], services: [], workloads: [] });
+    s.replace({ context: 'other', nodes: [], namespaces: [], deployments: [], pods: [], releases: [], services: [], workloads: [], ingresses: [] });
     expect(s.context).toBe('other');
     expect(s.pods.size).toBe(0);
     expect(s.nodes.size).toBe(0);

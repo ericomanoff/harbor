@@ -9,6 +9,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/ericomanoff/harbor/internal/api/gen"
@@ -156,6 +157,55 @@ func ConvertService(svc *corev1.Service) gen.Service {
 		Ports:     ports,
 		Selector:  selector,
 	}
+}
+
+// ConvertIngress: the harbor mouth. Rules are flattened to host/path/service.
+func ConvertIngress(ing *netv1.Ingress) gen.Ingress {
+	out := gen.Ingress{Ns: ing.Namespace, Name: ing.Name, Hosts: []string{}, Rules: []gen.IngressRule{}, Addresses: []string{}, Tls: len(ing.Spec.TLS) > 0}
+	out.Class = optString(derefStr(ing.Spec.IngressClassName))
+	seenHost := map[string]bool{}
+	addRule := func(host string, p netv1.HTTPIngressPath) {
+		r := gen.IngressRule{Host: host, Path: p.Path}
+		if p.Backend.Service != nil {
+			r.Service = p.Backend.Service.Name
+			if p.Backend.Service.Port.Name != "" {
+				r.Port = p.Backend.Service.Port.Name
+			} else if p.Backend.Service.Port.Number != 0 {
+				r.Port = strconv.Itoa(int(p.Backend.Service.Port.Number))
+			}
+		}
+		out.Rules = append(out.Rules, r)
+	}
+	for _, rule := range ing.Spec.Rules {
+		if rule.Host != "" && !seenHost[rule.Host] {
+			seenHost[rule.Host] = true
+			out.Hosts = append(out.Hosts, rule.Host)
+		}
+		if rule.HTTP == nil {
+			continue
+		}
+		for _, p := range rule.HTTP.Paths {
+			addRule(rule.Host, p)
+		}
+	}
+	if ing.Spec.DefaultBackend != nil && ing.Spec.DefaultBackend.Service != nil {
+		addRule("", netv1.HTTPIngressPath{Path: "/*", Backend: *ing.Spec.DefaultBackend})
+	}
+	for _, lb := range ing.Status.LoadBalancer.Ingress {
+		if lb.IP != "" {
+			out.Addresses = append(out.Addresses, lb.IP)
+		} else if lb.Hostname != "" {
+			out.Addresses = append(out.Addresses, lb.Hostname)
+		}
+	}
+	return out
+}
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func ConvertNamespace(ns *corev1.Namespace) gen.Namespace {

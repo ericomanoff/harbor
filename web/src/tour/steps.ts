@@ -70,6 +70,12 @@ export function tourSteps(): TourStep[] {
       waitFor: () => selection.keys.has(`s:${nginx}`),
     },
     {
+      id: 'gate',
+      title: 'The harbor mouth',
+      text: 'Gates in the breakwater are Ingresses: the only way in from the open sea. Select a gate to see the channels to the lighthouses it routes to; a gold chain means TLS.',
+      anchor: { kind: 'map', key: 'g:sandbox/shop', placement: 'top' },
+    },
+    {
       id: 'anchorage',
       title: 'Anchorages are Helm releases',
       text: 'A mooring boom of buoys surrounds everything a Helm release installed. Its nameplate opens a card to Upgrade, Roll back or Weigh anchor. The Charts button is the chart table: libraries, charts and every release.',

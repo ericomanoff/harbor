@@ -15,6 +15,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -207,6 +208,7 @@ func TestActionsRequireAContext(t *testing.T) {
 		{http.MethodDelete, "/api/deployments/default/web"},
 		{http.MethodDelete, "/api/pods/default/web-1"},
 		{http.MethodDelete, "/api/workloads/StatefulSet/default/db"},
+		{http.MethodDelete, "/api/ingresses/default/gate"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`)))
@@ -342,6 +344,28 @@ func TestWorkloadRoutes(t *testing.T) {
 		t.Errorf("delete: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := do(http.MethodDelete, "/api/workloads/StatefulSet/sandbox/db", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("delete twice: %d, want 404", rec.Code)
+	}
+}
+
+func TestDeleteIngress(t *testing.T) {
+	s := fakeServer(t)
+	ctx := context.Background()
+	if err := s.SelectContextByName(ctx, "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.current().Client().NetworkingV1().Ingresses("sandbox").Create(ctx, &netv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "gate", Namespace: "sandbox"}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/api/ingresses/sandbox/gate", nil))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodDelete, "/api/ingresses/sandbox/gate", nil))
+	if rec.Code != http.StatusNotFound {
 		t.Errorf("delete twice: %d, want 404", rec.Code)
 	}
 }

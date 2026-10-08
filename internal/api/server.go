@@ -154,6 +154,7 @@ func (s *Server) snapshot() gen.Snapshot {
 		Releases:    []gen.HelmRelease{},
 		Services:    []gen.Service{},
 		Workloads:   []gen.Workload{},
+		Ingresses:   []gen.Ingress{},
 	}
 }
 

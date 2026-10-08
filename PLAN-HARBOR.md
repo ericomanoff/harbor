@@ -28,7 +28,7 @@ so the map explains itself to anyone who knows Kubernetes:
 | ReplicaSet | Launch queue | Dry-dock hulls beside the shipyard during a rollout |
 | Node capacity vs requests | Harbor capacity bars | CPU = berths, memory = cargo, pods = crew; top-right bars |
 | Service | Lighthouse | Beam lines to the ships it routes to when either is selected |
-| Ingress (Phase 6) | Harbor mouth | A breakwater gate on the map edge linked to lighthouses |
+| Ingress | Harbor mouth gate | An opening in the south breakwater with two towers and a chain (gold when TLS); select it to see channels to the lighthouses its rules name; the card lists hosts, rules, addresses, and can close the gate |
 | Helm release | Anchorage | A mooring boom (rope and buoys) around the release's shipyards, nameplate buoy; status colours the boom |
 | Helm chart | Nautical chart | The shop's CHARTS tab; chart repositories are the chart library |
 | Warning events | Signal flags | Toasts near the top, full history under the Log button |

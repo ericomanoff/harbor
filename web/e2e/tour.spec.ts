@@ -46,6 +46,8 @@ test('welcome tour plays through in the training harbor', async ({ page }) => {
   await expect(title(page)).toHaveText('Lighthouses are Services');
 
   await clickMapKey(page, 's:sandbox/nginx');
+  await expect(title(page)).toHaveText('The harbor mouth');
+  await page.locator('[data-tour=next]').click();
   await expect(title(page)).toHaveText('Anchorages are Helm releases');
   await page.locator('[data-tour=next]').click();
   await expect(title(page)).toHaveText('Harbor capacity');

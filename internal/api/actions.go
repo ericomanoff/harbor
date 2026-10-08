@@ -233,3 +233,18 @@ func (s *Server) SetWorkloadMapPos(w http.ResponseWriter, r *http.Request, kind 
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// DeleteIngress closes a gate at the harbor mouth.
+func (s *Server) DeleteIngress(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.DeleteIngress(ctx, cur.Client(), ns, name); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
