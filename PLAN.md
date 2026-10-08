@@ -230,9 +230,9 @@ GET  /ws                            event stream
 
 ## 3. Art direction
 
-> Superseded on 2026-10-08 by `PLAN-VILLAGE.md`: the look moves from Tiberian
-> Dawn to a bright isometric village builder. The section below is kept for
-> history; the architecture sections still apply.
+> Superseded on 2026-10-08 by `PLAN-HARBOR.md`: the look moves from Tiberian
+> Dawn to a bright top-down naval scene (Kenney CC0 art, DOM HUD). The
+> section below is kept for history; the architecture sections still apply.
 
 Match the 1995-96 look without using EA assets. The Tiberian Dawn source is GPL
 but the art, sounds and voices are not, so every sprite, icon and sound is

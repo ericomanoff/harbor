@@ -26,7 +26,12 @@ export class BootScene extends Phaser.Scene {
 
     buildTextures(this);
 
-    const demo = new URLSearchParams(location.search).has('demo');
+    const params = new URLSearchParams(location.search);
+    if (params.has('style')) {
+      this.scene.start('Style');
+      return;
+    }
+    const demo = params.has('demo');
     if (demo) startDemo(store);
     else connectWebSocket(store);
 
