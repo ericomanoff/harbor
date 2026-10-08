@@ -272,7 +272,7 @@ images.
 
 | Phase | Scope | Size |
 |---|---|---|
-| G0 | Glossary and tooltips: dictionary, auto-markup, tooltip, glossary overlay, map hover, both-languages switch, coverage test | 1 session |
+| G0 | **Done 2026-10-08.** Glossary and tooltips: 41-entry dictionary (`web/src/glossary/terms.ts`), auto-markup of HUD, tour and overlay text by a MutationObserver (inputs, logs and code skipped; idempotent; first occurrence per element underlined), hover/focus tooltip with the pair and one-liner, click or G opens the glossary overlay with search and docs links, map hover shows the kind's entry, a both-languages switch in settings, a coverage test that fails when a UI term lacks an entry, an e2e spec | 1 session |
 | C0 | Harbor Select screen, progress endpoint and file, level types, director (simulated), level runner on the tour engine, success animation, summary card, "Ship's manifest" in forms, level 1 and level 2 | 2 sessions |
 | C1 | Levels 3-5 (scaling, probes, services): probe fields on forms, courier pod in the simulator, storm script | 1-2 sessions |
 | C2 | Levels 6-8 (ingress, config/secrets, requests/limits): ConfigMap/Secret forms and endpoints, limits fields, OOM and Pending staging | 2 sessions |

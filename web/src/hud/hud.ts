@@ -18,6 +18,7 @@ import { openTechTree } from '../ui/techTree';
 import { openMinimap, type MapApi } from './minimap';
 import { openShop } from './shop';
 import { Toasts } from './toasts';
+import { glossaryTooltip, openGlossary, startGlossary } from '../glossary';
 
 export type { MapApi } from './minimap';
 
@@ -74,6 +75,9 @@ export class Hud {
     };
     $('[data-shop-open]', this.root).onclick = () => openShop();
     $('[data-tech]', this.root).onclick = () => openTechTree();
+    $('[data-rail=glossary]', this.root).onclick = () => openGlossary();
+    startGlossary();
+    this.map.onHover((key, rect) => this.hoverTip(key, rect));
 
     store.subscribe((e) => this.onStore(e));
     link.changed.on((s) => this.setLink(s));
@@ -88,6 +92,18 @@ export class Hud {
     this.setLink(link.status);
     this.onStore({ type: 'snapshot' });
     window.setInterval(() => this.tickConfirm(), 250);
+  }
+
+  /** Map hover: the glossary entry for the kind of thing under the pointer. */
+  private hoverTip(key: string | undefined, rect: { x: number; y: number; width: number; height: number } | undefined): void {
+    const tip = glossaryTooltip();
+    if (!tip) return;
+    if (!key || !rect) {
+      tip.hide();
+      return;
+    }
+    const id = key.startsWith('b:sts:') ? 'tanker-terminal' : key.startsWith('b:') ? 'shipyard' : key.startsWith('s:') ? 'lighthouse' : key.startsWith('g:') ? 'gate' : key.startsWith('r:') ? 'anchorage' : key.startsWith('dock:') ? 'dock' : 'ship';
+    tip.showFor(id, new DOMRect(rect.x, rect.y, rect.width, rect.height));
   }
 
   // ---- top bar -----------------------------------------------------------
@@ -181,10 +197,13 @@ export class Hud {
     $('[data-set=tech]', root).onclick = () => { close(); openTechTree(); };
     const sound = $('[data-set=sound]', root);
     const sys = $('[data-set=system]', root);
+    const both = $('[data-set=both]', root);
     const refresh = (): void => {
       sound.textContent = settings.sound ? 'Sound: on' : 'Sound: off';
       sys.textContent = settings.showSystemNamespaces ? 'System fleets: shown' : 'System fleets: hidden';
+      both.textContent = settings.bothLanguages ? 'Both languages: harbor (Kubernetes)' : 'Both languages: off';
     };
+    both.onclick = () => { settings.bothLanguages = !settings.bothLanguages; settings.changed.emit(); refresh(); };
     sound.onclick = () => { settings.sound = !settings.sound; sfx.setEnabled(settings.sound); settings.changed.emit(); refresh(); };
     sys.onclick = () => { settings.showSystemNamespaces = !settings.showSystemNamespaces; settings.changed.emit(); refresh(); };
     refresh();

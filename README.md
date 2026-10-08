@@ -30,6 +30,10 @@ with one tugboat per dock, Jobs are fishing fleets that come home when the
 catch is landed. Ingresses are gates in the breakwater at the harbor mouth;
 select one to see the channels to the lighthouses it routes to.
 
+Every harbor word and every Kubernetes word in the interface has a tooltip:
+hover for the pairing ("Shipyard = Deployment") and a one-liner, click or press
+G for the glossary. Settings can show both languages everywhere.
+
 The loading screen hails the backend first; if no harbor answers it offers
 Retry or the demo harbor. The first visit starts a welcome tour in a training harbor (nothing touches
 your cluster); replay it any time with the Help button, or add `?notour` to

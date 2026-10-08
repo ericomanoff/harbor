@@ -42,6 +42,8 @@ export const settings = {
   showSystemNamespaces: false,
   hiddenNamespaces: new Set<string>(),
   sound: false,
+  /** Show the Kubernetes term beside every naval one. */
+  bothLanguages: false,
   changed: new Emitter<void>(),
 };
 

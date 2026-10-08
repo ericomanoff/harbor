@@ -309,3 +309,52 @@ body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { d
 #splash .actions { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
 #splash .tip { margin-top: 12px; font-size: 11px; font-weight: 600; color: var(--ink-soft); min-height: 15px; }
 #splash .version { position: absolute; right: 10px; bottom: 6px; font-size: 10px; font-weight: 700; color: var(--ink-soft); }
+
+/* ---- glossary ---------------------------------------------------------- */
+abbr.term {
+  text-decoration: none;
+  border-bottom: 0;
+  cursor: help;
+}
+abbr.term.first {
+  text-decoration: underline dotted currentColor;
+  text-underline-offset: 2px;
+}
+abbr.term .k8s { opacity: 0.75; font-weight: 600; }
+#term-tip {
+  position: fixed;
+  z-index: 40;
+  width: 260px;
+  background: var(--cream);
+  color: var(--ink);
+  border: 2px solid var(--olive);
+  border-radius: 10px;
+  padding: 8px 10px;
+  box-shadow: var(--shadow-sm);
+  font-size: 12px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+#term-tip .pair { font-weight: 900; font-size: 13px; margin-bottom: 2px; }
+#term-tip .short { font-weight: 600; }
+#term-tip .more { margin-top: 4px; font-size: 10px; color: var(--ink-soft); font-weight: 800; letter-spacing: 0.5px; }
+#term-tip::after {
+  content: '';
+  position: absolute;
+  left: calc(50% - 7px);
+  bottom: -8px;
+  width: 12px; height: 12px;
+  background: var(--cream);
+  border-right: 2px solid var(--olive);
+  border-bottom: 2px solid var(--olive);
+  transform: rotate(45deg);
+}
+#term-tip.below::after { bottom: auto; top: -8px; transform: rotate(225deg); }
+.panel.glossary { width: 720px; }
+.panel.glossary .columns { display: grid; grid-template-columns: 260px 1fr; gap: 14px; margin-top: 8px; height: 360px; }
+.panel.glossary ul.entries { list-style: none; margin: 0; padding: 0; overflow-y: auto; border-right: 1px solid #e3d8ba; }
+.panel.glossary ul.entries li { padding: 5px 8px; border-radius: 6px; cursor: pointer; font-weight: 800; font-size: 12px; }
+.panel.glossary ul.entries li.active, .panel.glossary ul.entries li:hover { background: var(--olive); color: #fff; }
+.panel.glossary .detail { overflow-y: auto; font-size: 13px; line-height: 1.45; }
+.panel.glossary .detail h3 { margin: 0 0 6px; color: var(--ink); font-size: 16px; }
+.panel.glossary .detail a { color: var(--green-dark); font-weight: 800; }

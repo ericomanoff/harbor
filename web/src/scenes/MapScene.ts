@@ -12,6 +12,7 @@ import { GateView } from '../entities/Gate';
 import { Sea } from '../world/Sea';
 import { floatText, splash } from '../world/fx';
 import { maybeAutoStartTour, startTour } from '../tour/tour';
+import { openGlossary } from '../glossary';
 import { splash as loadingSplash } from '../boot/splash';
 import { ingressesForService, podsForService, servicesForIngress, servicesForPod } from '../game/selector';
 import { openMissionSelect } from '../ui/missionSelect';
@@ -71,6 +72,8 @@ export class MapScene extends Phaser.Scene implements MapApi {
   private panStart?: { px: number; py: number; sx: number; sy: number };
   private dragBuilding?: { view: BuildingView; start: Phaser.Math.Vector2; moved: boolean };
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'w' | 'a' | 's' | 'd', Phaser.Input.Keyboard.Key>;
+  private hoverFn?: (key: string | undefined, rect: { x: number; y: number; width: number; height: number } | undefined) => void;
+  private hoverKey?: string;
 
   constructor() {
     super('Map');
@@ -134,6 +137,11 @@ export class MapScene extends Phaser.Scene implements MapApi {
       if (modal.open) return;
       ev.preventDefault();
       openMissionSelect();
+    });
+    kb.on('keydown-G', (ev: KeyboardEvent) => {
+      if (modal.open) return;
+      ev.preventDefault();
+      openGlossary();
     });
     kb.on('keydown-M', () => {
       if (modal.open) return;
@@ -386,8 +394,35 @@ export class MapScene extends Phaser.Scene implements MapApi {
     this.dragStart = w;
   }
 
+  onHover(fn: (key: string | undefined, rect: { x: number; y: number; width: number; height: number } | undefined) => void): void {
+    this.hoverFn = fn;
+  }
+
+  /** What is under the pointer, as a selection-style key. */
+  private keyAt(wx: number, wy: number): string | undefined {
+    for (const u of this.units.values()) if (!u.dying && u.rect().contains(wx, wy)) return unitKey(u.key);
+    for (const sv of this.services.values()) if (sv.rect().contains(wx, wy)) return serviceKey(sv.key);
+    for (const b of this.buildings.values()) if (b.rect().contains(wx, wy)) return buildingKey(b.key);
+    for (const r of this.releases.values()) if (r.plateRect().contains(wx, wy)) return releaseKey(r.key);
+    for (const gt of this.gates.values()) if (gt.rect().contains(wx, wy)) return gateKey(gt.key);
+    return undefined;
+  }
+
+  private updateHover(p: Phaser.Input.Pointer): void {
+    if (!this.hoverFn || modal.open || p.isDown || mode.current === 'place') {
+      if (this.hoverKey) { this.hoverKey = undefined; this.hoverFn?.(undefined, undefined); }
+      return;
+    }
+    const w = this.cameras.main.getWorldPoint(p.x, p.y);
+    const key = this.keyAt(w.x, w.y);
+    if (key === this.hoverKey) return;
+    this.hoverKey = key;
+    this.hoverFn(key, key ? this.screenRectOf(key) : undefined);
+  }
+
   private onPointerMove(p: Phaser.Input.Pointer): void {
     const cam = this.cameras.main;
+    this.updateHover(p);
     if (this.panStart) {
       cam.scrollX = this.panStart.sx - (p.x - this.panStart.px) / cam.zoom;
       cam.scrollY = this.panStart.sy - (p.y - this.panStart.py) / cam.zoom;

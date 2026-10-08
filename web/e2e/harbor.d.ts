@@ -1,8 +1,9 @@
 /** The devtools handle the game exposes, as the e2e specs use it. */
 interface HarborWindow {
   game: { scene: { keys: Record<string, unknown> } };
-  selection: { keys: Set<string> };
+  selection: { keys: Set<string>; set(keys: Iterable<string>): void; clear(): void };
   mode: { current: string };
+  settings: { bothLanguages: boolean; changed: { emit(): void } };
   store: {
     context: string;
     deployments: Map<string, { replicas: number; available: number }>;
