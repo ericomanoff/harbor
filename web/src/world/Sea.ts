@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { MAP_FONT, SEA } from '../config';
 import { ATLAS, TILES } from '../gfx/manifest';
 import { hashString } from '../layout/hash';
-import { TILE, TILE_SCALE, TILE_SRC, type MapLayout } from '../layout/grid';
+import { SEA_PAD, TILE, TILE_SCALE, TILE_SRC, type MapLayout } from '../layout/grid';
 
 /**
  * Open water for the whole world, a breakwater of rocks along the edge, and
@@ -26,8 +26,9 @@ export class Sea {
       this.water?.destroy();
       this.waves?.destroy();
       // The pack's water is pale; tint it to sea blue and float the wave tile over it.
-      this.water = this.scene.add.tileSprite(0, 0, w, h, ATLAS.tiles.key, TILES.water).setOrigin(0).setTileScale(TILE_SCALE).setDepth(-20).setTint(SEA.water);
-      this.waves = this.scene.add.tileSprite(0, 0, w, h, ATLAS.tiles.key, TILES.waterWave).setOrigin(0).setTileScale(TILE_SCALE).setDepth(-19).setAlpha(0.35).setTint(SEA.foam);
+      const pad = SEA_PAD * TILE;
+      this.water = this.scene.add.tileSprite(-pad, -pad, w + 2 * pad, h + 2 * pad, ATLAS.tiles.key, TILES.water).setOrigin(0).setTileScale(TILE_SCALE).setDepth(-20).setTint(SEA.water);
+      this.waves = this.scene.add.tileSprite(-pad, -pad, w + 2 * pad, h + 2 * pad, ATLAS.tiles.key, TILES.waterWave).setOrigin(0).setTileScale(TILE_SCALE).setDepth(-19).setAlpha(0.35).setTint(SEA.foam);
       for (const r of this.rocks) r.destroy();
       this.rocks.length = 0;
       // Breakwater: a rock every other tile along the edge, variant by position.

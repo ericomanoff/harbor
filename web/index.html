@@ -8,6 +8,75 @@
   </head>
   <body>
     <div id="game"></div>
+    <div id="hud" class="hud" hidden>
+      <div class="hud-top-left">
+        <div class="badge" data-badge title="Sail to another harbor"><div class="shield" data-berths-count>0</div><div><div class="eyebrow">YOUR HARBOR</div><div class="name" data-harbor-name>…</div></div></div>
+        <div class="chips"><span class="chip" data-chip="link">…</span><span class="chip" data-chip="docks"></span><span class="chip" data-chip="fleet"></span><span class="chip" data-chip="fleets"></span></div>
+      </div>
+      <div class="hud-top-center"><div class="toasts"></div></div>
+      <div class="hud-top-right">
+        <div class="bar" data-bar="berths"><span class="label">BERTHS</span><div class="track"><div class="fill"></div></div><span class="value">—</span></div>
+        <div class="bar cargo" data-bar="cargo"><span class="label">CARGO</span><div class="track"><div class="fill"></div></div><span class="value">—</span></div>
+        <div class="bar crew" data-bar="crew"><span class="label">CREW</span><div class="track"><div class="fill"></div></div><span class="value">—</span></div>
+      </div>
+      <div class="hud-left-rail">
+        <button class="rail-btn" data-rail="map" title="Chart table (minimap)"><span class="glyph">🗺️</span>Map</button>
+        <button class="rail-btn" data-rail="log" title="Harbor log"><span class="glyph">📜</span>Log</button>
+        <button class="rail-btn" data-rail="locate" title="Locate (/)"><span class="glyph">🔭</span>Find</button>
+        <button class="rail-btn" data-rail="fleets" title="Fleets filter (F)"><span class="glyph">⚑</span>Fleets</button>
+      </div>
+      <div class="hud-right-rail">
+        <button class="rail-btn" data-rail="settings" title="Settings"><span class="glyph">⚙️</span></button>
+        <button class="rail-btn" data-rail="zoom-in" title="Zoom in"><span class="glyph">＋</span></button>
+        <button class="rail-btn" data-rail="home" title="Whole harbor (H)"><span class="glyph">⌂</span></button>
+        <button class="rail-btn" data-rail="zoom-out" title="Zoom out"><span class="glyph">－</span></button>
+        <button class="rail-btn" data-rail="sound" title="Sound (M)"><span class="glyph">🔕</span></button>
+      </div>
+      <div class="hud-bottom-left">
+        <button class="pill primary big" data-shop-open>⚓ Shop</button>
+        <button class="pill secondary big" data-tech>🗺️ Charts</button>
+      </div>
+      <div class="hud-bottom-center">
+        <div class="selection card" hidden>
+          <div class="title"></div>
+          <div class="lines"></div>
+          <div class="actions"></div>
+        </div>
+      </div>
+    </div>
+    <div id="shop" class="overlay bottom" hidden>
+      <div class="drawer hud">
+        <div class="tabs"><h3>Shop</h3><span class="tab active" data-tab="all">All</span><span class="tab" data-tab="shipyards">Shipyards</span><span class="tab" data-tab="lighthouses">Lighthouses</span><span class="tab" data-tab="charts">Charts</span><span style="flex:1"></span><button class="pill secondary" data-close>Close</button></div>
+        <div class="cards"></div>
+      </div>
+    </div>
+    <div id="minimap" class="overlay" hidden>
+      <div class="panel">
+        <h2>CHART TABLE <span class="where">click to sail there</span></h2>
+        <canvas width="560" height="320"></canvas>
+        <div class="actions"><button type="button" data-close>CLOSE</button></div>
+      </div>
+    </div>
+    <div id="log" class="overlay" hidden>
+      <div class="panel wide">
+        <h2>HARBOR LOG <span class="where">newest first</span></h2>
+        <div class="rows"></div>
+        <div class="actions"><button type="button" data-close>CLOSE</button></div>
+      </div>
+    </div>
+    <div id="settings" class="overlay" hidden>
+      <div class="panel">
+        <h2>SETTINGS</h2>
+        <div class="menu">
+          <button type="button" data-set="theater">Sail to another harbor…</button>
+          <button type="button" data-set="fleets">Fleets filter…</button>
+          <button type="button" data-set="tech">Chart libraries…</button>
+          <button type="button" data-set="sound">Sound</button>
+          <button type="button" data-set="system">System fleets</button>
+        </div>
+        <div class="actions"><button type="button" data-close>CLOSE</button></div>
+      </div>
+    </div>
     <div id="build-form" class="overlay" hidden>
       <form class="panel" autocomplete="off">
         <h2>WAR FACTORY <span class="where"></span></h2>

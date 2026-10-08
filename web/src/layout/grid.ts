@@ -14,6 +14,8 @@ export const PLATEAU_GAP = 3;
 export const PLATEAUS_PER_ROW = 3;
 export const VOID_ROWS = 4; // staging strip below the plateaus for the unplaceable
 export const MARGIN = 1;
+/** Open sea drawn (and pannable) beyond the breakwater, in tiles. */
+export const SEA_PAD = 12;
 
 export interface Cell {
   x: number;

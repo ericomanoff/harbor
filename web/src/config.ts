@@ -1,9 +1,9 @@
 /** Logical render size. Scaled to the window with nearest-neighbour sampling. */
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 600;
-/** The C&C sidebar on the right; the map viewport is everything left of it. */
-export const SIDEBAR_W = 200;
-export const MAP_W = GAME_WIDTH - SIDEBAR_W;
+/** The map fills the window; the HUD is HTML over it. */
+export const SIDEBAR_W = 0;
+export const MAP_W = GAME_WIDTH;
 
 /** Sidebar palette, matched to the Tiberian Dawn / Red Alert 1 look. */
 export const PALETTE = {

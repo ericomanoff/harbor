@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { createDeployment, setMapPos } from '../api/client';
 import { eva, modal, mode, selection, settings, store } from '../app';
-import { GAME_HEIGHT, MAP_W, PALETTE, SEA } from '../config';
+import { PALETTE, SEA } from '../config';
+import { Hud, type MapApi } from '../hud/hud';
 import { BuildingView } from '../entities/Shipyard';
 import { DockView } from '../entities/Dock';
 import { UnitView } from '../entities/Ship';
@@ -12,7 +13,7 @@ import { podsForService, servicesForPod } from '../game/selector';
 import { openMissionSelect } from '../ui/missionSelect';
 import { openTechTree } from '../ui/techTree';
 import { isSystemNamespace } from '../layout/colors';
-import { BUILD_CELL, TILE, cellAt, computeLayout, isCellFree, type Cell, type MapLayout } from '../layout/grid';
+import { BUILD_CELL, SEA_PAD, TILE, cellAt, computeLayout, isCellFree, type Cell, type MapLayout } from '../layout/grid';
 import { nsKey, type ClusterEvent } from '../store/cluster';
 import { isObsolete } from '../game/unitState';
 import { openBuildForm } from '../ui/buildForm';
@@ -22,6 +23,9 @@ import { namespaceVisible } from '../game/filter';
 import { sfx } from '../game/audio';
 
 const EDGE = 14;
+
+const MAP_W = (): number => window.innerWidth;
+const MAP_H = (): number => window.innerHeight;
 const SCROLL_SPEED = 0.6; // px per ms
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
@@ -42,7 +46,7 @@ interface GhostTarget {
  * reconciling views against the store whenever it changes, and handles
  * placing and moving War Factories.
  */
-export class MapScene extends Phaser.Scene {
+export class MapScene extends Phaser.Scene implements MapApi {
   layout: MapLayout = computeLayout([], [], []);
 
   private readonly plateaus = new Map<string, DockView>();
@@ -68,8 +72,8 @@ export class MapScene extends Phaser.Scene {
 
   create(): void {
     const cam = this.cameras.main;
-    cam.setViewport(0, 0, MAP_W, GAME_HEIGHT);
     cam.setBackgroundColor(SEA.water);
+    this.scale.on('resize', () => this.updateGhost());
     this.input.mouse?.disableContextMenu();
 
     this.sea = new Sea(this);
@@ -135,7 +139,7 @@ export class MapScene extends Phaser.Scene {
     kb.on('keydown-TAB', (ev: KeyboardEvent) => !modal.open && this.cycleSelection(ev.shiftKey ? -1 : 1));
 
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (p.x >= MAP_W || modal.open) return;
+      if (modal.open) return;
       const before = cam.getWorldPoint(p.x, p.y);
       cam.setZoom(Phaser.Math.Clamp(cam.zoom * (dy > 0 ? 0.9 : 1.1), ZOOM_MIN, ZOOM_MAX));
       const after = cam.getWorldPoint(p.x, p.y);
@@ -146,9 +150,9 @@ export class MapScene extends Phaser.Scene {
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.onPointerMove(p));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.onPointerUp(p));
 
-    this.scene.launch('Hud');
     this.rebuild();
     this.homeCamera();
+    new Hud(this);
   }
 
   update(time: number, delta: number): void {
@@ -164,17 +168,33 @@ export class MapScene extends Phaser.Scene {
     for (const s of this.services.values()) s.tick(time);
   }
 
-  /** Zoom out until the whole world fits (never past ZOOM_MIN) and centre it. */
+  /** Zoom out until the whole world fits inside the HUD margins and centre it. */
   homeCamera(): void {
     const cam = this.cameras.main;
     const ww = this.layout.width * TILE;
     const wh = this.layout.height * TILE;
-    cam.setZoom(Phaser.Math.Clamp(Math.min(MAP_W / ww, GAME_HEIGHT / wh), ZOOM_MIN, 1));
-    cam.centerOn(ww / 2, wh / 2);
+    const freeW = MAP_W() - 2 * 90; // rails and bars on both sides
+    const freeH = MAP_H() - 150 - 90; // top bar and bottom buttons
+    cam.setZoom(Phaser.Math.Clamp(Math.min(freeW / ww, freeH / wh), ZOOM_MIN, 1));
+    cam.centerOn(ww / 2, wh / 2 + 20 / cam.zoom);
   }
 
   centerOnWorld(x: number, y: number): void {
     this.cameras.main.centerOn(x, y);
+  }
+
+  home(): void {
+    this.homeCamera();
+  }
+
+  zoomBy(factor: number): void {
+    const cam = this.cameras.main;
+    cam.setZoom(Phaser.Math.Clamp(cam.zoom * factor, ZOOM_MIN, ZOOM_MAX));
+  }
+
+  cameraView(): { x: number; y: number; width: number; height: number } {
+    const v = this.cameras.main.worldView;
+    return { x: v.x, y: v.y, width: v.width, height: v.height };
   }
 
   /** "/" search overlay; picking a hit selects it and pans to it. */
@@ -221,11 +241,12 @@ export class MapScene extends Phaser.Scene {
     if (this.keys.up.isDown || this.keys.w.isDown) dy -= v;
     if (this.keys.down.isDown || this.keys.s.isDown) dy += v;
     // Edge scroll on the three edges that are not shared with the sidebar.
-    const inMap = p.x >= 0 && p.x < MAP_W && p.y >= 0 && p.y < GAME_HEIGHT && this.game.canvas.matches(':hover');
+    const inMap = p.x >= 0 && p.x < MAP_W() && p.y >= 0 && p.y < MAP_H() && this.game.canvas.matches(':hover');
     if (inMap && !this.panStart) {
       if (p.x < EDGE) dx -= v;
       if (p.y < EDGE) dy -= v;
-      if (p.y > GAME_HEIGHT - EDGE) dy += v;
+      if (p.y > MAP_H() - EDGE) dy += v;
+      if (p.x > MAP_W() - EDGE) dx += v;
     }
     if (dx || dy) {
       cam.scrollX += dx;
@@ -246,7 +267,7 @@ export class MapScene extends Phaser.Scene {
   /** Draws (or clears) the footprint for placing or moving a building. */
   private updateGhost(p: Phaser.Input.Pointer = this.input.activePointer): GhostTarget | undefined {
     const moving = this.dragBuilding?.moved ? this.dragBuilding.view.key : undefined;
-    if ((mode.current !== 'place' && !moving) || p.x >= MAP_W) {
+    if (mode.current !== 'place' && !moving) {
       this.ghost.clear();
       return undefined;
     }
@@ -283,7 +304,7 @@ export class MapScene extends Phaser.Scene {
   // ---- pointer -----------------------------------------------------------
 
   private onPointerDown(p: Phaser.Input.Pointer): void {
-    if (p.x >= MAP_W || modal.open) return;
+    if (modal.open) return;
     if (p.rightButtonDown() || p.middleButtonDown()) {
       if (mode.current === 'place') {
         mode.set('idle');
@@ -445,7 +466,8 @@ export class MapScene extends Phaser.Scene {
     this.layout = computeLayout([...store.nodes.values()], deployments, pods, services);
     const L = this.layout;
 
-    this.cameras.main.setBounds(0, 0, L.width * TILE, L.height * TILE);
+    const pad = SEA_PAD * TILE;
+    this.cameras.main.setBounds(-pad, -pad, L.width * TILE + 2 * pad, L.height * TILE + 2 * pad);
     this.sea.rebuild(L);
 
     const liveNodes = new Set<string>();

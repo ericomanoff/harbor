@@ -1,6 +1,6 @@
 # Harbor redesign: a naval scene for Kubernetes and Helm
 
-Status: V0 and V1 done, 2026-10-08; next V2 (DOM HUD). Supersedes `PLAN-VILLAGE.md` (removed)
+Status: V0-V2 done, 2026-10-08; next V3 (motion and feel). Supersedes `PLAN-VILLAGE.md` (removed)
 and the Tiberian Dawn art direction in `PLAN.md` section 3. Everything else
 in `PLAN.md` (architecture, backend, phases 0-6, testing layers) stands.
 
@@ -127,10 +127,23 @@ all four test layers, demo mode, `make dist`.
   stretched the e2e round from 10 s to 2 min; it is 17 s now.
 - The C&C sidebar is still in place until V2.
 
-### V2: DOM HUD (2 sessions)
-- Top bar, rails, selection card, toasts, shop with drag-to-place for
-  shipyards and charts. Remove `HudScene`. Restyle overlays. The e2e round
-  moves to DOM selectors.
+### V2: DOM HUD — DONE 2026-10-08
+- `HudScene` and the sidebar are gone; the canvas fills the window (RESIZE
+  scale mode) and `web/src/hud/` draws everything else in HTML:
+  harbor badge (click: change context), status chips, BERTHS / CARGO / CREW
+  bars, left rail (Map, Log, Find, Fleets), right rail (settings, zoom,
+  home, sound), Shop and Charts pills, a selection card with pill actions
+  (dangerous ones confirm on a second click), toasts under the top bar.
+- Overlays: chart table (2D-canvas minimap, click to sail), harbor log,
+  settings; the shop drawer (All / Shipyards / Lighthouses / Charts) builds
+  by click-to-place rather than drag, which proved enough.
+- All existing overlays restyled to the cream tokens; EVA lines are reworded
+  to harbor speak for toasts (`navalise`), the fixed voice vocabulary is
+  unchanged underneath.
+- The e2e round now drives DOM buttons (`[data-action]`, `[data-shop-open]`)
+  instead of canvas coordinates, which made it sturdier (22 s).
+- Sea and camera bounds extend 12 tiles beyond the breakwater so the home
+  view sits clear of the HUD.
 
 ### V3: Motion and feel (1 session)
 - Bobbing, wakes, launch splash, fire and sinking, flag flutter, cargo

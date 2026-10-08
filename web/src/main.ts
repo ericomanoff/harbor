@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { mode, selection, settings, store } from './app';
 import { GAME_HEIGHT, GAME_WIDTH } from './config';
 import { BootScene } from './scenes/BootScene';
-import { HudScene } from './scenes/HudScene';
 import { MapScene } from './scenes/MapScene';
 import { StyleScene } from './scenes/StyleScene';
 import './hud/hud.css';
@@ -15,10 +14,10 @@ const game = new Phaser.Game({
   backgroundColor: '#000000',
   pixelArt: true,
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.NO_CENTER,
   },
-  scene: [BootScene, MapScene, HudScene, StyleScene],
+  scene: [BootScene, MapScene, StyleScene],
 });
 
 /** Devtools handle: `harbor.store.pods`, `harbor.game.scene.keys.Map`, ... */

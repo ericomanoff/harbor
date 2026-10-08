@@ -22,31 +22,32 @@ make dev       # backend on :8080, Vite with hot reload on :5173
 Open http://127.0.0.1:5173. Add `?demo` to the URL to run against a built-in
 fake cluster with no backend.
 
-Controls: left-click selects, drag box-selects units, drag a structure to
-move it, right-drag pans, wheel zooms, arrows or WASD scroll, H homes the
-camera, B (or the WAR FACTORY cameo) starts placing a Deployment, Tab cycles
-the selection, T opens the Helm tech tree, C (or the THEATER line) picks a
-context, `/` opens the locate box, F opens the namespace filter, N
-toggles system namespaces, M toggles sound and the EVA voice, Esc cancels or
-clears. Click the radar to jump.
+The map is a harbor: each node is an island dock, Deployments are shipyards
+on the land, pods are ships moored in the shallows, Services are lighthouses,
+Helm releases are anchorages ringed by a mooring boom.
 
-Playing: place a War Factory on a free cell in a plateau's top rows and fill
-in the form to create a Deployment. Select the factory to build or retire
-units (scale replicas), or SELL STRUCTURE (click twice) to delete it. Select
-units and SELL to scale down retiring exactly those pods, or REPAIR to delete
-them so the ReplicaSet replaces them. Units from an old rollout are hatched;
-Warning events flash their unit or structure. The power bar is CPU requests
-over allocatable across ready nodes.
+Controls: left-click selects, drag box-selects ships, drag a shipyard to move
+it, right-drag pans, wheel or the right rail zooms, arrows or WASD scroll, H
+or the home button fits the harbor, Shop (or B) starts placing a shipyard,
+Charts (or T) opens the Helm chart table, the harbor badge (or C) changes
+context, Find (or `/`) locates, Fleets (or F) filters namespaces, the bell
+(or M) toggles sound, Tab cycles the selection, Esc cancels or clears. The
+selection card at the bottom carries the actions for whatever is selected.
 
-Services appear as radar dishes near the units they route to; select either
-side to see the power lines between them. Select a unit and choose UNIT
-INTEL to tail its logs.
+Playing: open the Shop, Build a shipyard on a free slipway (the land rows of
+an island) and fill in the form to create a Deployment. Select the shipyard
+to Launch or Scrap ships (scale replicas) or Sell it (confirm twice). Select
+ships to Scrap exactly those pods, Refit them (delete so the ReplicaSet
+replaces them), or read the Ship's log. Ships from an old rollout look
+weathered; crash-looping ships burn; Warning events flash their ship or
+shipyard. BERTHS is CPU requests over allocatable, CARGO is memory, CREW is
+ships ready.
 
-Helm: open the tech tree (T or the TECH TREE cameo), add a chart repository
-under REPOS (for example `podinfo` at https://stefanprodan.github.io/podinfo),
-pick a chart under CHARTS and BUILD it: the release's Deployments appear as a
-block inside a dashed base perimeter. Click the perimeter's nameplate to
-UPGRADE, ROLLBACK or SELL the expansion; EXPANSIONS lists every release.
+Lighthouses stand near the ships they route to; select either side to see
+the beam lines. Helm: open Charts, add a chart library under REPOS (for
+example `podinfo` at https://stefanprodan.github.io/podinfo), pick a chart and
+Build it: the release's shipyards appear inside a mooring boom. Click the
+boom's nameplate to Upgrade, Roll back or Weigh anchor (uninstall).
 Repositories are read from and written to Helm's usual config paths.
 
 For the single-binary experience:

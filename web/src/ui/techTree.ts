@@ -8,6 +8,8 @@ export interface TechOptions {
   tab?: TechTab;
   /** "ns/name": jump straight to the upgrade form for this release. */
   upgrade?: string;
+  /** Jump straight to the install form for this chart. */
+  install?: HelmChart;
 }
 
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
@@ -248,6 +250,10 @@ export function openTechTree(opts: TechOptions = {}): void {
       void helm.listReleases().then((rels) => openUpgrade(rels.find((x) => `${x.ns}/${x.name}` === opts.upgrade) ?? r)).catch(fail);
       return;
     }
+  }
+  if (opts.install) {
+    void openInstall(opts.install);
+    return;
   }
   const tab = opts.tab ?? 'charts';
   show(tab);

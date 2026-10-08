@@ -11,13 +11,11 @@ import { expect, test, type Page } from '@playwright/test';
  * Playwright webServer starts the binary on its own port.
  */
 
-// Sidebar geometry, mirrored from HudScene. The viewport is exactly the
-// logical size so canvas coordinates equal page coordinates.
-const MAP_W = 760;
+// The map fills the viewport; the HUD is DOM, so commands are buttons.
+const MAP_W = 960;
 const TILE = 32;
-const CAMEO = { x: MAP_W + 8 + 44, y: 176 + 22 };
-const CMD_Y0 = 232 + 222 - 3 * 22 - 2 * 4 - 4;
-const cmd = (i: number): { x: number; y: number } => ({ x: MAP_W + 8 + 2 + 90, y: CMD_Y0 + i * 26 + 11 });
+/** The n-th action button on the selection card. */
+const action = (i: number): string => `#hud .selection button[data-action="${i}"]`;
 
 const NS = 'default';
 const NAME = `e2e-${Date.now().toString(36)}`;
@@ -97,11 +95,12 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
     .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
   await page.waitForFunction(() => {
     const active = (k: string): boolean => !!(window.harbor.game.scene.keys[k] as { sys?: { isActive(): boolean } } | undefined)?.sys?.isActive();
-    return active('Map') && active('Hud');
+    return active('Map') && !document.getElementById('hud')?.hidden;
   });
 
-  // Enter placement mode from the cameo and pick a free building cell.
-  await page.mouse.click(CAMEO.x, CAMEO.y);
+  // Enter placement mode from the shop and pick a free building cell.
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=shipyard] button').click();
   await expect.poll(() => page.evaluate(() => window.harbor.mode.current)).toBe('place');
   const cell = await page.evaluate(() => {
     const m = window.harbor.game.scene.keys.Map as {
@@ -172,7 +171,8 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   let bAt = await focus(page, cell.x * TILE + TILE * 1.5, cell.y * TILE + TILE * 1.5);
   await page.mouse.click(bAt.x, bAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`b:${NS}/${NAME}`]);
-  await page.mouse.click(cmd(0).x, cmd(0).y);
+  await expect(page.locator(action(0))).toHaveText('Launch ship');
+  await page.locator(action(0)).click();
   await page.waitForFunction((key) => {
     const d = window.harbor.store.deployments.get(key) as { replicas: number; available: number } | undefined;
     return d?.replicas === 2 && d.available === 2;
@@ -186,7 +186,8 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   const uAt = await focus(page, unitPos.x, unitPos.y);
   await page.mouse.click(uAt.x, uAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${victim}`]);
-  await page.mouse.click(cmd(0).x, cmd(0).y);
+  await expect(page.locator(action(1))).toHaveText('Scrap ship');
+  await page.locator(action(1)).click();
   await page.waitForFunction(
     ([name, v]) => {
       const live = [...window.harbor.store.pods.values()].filter((p) => (p as { deployment?: string }).deployment === name) as { name: string }[];
@@ -203,7 +204,8 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   const iAt = await focus(page, iPos.x, iPos.y);
   await page.mouse.click(iAt.x, iAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${intel!.name}`]);
-  await page.mouse.click(cmd(2).x, cmd(2).y);
+  await expect(page.locator(action(0))).toHaveText("Ship's log");
+  await page.locator(action(0)).click();
   const logs = page.locator('#logs');
   await expect(logs).toBeVisible();
   await expect(logs.locator('.where')).toHaveText(`${NS}/${intel!.name}`);
@@ -227,7 +229,8 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   const rAt = await focus(page, rPos.x, rPos.y);
   await page.mouse.click(rAt.x, rAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${remaining!.name}`]);
-  await page.mouse.click(cmd(1).x, cmd(1).y);
+  await expect(page.locator(action(2))).toHaveText('Refit ship');
+  await page.locator(action(2)).click();
   await page.waitForFunction(
     ([name, old]) => {
       const live = [...window.harbor.store.pods.values()].filter((p) => (p as { deployment?: string }).deployment === name) as { name: string; ready: boolean }[];
@@ -241,10 +244,10 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   bAt = await focus(page, cell.x * TILE + TILE * 1.5, cell.y * TILE + TILE * 1.5);
   await page.mouse.click(bAt.x, bAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`b:${NS}/${NAME}`]);
-  await page.mouse.click(cmd(2).x, cmd(2).y);
-  await page.waitForTimeout(300);
-  expect(await deployment(page)).toBeDefined(); // first click only arms the confirm
-  await page.mouse.click(cmd(2).x, cmd(2).y);
+  await page.locator(action(2)).click();
+  await expect(page.locator(action(2))).toContainText('Confirm'); // first click only arms the confirm
+  expect(await deployment(page)).toBeDefined();
+  await page.locator(action(2)).click();
   await page.waitForFunction((key) => !window.harbor.store.deployments.has(key), `${NS}/${NAME}`, { timeout: 60_000 });
   expect(() => kubectl('get', 'deployment', NAME, '-n', NS)).toThrow();
 });

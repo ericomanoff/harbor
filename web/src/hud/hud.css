@@ -159,7 +159,7 @@
 .hud .shop-card .pill { padding: 4px 12px; font-size: 12px; }
 .hud .shop-card.selected { border-color: var(--green); box-shadow: 0 0 0 3px rgba(92, 184, 42, 0.4), var(--shadow-sm); }
 
-.hud .drawer {
+.hud .drawer, .hud.drawer {
   background: var(--cream-2);
   border-top: 3px solid var(--olive);
   border-radius: 18px 18px 0 0;
@@ -179,3 +179,47 @@
 
 .hud .swatches { display: flex; gap: 6px; flex-wrap: wrap; }
 .hud .swatch { width: 34px; height: 34px; border-radius: 8px; border: 2px solid rgba(0, 0, 0, 0.2); }
+
+/* ---- layout ------------------------------------------------------------ */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+#hud > * { position: absolute; }
+#hud .hud-top-left { top: 12px; left: 14px; display: flex; flex-direction: column; gap: 8px; }
+#hud .hud-top-center { top: 12px; left: 50%; transform: translateX(-50%); width: 420px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#hud .hud-top-right { top: 12px; right: 14px; display: flex; flex-direction: column; gap: 6px; }
+#hud .hud-left-rail { top: 50%; left: 14px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
+#hud .hud-right-rail { top: 50%; right: 14px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
+#hud .hud-bottom-left { bottom: 14px; left: 14px; display: flex; gap: 8px; }
+#hud .hud-bottom-center { bottom: 14px; left: 50%; transform: translateX(-50%); }
+#hud button, #hud .badge, #hud .bar, #hud .selection { pointer-events: auto; }
+#hud .badge { cursor: pointer; }
+.hud .pill.big { padding: 10px 20px; font-size: 15px; }
+
+.hud .chips { display: flex; gap: 6px; flex-wrap: wrap; max-width: 320px; }
+.hud .chip { background: var(--olive-dark); color: #fff; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 800; }
+.hud .chip[data-state="online"] { background: var(--green-dark); }
+.hud .chip[data-state="offline"] { background: var(--red); }
+.hud .chip[data-state="demo"], .hud .chip[data-state="connecting"] { background: var(--gold-dark); }
+
+.hud .toast.warn { background: rgba(120, 30, 20, 0.9); }
+.hud .toast.fade { opacity: 0; transition: opacity 0.4s; }
+
+.hud .selection { min-width: 360px; max-width: 520px; }
+.hud .selection .title { font-size: 17px; font-weight: 900; margin-bottom: 2px; }
+.hud .selection .lines { font-size: 12px; font-weight: 600; color: var(--ink-soft); line-height: 1.35; }
+.hud .selection .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+/* overlay drawer at the bottom of the screen */
+.overlay.bottom { align-items: flex-end; background: transparent; }
+.overlay.bottom .drawer { width: 100%; box-sizing: border-box; }
+.drawer .cards { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+
+.panel .menu { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.panel .menu button { text-align: left; }
+
+/* While the shop is open the bottom HUD gets out of its way. */
+body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { display: none; }
