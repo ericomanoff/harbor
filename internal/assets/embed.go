@@ -29,9 +29,13 @@ func Handler() http.Handler {
 
 const placeholder = `<!doctype html>
 <meta charset="utf-8">
-<title>harbor</title>
-<body style="background:#000;color:#39ff14;font-family:monospace;padding:2em">
-<h1>harbor</h1>
-<p>No frontend build is embedded. Run <code>make web</code> then rebuild, or use
-<code>make dev</code> for the Vite dev server.</p>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harbor</title>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:linear-gradient(180deg,#5fbde6,#3a98c9);font-family:Nunito,'Segoe UI',system-ui,sans-serif">
+<div style="width:380px;padding:22px 26px;background:#f6efdc;color:#2d3319;border:2px solid #4b5a2a;border-radius:14px;box-shadow:0 6px 0 rgba(0,0,0,.18),0 12px 28px rgba(0,0,0,.3);text-align:center">
+<div style="font-size:44px">⚓</div>
+<div style="font-size:36px;font-weight:900">Harbor</div>
+<p style="font-weight:700;color:#6b7350;margin:8px 0 14px">No charts aboard: this binary has no frontend build embedded.</p>
+<p style="font-weight:600;font-size:13px;margin:0">Run <code>make web</code> and rebuild, or <code>make dev</code> for the Vite dev server.</p>
+</div>
 </body>`

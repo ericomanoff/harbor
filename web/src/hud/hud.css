@@ -265,3 +265,47 @@ body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { d
 #tour .bubble[data-place="left"]::after { right: -10px; top: calc(50% - 8px); left: auto; border-left: none; border-bottom: none; }
 #tour .bubble[data-place="right"]::after { left: -10px; top: calc(50% - 8px); border-right: none; border-top: none; }
 @keyframes tour-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+
+/* ---- loading screen ------------------------------------------------- */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, var(--sea) 0%, var(--sea-deep) 100%);
+  transition: opacity 0.35s;
+}
+#splash.fade { opacity: 0; pointer-events: none; }
+#splash .waves { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#splash .wave {
+  position: absolute;
+  left: -50%;
+  width: 200%;
+  height: 46%;
+  bottom: -8%;
+  border-radius: 45% 45% 0 0 / 60% 60% 0 0;
+  background: rgba(255, 255, 255, 0.10);
+  animation: splash-drift 9s ease-in-out infinite;
+}
+#splash .wave.w2 { bottom: -18%; height: 40%; background: rgba(255, 255, 255, 0.07); animation-duration: 13s; animation-direction: reverse; }
+@keyframes splash-drift { 0%, 100% { transform: translateX(-3%) } 50% { transform: translateX(3%) } }
+@media (prefers-reduced-motion: reduce) { #splash .wave { animation: none; } }
+#splash .splash-card {
+  position: relative;
+  width: 380px;
+  padding: 22px 26px 16px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+#splash .mark { font-size: 44px; line-height: 1; }
+#splash .word { font-size: 40px; font-weight: 900; letter-spacing: 1px; color: var(--ink); line-height: 1.1; }
+#splash .sub { font-size: 13px; font-weight: 700; color: var(--ink-soft); margin-bottom: 14px; }
+#splash .bar { margin: 0 auto 8px; min-width: 0; }
+#splash .bar .fill { transition: width 0.3s; }
+#splash .status { font-size: 13px; font-weight: 800; color: var(--ink); min-height: 18px; }
+#splash.failed .bar .fill { background: var(--red); width: 100% !important; }
+#splash.failed .status { color: var(--red); }
+#splash .actions { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+#splash .tip { margin-top: 12px; font-size: 11px; font-weight: 600; color: var(--ink-soft); min-height: 15px; }
+#splash .version { position: absolute; right: 10px; bottom: 6px; font-size: 10px; font-weight: 700; color: var(--ink-soft); }

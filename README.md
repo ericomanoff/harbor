@@ -29,7 +29,8 @@ tanker terminals launching numbered tankers, DaemonSets are tug companies
 with one tugboat per dock, Jobs are fishing fleets that come home when the
 catch is landed.
 
-The first visit starts a welcome tour in a training harbor (nothing touches
+The loading screen hails the backend first; if no harbor answers it offers
+Retry or the demo harbor. The first visit starts a welcome tour in a training harbor (nothing touches
 your cluster); replay it any time with the Help button, or add `?notour` to
 the URL to suppress it.
 

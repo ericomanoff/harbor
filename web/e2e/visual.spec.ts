@@ -18,6 +18,31 @@ test.describe('visual', () => {
     await expect(page).toHaveScreenshot('style.png', { maxDiffPixelRatio: 0.02 });
   });
 
+  test('loading screen while hailing the harbor master', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 760 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    // Keep the backend from answering so the splash sits at the backend stage.
+    await page.route('**/api/healthz', () => { /* never fulfilled */ });
+    await page.goto('/');
+    await expect(page.locator('#splash .status')).toHaveText('Hailing the harbor master…');
+    await page.waitForTimeout(400);
+    await expect(page).toHaveScreenshot('splash-hailing.png', { maxDiffPixelRatio: 0.02, mask: [page.locator('#splash .tip')] });
+  });
+
+  test('loading screen when no harbor answers', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 760 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.route('**/api/healthz', (route) => route.abort());
+    await page.goto('/');
+    await expect(page.locator('#splash .status')).toContainText('No harbor in sight');
+    await expect(page.locator('#splash button[data-demo]')).toBeVisible();
+    await expect(page).toHaveScreenshot('splash-failed.png', { maxDiffPixelRatio: 0.02, mask: [page.locator('#splash .tip')] });
+    // The demo button is the way out.
+    await page.locator('#splash button[data-demo]').click();
+    await page.waitForFunction(() => !document.getElementById('hud')?.hidden, null, { timeout: 15_000 });
+    await expect(page.locator('#splash')).toBeHidden();
+  });
+
   test('demo harbor at home zoom', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 760 });
     await page.goto('/?demo');

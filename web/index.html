@@ -3,10 +3,27 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>harbor</title>
+    <title>Harbor</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%235fbde6' stroke='%234b5a2a' stroke-width='4'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle'%3E%E2%9A%93%3C/text%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
+    <div id="splash" class="hud">
+      <div class="waves"><div class="wave w1"></div><div class="wave w2"></div></div>
+      <div class="card splash-card">
+        <div class="mark">⚓</div>
+        <div class="word">Harbor</div>
+        <div class="sub">your Kubernetes harbor</div>
+        <div class="bar"><span class="label">LOADING</span><div class="track"><div class="fill" style="width:0%"></div></div></div>
+        <div class="status">Loading the charts…</div>
+        <div class="actions" hidden>
+          <button class="pill primary" data-retry>Retry</button>
+          <button class="pill secondary" data-demo>Demo harbor</button>
+        </div>
+        <div class="tip"></div>
+        <div class="version"></div>
+      </div>
+    </div>
     <div id="game"></div>
     <div id="hud" class="hud" hidden>
       <div class="hud-top-left">

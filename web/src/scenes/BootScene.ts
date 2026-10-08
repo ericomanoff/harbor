@@ -1,15 +1,22 @@
 import Phaser from 'phaser';
+import { contexts, getHealth } from '../api/client';
 import { source, store } from '../app';
-import { GAME_HEIGHT, GAME_WIDTH, PALETTE } from '../config';
+import { splash } from '../boot/splash';
 import { startDemo } from '../demo/demo';
 import { createPackAnims, loadPackAssets } from '../gfx/anims';
-import { createFxTextures } from '../world/fx';
 import { connectWebSocket } from '../store/source';
+import { createFxTextures } from '../world/fx';
+
+const HAIL_TIMEOUT_MS = 4000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timed out')), ms))]);
+}
 
 /**
- * First scene: picks the data source (live WebSocket, or the demo cluster
- * when the URL has ?demo), shows the boot banner briefly, then starts the
- * map. Later it will also load atlases and audio.
+ * First scene. Draws nothing: the HTML splash is the loading screen. Loads
+ * the atlases, waits for the font, hails the backend, picks the data source
+ * and starts the map (or the style page).
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -17,30 +24,50 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    splash().setStage('assets');
+    this.load.on('progress', (v: number) => splash().setProgress(v * 0.7));
     loadPackAssets(this);
   }
 
   create(): void {
     createPackAnims(this);
     createFxTextures(this);
-    const g = this.add.graphics();
-    g.fillStyle(PALETTE.radarGround, 1).fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    g.lineStyle(2, PALETTE.bevelLight, 1).strokeRect(8, 8, GAME_WIDTH - 16, GAME_HEIGHT - 16);
+    void this.run();
+  }
 
-    const mono = { fontFamily: 'monospace', fontSize: '28px', color: '#39ff14' };
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, 'HARBOR', mono).setOrigin(0.5);
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'ESTABLISHING BATTLEFIELD CONTROL...', { ...mono, fontSize: '14px' }).setOrigin(0.5);
-
+  private async run(): Promise<void> {
     const params = new URLSearchParams(location.search);
     if (params.has('style')) {
       this.scene.start('Style');
+      void splash().done();
       return;
     }
     const demo = params.has('demo');
-    source.stop = demo ? startDemo(store) : connectWebSocket(store);
+    const s = splash();
 
-    // Let the map font arrive so labels never fall back to a system face.
-    const fonts = document.fonts?.load('800 12px Nunito') ?? Promise.resolve();
-    void Promise.race([fonts, new Promise((r) => setTimeout(r, 1500))]).then(() => this.scene.start('Map'));
+    s.setStage('fonts');
+    await Promise.race([document.fonts?.load('800 12px Nunito') ?? Promise.resolve(), new Promise((r) => setTimeout(r, 1500))]);
+
+    if (!demo) {
+      s.setStage('backend');
+      try {
+        const health = await withTimeout(getHealth(), HAIL_TIMEOUT_MS);
+        s.setVersion(health.version);
+        const cl = await withTimeout(contexts.list(), HAIL_TIMEOUT_MS);
+        s.setStage('backend', cl.current || undefined);
+      } catch {
+        s.fail('No harbor in sight. Is the harbor binary running?', {
+          onRetry: () => location.reload(),
+          onDemo: () => {
+            location.search = '?demo';
+          },
+        });
+        return;
+      }
+    }
+
+    s.setStage('sail');
+    source.stop = demo ? startDemo(store) : connectWebSocket(store);
+    this.scene.start('Map');
   }
 }

@@ -1,3 +1,8 @@
+/* The hidden attribute must beat any display rule below. */
+[hidden] {
+  display: none !important;
+}
+
 html, body {
   margin: 0;
   height: 100%;

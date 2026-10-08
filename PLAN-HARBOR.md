@@ -1,6 +1,6 @@
 # Harbor redesign: a naval scene for Kubernetes and Helm
 
-Status: V0-V5 done, 2026-10-08. The naval redesign is complete, with the three extra workload kinds and a welcome tour; remaining work is Phase 6 of PLAN.md (Ingress, exec, create forms for StatefulSets/Jobs) and bespoke art if ever wanted. Supersedes `PLAN-VILLAGE.md` (removed)
+Status: V0-V6 done, 2026-10-08. The naval redesign is complete, with the three extra workload kinds and a welcome tour; remaining work is Phase 6 of PLAN.md (Ingress, exec, create forms for StatefulSets/Jobs) and bespoke art if ever wanted. Supersedes `PLAN-VILLAGE.md` (removed)
 and the Tiberian Dawn art direction in `PLAN.md` section 3. Everything else
 in `PLAN.md` (architecture, backend, phases 0-6, testing layers) stands.
 
@@ -184,7 +184,7 @@ all four test layers, demo mode, `make dist`.
   had been dead since Phase 5 (their hit-tests were spliced against a loop
   that had already moved). Fixed; the tour spec now guards it.
 
-### V6: Loading screen — PLAN (2026-10-08)
+### V6: Loading screen — DONE 2026-10-08 (plan below, built as written)
 
 What is left of the old theme: `BootScene` paints a radar-green box with a
 monospace "HARBOR" and "ESTABLISHING BATTLEFIELD CONTROL...", the Go

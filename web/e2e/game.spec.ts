@@ -90,6 +90,8 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
     const active = (k: string): boolean => !!(window.harbor.game.scene.keys[k] as { sys?: { isActive(): boolean } } | undefined)?.sys?.isActive();
     return active('Map') && !document.getElementById('hud')?.hidden;
   });
+  // The loading screen names the harbor it hailed, then gets out of the way.
+  await expect(page.locator('#splash')).toBeHidden({ timeout: 5000 });
 
   // Enter placement mode from the shop and pick a free building cell.
   await page.locator('#hud [data-shop-open]').click();

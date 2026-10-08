@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { createDeployment, setMapPos, workloads as workloadApi } from '../api/client';
 import { eva, modal, mode, selection, settings, store } from '../app';
-import { PALETTE, SEA } from '../config';
+import { SEA } from '../config';
 import { Hud, type MapApi } from '../hud/hud';
 import { BuildingView, structureOfDeployment, structureOfStatefulSet } from '../entities/Shipyard';
 import { DockView } from '../entities/Dock';
@@ -11,6 +11,7 @@ import { ServiceView } from '../entities/Lighthouse';
 import { Sea } from '../world/Sea';
 import { floatText, splash } from '../world/fx';
 import { maybeAutoStartTour, startTour } from '../tour/tour';
+import { splash as loadingSplash } from '../boot/splash';
 import { podsForService, servicesForPod } from '../game/selector';
 import { openMissionSelect } from '../ui/missionSelect';
 import { openTechTree } from '../ui/techTree';
@@ -156,7 +157,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
     this.homeCamera();
     new Hud(this);
     document.querySelector<HTMLButtonElement>('#hud [data-rail=help]')?.addEventListener('click', () => startTour(this));
-    maybeAutoStartTour(this);
+    void loadingSplash().done().then(() => maybeAutoStartTour(this));
   }
 
   update(time: number, delta: number): void {
