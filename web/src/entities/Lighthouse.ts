@@ -15,6 +15,7 @@ export class ServiceView extends Phaser.GameObjects.Container {
   private readonly beam: Phaser.GameObjects.Graphics;
   private readonly sel: Phaser.GameObjects.Graphics;
   private readonly label: Phaser.GameObjects.Text;
+  private readonly lamp: Phaser.GameObjects.Arc;
 
   constructor(scene: Phaser.Scene, key: string, svc: Service, placement: Placement) {
     super(scene, placement.x * TILE, placement.y * TILE);
@@ -23,9 +24,10 @@ export class ServiceView extends Phaser.GameObjects.Container {
     this.placement = placement;
     this.beam = scene.add.graphics();
     this.tower = scene.add.image(TILE / 2, TILE / 2, ATLAS.tiles.key, TILES.tower).setScale(TILE_SCALE * 1.15);
+    this.lamp = scene.add.circle(TILE / 2, TILE / 2 - 2, 3, 0xfff3a0, 1);
     this.sel = scene.add.graphics();
     this.label = scene.add.text(TILE / 2, TILE + 1, '', { fontFamily: MAP_FONT, fontSize: '10px', fontStyle: '800', color: '#ffffff', stroke: '#1d5f87', strokeThickness: 3 }).setOrigin(0.5, 0);
-    this.add([this.beam, this.tower, this.sel, this.label]);
+    this.add([this.beam, this.tower, this.lamp, this.sel, this.label]);
     this.setDepth(18);
     scene.add.existing(this);
     this.redraw();
@@ -59,6 +61,7 @@ export class ServiceView extends Phaser.GameObjects.Container {
     g.clear();
     g.fillStyle(SEA.beam, 0.22);
     g.slice(TILE / 2, TILE / 2, TILE * 1.8, a, a + 0.5, false).fillPath();
+    this.lamp.setAlpha(0.6 + 0.4 * Math.sin(time / 300)).setScale(1 + 0.3 * Math.sin(time / 300));
   }
 
   private redraw(): void {

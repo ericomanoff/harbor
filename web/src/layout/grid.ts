@@ -64,9 +64,9 @@ export interface MapLayout {
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
-/** Bigger nodes get wider plateaus, bounded so one giant node does not dwarf the map. */
+/** Bigger nodes get wider islands, bounded so one giant node does not dwarf the harbor. */
 export function plateauWidth(cpuMilli: number): number {
-  return clamp(12 + Math.round(cpuMilli / 1000) * 2, 12, 36);
+  return clamp(12 + Math.round(cpuMilli / 2000) * 2, 12, 24);
 }
 
 export function layoutPlateaus(nodes: Node[]): PlateauLayout[] {

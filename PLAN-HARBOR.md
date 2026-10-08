@@ -1,6 +1,6 @@
 # Harbor redesign: a naval scene for Kubernetes and Helm
 
-Status: V0-V2 done, 2026-10-08; next V3 (motion and feel). Supersedes `PLAN-VILLAGE.md` (removed)
+Status: V0-V3 done, 2026-10-08; V4 in progress. Supersedes `PLAN-VILLAGE.md` (removed)
 and the Tiberian Dawn art direction in `PLAN.md` section 3. Everything else
 in `PLAN.md` (architecture, backend, phases 0-6, testing layers) stands.
 
@@ -145,9 +145,14 @@ all four test layers, demo mode, `make dist`.
 - Sea and camera bounds extend 12 tiles beyond the breakwater so the home
   view sits clear of the HUD.
 
-### V3: Motion and feel (1 session)
-- Bobbing, wakes, launch splash, fire and sinking, flag flutter, cargo
-  crates, signal-flag toasts, audio cues.
+### V3: Motion and feel — DONE 2026-10-08
+- Foam wake particles while a ship sails, a splash ring and a floating
+  "launched" pill at the slipway, cargo crates on deck (one per container)
+  that turn with the hull, smoke over burning ships, a pulsing lighthouse
+  lamp, flag flutter on shipyards.
+- Audio cues re-synthesised as harbor sounds: wood knock (click), ship's
+  bell (done), bell twice (alert), hammering (build), foghorn (error).
+- Islands are narrower (12-24 tiles) so a three-node cluster fills the view.
 
 ### V4: Polish (1 session)
 - Settings overlay, zoom rail, performance pass, visual snapshot tests of

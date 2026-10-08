@@ -3,6 +3,7 @@ import { store } from '../app';
 import { GAME_HEIGHT, GAME_WIDTH, PALETTE } from '../config';
 import { startDemo } from '../demo/demo';
 import { createPackAnims, loadPackAssets } from '../gfx/anims';
+import { createFxTextures } from '../world/fx';
 import { connectWebSocket } from '../store/source';
 
 /**
@@ -21,6 +22,7 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     createPackAnims(this);
+    createFxTextures(this);
     const g = this.add.graphics();
     g.fillStyle(PALETTE.radarGround, 1).fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     g.lineStyle(2, PALETTE.bevelLight, 1).strokeRect(8, 8, GAME_WIDTH - 16, GAME_HEIGHT - 16);

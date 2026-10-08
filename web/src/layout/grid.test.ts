@@ -9,8 +9,8 @@ const pod = (ns: string, name: string, nodeName: string, deployment?: string): P
 describe('plateaus', () => {
   it('width grows with CPU within bounds', () => {
     expect(plateauWidth(0)).toBe(12);
-    expect(plateauWidth(4000)).toBe(20);
-    expect(plateauWidth(64000)).toBe(36);
+    expect(plateauWidth(4000)).toBe(16);
+    expect(plateauWidth(64000)).toBe(24);
   });
 
   it('are sorted by name and wrap into rows without overlapping', () => {

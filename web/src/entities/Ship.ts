@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { SEA } from '../config';
 import { unitState, type UnitState } from '../game/unitState';
 import { ANIM } from '../gfx/anims';
-import { ATLAS, SPRITES } from '../gfx/manifest';
+import { ATLAS, SPRITES, TILES } from '../gfx/manifest';
+import { smokeEmitter, wakeEmitter } from '../world/fx';
 import { hashString } from '../layout/hash';
 import { namespaceColor } from '../layout/colors';
-import { TILE, type Placement } from '../layout/grid';
+import { TILE, TILE_SCALE, type Placement } from '../layout/grid';
 import type { Pod } from '../store/cluster';
 
 const SHIP_SCALE = 0.42; // 66x113 frame → ~28x47 px; overhangs its tile, which reads better than a speck
@@ -25,7 +26,12 @@ export class UnitView extends Phaser.GameObjects.Container {
   dying = false;
 
   private readonly shadow: Phaser.GameObjects.Ellipse;
+  /** Hull plus deck cargo; rotates as one. */
+  private readonly hull: Phaser.GameObjects.Container;
   private readonly ship: Phaser.GameObjects.Image;
+  private readonly crates: Phaser.GameObjects.Image[];
+  private wake?: Phaser.GameObjects.Particles.ParticleEmitter;
+  private smoke?: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly fire: Phaser.GameObjects.Sprite;
   private readonly marks: Phaser.GameObjects.Graphics;
   private readonly sel: Phaser.GameObjects.Graphics;
@@ -42,16 +48,19 @@ export class UnitView extends Phaser.GameObjects.Container {
     this.placement = placement;
     this.bobPhase = (hashString(key) % 100) / 100;
     this.shadow = scene.add.ellipse(TILE / 2, TILE / 2 + 4, 26, 40, 0x000000, 0.18);
-    this.ship = scene.add.image(TILE / 2, TILE / 2, ATLAS.ships.key, SPRITES.ship(0, hashString(key) % 4).frame).setScale(SHIP_SCALE);
+    this.ship = scene.add.image(0, 0, ATLAS.ships.key, SPRITES.ship(0, hashString(key) % 4).frame).setScale(SHIP_SCALE);
+    // Cargo: one crate per container (up to three) stacked along the deck.
+    this.crates = [0, 1, 2].map((i) => scene.add.image(0, -4 + i * 6, ATLAS.tiles.key, TILES.crate).setScale(TILE_SCALE * 0.28).setVisible(false));
+    this.hull = scene.add.container(TILE / 2, TILE / 2, [this.ship, ...this.crates]);
     this.fire = scene.add.sprite(TILE / 2, TILE / 2 - 2, ATLAS.ships.key, SPRITES.fire[0].frame).setScale(0.45).setOrigin(0.5, 1).setVisible(false);
     this.marks = scene.add.graphics();
     this.sel = scene.add.graphics();
     this.hit = scene.add.graphics();
     this.hit.fillStyle(0xe5473a, 0.5).fillCircle(TILE / 2, TILE / 2, TILE / 2).setVisible(false);
-    this.add([this.shadow, this.ship, this.marks, this.fire, this.sel, this.hit]);
+    this.add([this.shadow, this.hull, this.marks, this.fire, this.sel, this.hit]);
     this.setDepth(20);
     scene.add.existing(this);
-    this.ship.setRotation(((hashString(key) >> 4) % 8) * (Math.PI / 4));
+    this.hull.setRotation(((hashString(key) >> 4) % 8) * (Math.PI / 4));
     this.redraw();
     if (spawnFrom) {
       this.setPosition(spawnFrom.x, spawnFrom.y);
@@ -80,8 +89,13 @@ export class UnitView extends Phaser.GameObjects.Container {
     const tx = p.x * TILE;
     const ty = p.y * TILE;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, tx, ty);
-    if (dist > 0) this.ship.setRotation(Math.atan2(ty - this.y, tx - this.x) + Math.PI / 2);
-    this.scene.tweens.add({ targets: this, x: tx, y: ty, duration: Phaser.Math.Clamp(dist * 2, 300, 2200), ease: 'Sine.easeInOut' });
+    if (dist > 0) this.hull.setRotation(Math.atan2(ty - this.y, tx - this.x) + Math.PI / 2);
+    this.wake ??= wakeEmitter(this.scene, this, { x: TILE / 2, y: TILE / 2 });
+    this.wake.start();
+    this.scene.tweens.add({
+      targets: this, x: tx, y: ty, duration: Phaser.Math.Clamp(dist * 2, 300, 2200), ease: 'Sine.easeInOut',
+      onComplete: () => this.wake?.stop(),
+    });
   }
 
   setSelected(on: boolean): void {
@@ -92,7 +106,7 @@ export class UnitView extends Phaser.GameObjects.Container {
   /** Bob at anchor, blink while pending, flash on warnings. */
   tick(time: number): void {
     const bob = Math.sin(time / 700 + this.bobPhase * Math.PI * 2);
-    this.ship.y = TILE / 2 + bob * 1.2;
+    this.hull.y = TILE / 2 + bob * 1.2;
     this.hit.setVisible(time < this.flashUntil && Math.floor(time / 120) % 2 === 0);
     if (this.status === 'pending') this.ship.setAlpha(Math.floor(time / 300) % 2 === 0 ? 0.9 : 0.45);
   }
@@ -102,13 +116,16 @@ export class UnitView extends Phaser.GameObjects.Container {
     if (this.dying) return;
     this.dying = true;
     this.fire.setVisible(false);
+    this.wake?.stop();
+    this.smoke?.stop();
+    this.scene.time.delayedCall(2000, () => { this.wake?.destroy(); this.smoke?.destroy(); });
     const boom = this.scene.add.sprite(this.x + TILE / 2, this.y + TILE / 2, ATLAS.ships.key, SPRITES.explosion[0].frame).setScale(0.6).setDepth(30);
     boom.play(ANIM.explosion);
     boom.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => boom.destroy());
     const debris = this.scene.add.image(this.x + TILE / 2, this.y + TILE / 2, ATLAS.ships.key, SPRITES.wood(hashString(this.key) % 4).frame).setScale(0.4).setDepth(19).setAlpha(0.9);
     this.scene.tweens.add({ targets: debris, alpha: 0, duration: 4000, delay: 1500, onComplete: () => debris.destroy() });
-    this.scene.tweens.add({ targets: this.ship, scaleX: 0.05, scaleY: 0.05, alpha: 0, duration: 700, delay: 150 });
-    this.scene.tweens.add({ targets: this, alpha: 0, duration: 800, delay: 200, onComplete: () => this.destroy() });
+    this.scene.tweens.add({ targets: this.hull, scaleX: 0.05, scaleY: 0.05, alpha: 0, duration: 700, delay: 150 });
+    this.scene.tweens.add({ targets: this, alpha: 0, duration: 800, delay: 200, onComplete: () => { this.wake?.destroy(); this.smoke?.destroy(); this.destroy(); } });
   }
 
   private redraw(): void {
@@ -118,6 +135,9 @@ export class UnitView extends Phaser.GameObjects.Container {
     this.ship.setAlpha(1).setTint(color).setTexture(ATLAS.ships.key, SPRITES.ship(0, hashString(this.key) % 4).frame).setScale(SHIP_SCALE);
     this.marks.clear();
     this.fire.setVisible(false).stop();
+    this.smoke?.stop();
+    const cargo = Math.min(3, this.pod.containers.length);
+    this.crates.forEach((c, i) => c.setVisible(i < cargo && this.status !== 'pending'));
     switch (this.status) {
       case 'pending':
         this.ship.setTexture(ATLAS.ships.key, SPRITES.hullSmall(0).frame).setScale(SHIP_SCALE * 1.1).setTint(color);
@@ -129,6 +149,8 @@ export class UnitView extends Phaser.GameObjects.Container {
         break;
       case 'crash':
         this.fire.setVisible(true).play(ANIM.fire);
+        this.smoke ??= smokeEmitter(this.scene, this, { x: TILE / 2, y: TILE / 2 - 8 });
+        this.smoke.start();
         break;
       case 'terminating':
         this.setAlpha(0.45);

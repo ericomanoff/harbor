@@ -39,12 +39,29 @@ export class Sfx {
       osc.start(t + start);
       osc.stop(t + start + dur + 0.02);
     };
+    // Wood knock: a short burst of filtered noise.
+    const knock = (start: number, gain = 0.12): void => {
+      const ctx = this.ctx!;
+      const len = Math.floor(ctx.sampleRate * 0.06);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 700;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain, t + start);
+      src.connect(lp).connect(g).connect(ctx.destination);
+      src.start(t + start);
+    };
     switch (name) {
-      case 'click': tone(900, 'square', 0, 0.04, 0.05); break;
-      case 'ok': tone(660, 'square', 0, 0.07); tone(990, 'square', 0.08, 0.1); break;
-      case 'error': tone(160, 'sawtooth', 0, 0.25, 0.1, 110); break;
-      case 'alert': tone(440, 'sawtooth', 0, 0.12, 0.08, 880); tone(440, 'sawtooth', 0.15, 0.12, 0.08, 880); break;
-      case 'build': tone(120, 'triangle', 0, 0.35, 0.06, 240); break;
+      case 'click': knock(0, 0.1); break;
+      case 'ok': tone(880, 'sine', 0, 0.5, 0.07); tone(1760, 'sine', 0, 0.35, 0.03); break; // ship's bell
+      case 'error': tone(110, 'sawtooth', 0, 0.45, 0.08, 95); tone(165, 'sawtooth', 0.05, 0.4, 0.04, 140); break; // foghorn
+      case 'alert': tone(880, 'sine', 0, 0.25, 0.07); tone(880, 'sine', 0.3, 0.25, 0.07); break; // bell twice
+      case 'build': knock(0); knock(0.12); knock(0.24, 0.09); break; // hammering
     }
   }
 

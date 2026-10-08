@@ -9,6 +9,7 @@ import { UnitView } from '../entities/Ship';
 import { ReleaseView } from '../entities/Anchorage';
 import { ServiceView } from '../entities/Lighthouse';
 import { Sea } from '../world/Sea';
+import { floatText, splash } from '../world/fx';
 import { podsForService, servicesForPod } from '../game/selector';
 import { openMissionSelect } from '../ui/missionSelect';
 import { openTechTree } from '../ui/techTree';
@@ -550,6 +551,10 @@ export class MapScene extends Phaser.Scene implements MapApi {
         const building = p.deployment ? this.buildings.get(nsKey(p.ns, p.deployment)) : undefined;
         const from = this.initialised && building ? building.door() : undefined;
         this.units.set(key, new UnitView(this, key, p, place, from));
+        if (from) {
+          splash(this, from.x + TILE / 2, from.y + TILE / 2);
+          floatText(this, from.x + TILE / 2, from.y - 6, '⚓ launched');
+        }
       }
     }
     for (const [k, v] of this.units) {
