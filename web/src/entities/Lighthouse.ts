@@ -1,17 +1,18 @@
 import Phaser from 'phaser';
-import { FONT, PALETTE } from '../config';
-import { TEX } from '../gfx/sprites';
+import { MAP_FONT, SEA } from '../config';
+import { ATLAS, TILES } from '../gfx/manifest';
 import { hexString, namespaceColor } from '../layout/colors';
-import { TILE, type Placement } from '../layout/grid';
+import { TILE, TILE_SCALE, type Placement } from '../layout/grid';
 import type { Service } from '../store/cluster';
 
-/** A Service: a radar dish whose power lines run to the units it routes to. */
+/** A Service: a lighthouse whose beam reaches the ships it routes to. */
 export class ServiceView extends Phaser.GameObjects.Container {
   readonly key: string;
   svc: Service;
   placement: Placement;
 
-  private readonly dish: Phaser.GameObjects.Sprite;
+  private readonly tower: Phaser.GameObjects.Image;
+  private readonly beam: Phaser.GameObjects.Graphics;
   private readonly sel: Phaser.GameObjects.Graphics;
   private readonly label: Phaser.GameObjects.Text;
 
@@ -20,16 +21,16 @@ export class ServiceView extends Phaser.GameObjects.Container {
     this.key = key;
     this.svc = svc;
     this.placement = placement;
-    this.dish = scene.add.sprite(TILE / 2, TILE / 2, TEX.dish);
+    this.beam = scene.add.graphics();
+    this.tower = scene.add.image(TILE / 2, TILE / 2, ATLAS.tiles.key, TILES.tower).setScale(TILE_SCALE * 1.15);
     this.sel = scene.add.graphics();
-    this.label = scene.add.text(TILE / 2, TILE + 1, '', { fontFamily: FONT, fontSize: '8px', color: '#ffffff' }).setOrigin(0.5, 0);
-    this.add([this.dish, this.sel, this.label]);
+    this.label = scene.add.text(TILE / 2, TILE + 1, '', { fontFamily: MAP_FONT, fontSize: '10px', fontStyle: '800', color: '#ffffff', stroke: '#1d5f87', strokeThickness: 3 }).setOrigin(0.5, 0);
+    this.add([this.beam, this.tower, this.sel, this.label]);
     this.setDepth(18);
     scene.add.existing(this);
     this.redraw();
   }
 
-  /** Where power lines attach (world px). */
   centre(): { x: number; y: number } {
     return { x: this.x + TILE / 2, y: this.y + TILE / 2 };
   }
@@ -48,17 +49,20 @@ export class ServiceView extends Phaser.GameObjects.Container {
 
   setSelected(on: boolean): void {
     this.sel.clear();
-    if (on) this.sel.lineStyle(1, PALETTE.radarGreen, 1).strokeRect(0.5, 0.5, TILE - 1, TILE - 1);
+    if (on) this.sel.lineStyle(2, SEA.outline, 1).strokeCircle(TILE / 2, TILE / 2, TILE / 2 + 2);
   }
 
-  /** Dish sweep. */
+  /** A slow sweeping light. */
   tick(time: number): void {
-    this.dish.setRotation(Math.sin(time / 600) * 0.6);
+    const a = time / 1500;
+    const g = this.beam;
+    g.clear();
+    g.fillStyle(SEA.beam, 0.22);
+    g.slice(TILE / 2, TILE / 2, TILE * 1.8, a, a + 0.5, false).fillPath();
   }
 
   private redraw(): void {
     const color = namespaceColor(this.svc.ns);
-    this.dish.setTint(color);
-    this.label.setText(this.svc.name.length > 10 ? `${this.svc.name.slice(0, 9)}…` : this.svc.name).setColor(hexString(color));
+    this.label.setText(this.svc.name.length > 12 ? `${this.svc.name.slice(0, 11)}…` : this.svc.name).setColor(hexString(color));
   }
 }

@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import { createDeployment, setMapPos } from '../api/client';
 import { eva, modal, mode, selection, settings, store } from '../app';
-import { GAME_HEIGHT, MAP_W, PALETTE } from '../config';
-import { BuildingView } from '../entities/Building';
-import { PlateauView } from '../entities/Plateau';
-import { UnitView } from '../entities/Unit';
-import { ReleaseView } from '../entities/Release';
-import { ServiceView } from '../entities/Service';
+import { GAME_HEIGHT, MAP_W, PALETTE, SEA } from '../config';
+import { BuildingView } from '../entities/Shipyard';
+import { DockView } from '../entities/Dock';
+import { UnitView } from '../entities/Ship';
+import { ReleaseView } from '../entities/Anchorage';
+import { ServiceView } from '../entities/Lighthouse';
+import { Sea } from '../world/Sea';
 import { podsForService, servicesForPod } from '../game/selector';
 import { openMissionSelect } from '../ui/missionSelect';
 import { openTechTree } from '../ui/techTree';
@@ -44,7 +45,8 @@ interface GhostTarget {
 export class MapScene extends Phaser.Scene {
   layout: MapLayout = computeLayout([], [], []);
 
-  private readonly plateaus = new Map<string, PlateauView>();
+  private readonly plateaus = new Map<string, DockView>();
+  private sea!: Sea;
   private readonly buildings = new Map<string, BuildingView>();
   private readonly units = new Map<string, UnitView>();
   private readonly releases = new Map<string, ReleaseView>();
@@ -53,7 +55,6 @@ export class MapScene extends Phaser.Scene {
   private dirty = true;
   private initialised = false;
 
-  private ground!: Phaser.GameObjects.Graphics;
   private selBox!: Phaser.GameObjects.Graphics;
   private ghost!: Phaser.GameObjects.Graphics;
   private dragStart?: Phaser.Math.Vector2;
@@ -68,10 +69,10 @@ export class MapScene extends Phaser.Scene {
   create(): void {
     const cam = this.cameras.main;
     cam.setViewport(0, 0, MAP_W, GAME_HEIGHT);
-    cam.setBackgroundColor(PALETTE.ground);
+    cam.setBackgroundColor(SEA.water);
     this.input.mouse?.disableContextMenu();
 
-    this.ground = this.add.graphics().setDepth(-10);
+    this.sea = new Sea(this);
     this.selBox = this.add.graphics().setDepth(100);
     this.ghost = this.add.graphics().setDepth(90);
     this.links = this.add.graphics().setDepth(16);
@@ -156,6 +157,8 @@ export class MapScene extends Phaser.Scene {
       this.dirty = false;
     }
     if (!modal.open) this.moveCamera(delta);
+    this.sea.update(delta);
+    for (const d of this.plateaus.values()) d.tick(time);
     for (const b of this.buildings.values()) b.tick(time);
     for (const u of this.units.values()) u.tick(time);
     for (const s of this.services.values()) s.tick(time);
@@ -253,8 +256,8 @@ export class MapScene extends Phaser.Scene {
     const y = t.cell ? t.cell.y * TILE : Math.floor(w.y / TILE) * TILE - TILE;
     const s = BUILD_CELL * TILE;
     this.ghost.clear();
-    this.ghost.fillStyle(t.valid ? PALETTE.radarGreen : PALETTE.alert, 0.18).fillRect(x, y, s, s);
-    this.ghost.lineStyle(2, t.valid ? PALETTE.radarGreen : PALETTE.alert, 1).strokeRect(x + 1, y + 1, s - 2, s - 2);
+    this.ghost.fillStyle(t.valid ? 0x5cb82a : 0xe5473a, 0.25).fillRoundedRect(x, y, s, s, 10);
+    this.ghost.lineStyle(3, t.valid ? 0x5cb82a : 0xe5473a, 1).strokeRoundedRect(x + 1, y + 1, s - 2, s - 2, 10);
     return t;
   }
 
@@ -337,7 +340,8 @@ export class MapScene extends Phaser.Scene {
       const r = Phaser.Geom.Rectangle.FromPoints([this.dragStart, w]);
       this.selBox.clear();
       if (r.width > CLICK_SLOP || r.height > CLICK_SLOP) {
-        this.selBox.lineStyle(1, PALETTE.radarGreen, 1).strokeRectShape(r);
+        this.selBox.lineStyle(2, SEA.outline, 0.9).strokeRectShape(r);
+        this.selBox.fillStyle(SEA.outline, 0.12).fillRectShape(r);
       }
     }
   }
@@ -424,9 +428,9 @@ export class MapScene extends Phaser.Scene {
       const a = sv.centre();
       const bx = u.x + TILE / 2;
       const by = u.y + TILE / 2;
-      g.lineStyle(3, 0x000000, 0.6).lineBetween(a.x, a.y, bx, by);
-      g.lineStyle(1, PALETTE.radarGreen, 1).lineBetween(a.x, a.y, bx, by);
-      g.fillStyle(PALETTE.radarGreen, 1).fillCircle(bx, by, 2);
+      g.lineStyle(5, SEA.beam, 0.35).lineBetween(a.x, a.y, bx, by);
+      g.lineStyle(2, 0xffffff, 0.9).lineBetween(a.x, a.y, bx, by);
+      g.fillStyle(0xffffff, 1).fillCircle(bx, by, 3);
     }
   }
 
@@ -442,14 +446,14 @@ export class MapScene extends Phaser.Scene {
     const L = this.layout;
 
     this.cameras.main.setBounds(0, 0, L.width * TILE, L.height * TILE);
-    this.drawGround();
+    this.sea.rebuild(L);
 
     const liveNodes = new Set<string>();
     for (const pl of L.plateaus) {
       liveNodes.add(pl.node);
       const v = this.plateaus.get(pl.node);
       if (v) v.redraw(pl);
-      else this.plateaus.set(pl.node, new PlateauView(this, pl));
+      else this.plateaus.set(pl.node, new DockView(this, pl));
     }
     for (const [k, v] of this.plateaus) {
       if (!liveNodes.has(k)) {
@@ -545,11 +549,4 @@ export class MapScene extends Phaser.Scene {
     this.initialised = true;
   }
 
-  private drawGround(): void {
-    const L = this.layout;
-    this.ground.clear();
-    this.ground.fillStyle(PALETTE.ground, 1).fillRect(0, 0, L.width * TILE, L.height * TILE);
-    this.ground.fillStyle(PALETTE.voidStrip, 1).fillRect(0, L.voidY * TILE, L.width * TILE, 4 * TILE);
-    this.ground.lineStyle(1, 0x2a2a20, 1).strokeRect(0.5, L.voidY * TILE + 0.5, L.width * TILE - 1, 4 * TILE - 1);
-  }
 }

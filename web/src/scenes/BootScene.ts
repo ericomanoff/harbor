@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { store } from '../app';
 import { GAME_HEIGHT, GAME_WIDTH, PALETTE } from '../config';
 import { startDemo } from '../demo/demo';
-import { buildTextures } from '../gfx/sprites';
+import { createPackAnims, loadPackAssets } from '../gfx/anims';
 import { connectWebSocket } from '../store/source';
 
 /**
@@ -15,7 +15,12 @@ export class BootScene extends Phaser.Scene {
     super('Boot');
   }
 
+  preload(): void {
+    loadPackAssets(this);
+  }
+
   create(): void {
+    createPackAnims(this);
     const g = this.add.graphics();
     g.fillStyle(PALETTE.radarGround, 1).fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     g.lineStyle(2, PALETTE.bevelLight, 1).strokeRect(8, 8, GAME_WIDTH - 16, GAME_HEIGHT - 16);
@@ -23,8 +28,6 @@ export class BootScene extends Phaser.Scene {
     const mono = { fontFamily: 'monospace', fontSize: '28px', color: '#39ff14' };
     this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 40, 'HARBOR', mono).setOrigin(0.5);
     this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'ESTABLISHING BATTLEFIELD CONTROL...', { ...mono, fontSize: '14px' }).setOrigin(0.5);
-
-    buildTextures(this);
 
     const params = new URLSearchParams(location.search);
     if (params.has('style')) {
@@ -35,6 +38,8 @@ export class BootScene extends Phaser.Scene {
     if (demo) startDemo(store);
     else connectWebSocket(store);
 
-    this.time.delayedCall(700, () => this.scene.start('Map'));
+    // Let the map font arrive so labels never fall back to a system face.
+    const fonts = document.fonts?.load('800 12px Nunito') ?? Promise.resolve();
+    void Promise.race([fonts, new Promise((r) => setTimeout(r, 1500))]).then(() => this.scene.start('Map'));
   }
 }

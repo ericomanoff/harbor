@@ -1,6 +1,6 @@
 # Harbor redesign: a naval scene for Kubernetes and Helm
 
-Status: V0 in progress, 2026-10-08. Supersedes `PLAN-VILLAGE.md` (removed)
+Status: V0 and V1 done, 2026-10-08; next V2 (DOM HUD). Supersedes `PLAN-VILLAGE.md` (removed)
 and the Tiberian Dawn art direction in `PLAN.md` section 3. Everything else
 in `PLAN.md` (architecture, backend, phases 0-6, testing layers) stands.
 
@@ -103,10 +103,29 @@ all four test layers, demo mode, `make dist`.
   shipyard until better art exists.
 - Decision point: review http://127.0.0.1:8080/?style and confirm before V1.
 
-### V1: Water world (1-2 sessions)
-- Water and island terrain, docks per node, breakwater edge, 32 px tiles.
-- Entities re-rendered with pack sprites; ships sail from shipyard to quay;
-  anchorage booms; lighthouse beams. All current interactions intact.
+### V1: Water world — DONE 2026-10-08
+- 32 px tiles (pack art at half scale). Sea: tinted water tile with a
+  scrolling foam layer, rock breakwater around the edge, an "open sea" strip.
+- Docks: one island per node drawn once into a render texture (sand with
+  edge tiles, grass heart, bushes seeded by node name), a wooden quay, and
+  shallows below where ships moor. NotReady = dimmed with a blinking beacon.
+- Shipyards (Deployments): slipway with a hull, crates per replica, an
+  ensign flag, health bar, REFIT badge during rollouts.
+- Ships (pods): pack ship tinted with a pastel of the namespace colour
+  (plain tint made hulls muddy), bobbing at anchor, hull-only while
+  pending, fire while crash-looping, weathered when from an old rollout,
+  explosion + debris + sinking on delete; they sail from the slipway to
+  their berth.
+- Lighthouses (Services): round tower with a sweeping beam; selection draws
+  white beam lines to the ships they route to.
+- Anchorages (Helm releases): rope-and-buoy boom around the release's
+  shipyards with a cream nameplate.
+- Selection is a white rounded outline; placement ghost is a rounded green
+  or red footprint.
+- Lesson: the dock render texture must only redraw when the island's size or
+  readiness changes. Redrawing on every store event pinned the browser and
+  stretched the e2e round from 10 s to 2 min; it is 17 s now.
+- The C&C sidebar is still in place until V2.
 
 ### V2: DOM HUD (2 sessions)
 - Top bar, rails, selection card, toasts, shop with drag-to-place for

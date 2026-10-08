@@ -1,22 +1,21 @@
 import Phaser from 'phaser';
-import { FONT, PALETTE } from '../config';
-import { hexString } from '../layout/colors';
+import { MAP_FONT } from '../config';
 import { TILE, type ReleaseBox } from '../layout/grid';
 import type { HelmRelease } from '../store/cluster';
 
-const INSET = 3;
-const DASH = 6;
+const INSET = 6;
+const BUOY_EVERY = 28;
 
 function statusColor(status: string | undefined): number {
   switch (status) {
-    case 'deployed': return PALETTE.radarGreen;
-    case 'failed': return PALETTE.alert;
-    case undefined: return PALETTE.bevelLight;
-    default: return PALETTE.amber; // pending-*, uninstalling, superseded
+    case 'deployed': return 0x5cb82a;
+    case 'failed': return 0xe5473a;
+    case undefined: return 0xc9c3b2;
+    default: return 0xe8b33a;
   }
 }
 
-/** A Helm release: a dashed base perimeter around its structures, with a nameplate. */
+/** A Helm release: a mooring boom of rope and buoys around its shipyards, with a nameplate. */
 export class ReleaseView extends Phaser.GameObjects.Container {
   readonly key: string;
   box: ReleaseBox;
@@ -34,7 +33,7 @@ export class ReleaseView extends Phaser.GameObjects.Container {
     this.rel = rel;
     this.g = scene.add.graphics();
     this.plate = scene.add.graphics();
-    this.label = scene.add.text(2, -15, '', { fontFamily: FONT, fontSize: '10px', color: '#ffffff' });
+    this.label = scene.add.text(8, -21, '', { fontFamily: MAP_FONT, fontSize: '11px', fontStyle: '900', color: '#2d3319' });
     this.add([this.g, this.plate, this.label]);
     this.setDepth(5);
     scene.add.existing(this);
@@ -48,9 +47,8 @@ export class ReleaseView extends Phaser.GameObjects.Container {
     this.redraw();
   }
 
-  /** The nameplate, in world coordinates, is the click target. */
   plateRect(): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(this.x, this.y - 17, this.label.width + 8, 16);
+    return new Phaser.Geom.Rectangle(this.x, this.y - 26, this.label.width + 16, 22);
   }
 
   setSelected(on: boolean): void {
@@ -64,18 +62,29 @@ export class ReleaseView extends Phaser.GameObjects.Container {
     const color = statusColor(this.rel?.status);
     const g = this.g;
     g.clear();
-    g.lineStyle(this.selected ? 2 : 1, color, 0.9);
     const x0 = -INSET;
     const y0 = -INSET;
     const x1 = w + INSET;
     const y1 = h + INSET;
-    for (let x = x0; x < x1; x += DASH * 2) g.lineBetween(x, y0, Math.min(x + DASH, x1), y0).lineBetween(x, y1, Math.min(x + DASH, x1), y1);
-    for (let y = y0; y < y1; y += DASH * 2) g.lineBetween(x0, y, x0, Math.min(y + DASH, y1)).lineBetween(x1, y, x1, Math.min(y + DASH, y1));
+    g.lineStyle(this.selected ? 3 : 2, 0xffffff, 0.9).strokeRoundedRect(x0, y0, x1 - x0, y1 - y0, 8);
+    g.lineStyle(1, color, 1).strokeRoundedRect(x0 + 1, y0 + 1, x1 - x0 - 2, y1 - y0 - 2, 7);
+    const buoy = (x: number, y: number): void => {
+      g.fillStyle(0xffffff, 1).fillCircle(x, y, 4);
+      g.fillStyle(color, 1).fillCircle(x, y, 2.5);
+    };
+    for (let x = x0; x <= x1; x += BUOY_EVERY) {
+      buoy(x, y0);
+      buoy(x, y1);
+    }
+    for (let y = y0 + BUOY_EVERY; y < y1; y += BUOY_EVERY) {
+      buoy(x0, y);
+      buoy(x1, y);
+    }
     const status = this.rel?.status ?? 'unknown';
-    const rev = this.rel ? ` r${this.rel.revision}` : '';
-    this.label.setText(`⌂ ${this.box.name}${rev} [${status}]`).setColor(hexString(color));
+    const rev = this.rel ? ` · r${this.rel.revision}` : '';
+    this.label.setText(`⚓ ${this.box.name}${rev} · ${status}`);
     this.plate.clear();
-    this.plate.fillStyle(0x000000, 0.75).fillRect(0, -17, this.label.width + 6, 16);
-    this.plate.lineStyle(1, color, this.selected ? 1 : 0.6).strokeRect(0.5, -16.5, this.label.width + 5, 15);
+    this.plate.fillStyle(0xf6efdc, 1).fillRoundedRect(0, -26, this.label.width + 16, 22, 8);
+    this.plate.lineStyle(2, this.selected ? 0xffffff : color, 1).strokeRoundedRect(0, -26, this.label.width + 16, 22, 8);
   }
 }

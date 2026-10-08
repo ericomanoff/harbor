@@ -3,8 +3,10 @@ import { podsForService } from '../game/selector';
 import { nsKey } from '../store/cluster';
 import { hashString } from './hash';
 
-/** World units are tiles; multiply by TILE for pixels. */
-export const TILE = 24;
+/** World units are tiles; multiply by TILE for pixels. Pack art is 64 px, drawn at half scale. */
+export const TILE = 32;
+export const TILE_SRC = 64;
+export const TILE_SCALE = TILE / TILE_SRC;
 export const PLATEAU_H = 14;
 export const BUILD_ROWS = 2; // rows of 3x3 building cells at the top of a plateau
 export const BUILD_CELL = 3;

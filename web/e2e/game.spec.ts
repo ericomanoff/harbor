@@ -14,6 +14,7 @@ import { expect, test, type Page } from '@playwright/test';
 // Sidebar geometry, mirrored from HudScene. The viewport is exactly the
 // logical size so canvas coordinates equal page coordinates.
 const MAP_W = 760;
+const TILE = 32;
 const CAMEO = { x: MAP_W + 8 + 44, y: 176 + 22 };
 const CMD_Y0 = 232 + 222 - 3 * 22 - 2 * 4 - 4;
 const cmd = (i: number): { x: number; y: number } => ({ x: MAP_W + 8 + 2 + 90, y: CMD_Y0 + i * 26 + 11 });
@@ -59,16 +60,16 @@ async function focus(page: Page, worldX: number, worldY: number): Promise<{ x: n
 
 /** Waits for a unit to finish driving to its slot and returns its live world centre. */
 async function unitCentre(page: Page, key: string): Promise<{ x: number; y: number }> {
-  await page.waitForFunction((k) => {
+  await page.waitForFunction(([k, t]) => {
     const m = window.harbor.game.scene.keys.Map as { units: Map<string, { x: number; y: number; placement: { x: number; y: number } }> };
     const v = m.units.get(k);
-    return !!v && Math.abs(v.x - v.placement.x * 24) < 0.5 && Math.abs(v.y - v.placement.y * 24) < 0.5;
-  }, key, { timeout: 10_000 });
-  return page.evaluate((k) => {
+    return !!v && Math.abs(v.x - v.placement.x * t) < 0.5 && Math.abs(v.y - v.placement.y * t) < 0.5;
+  }, [key, TILE] as const, { timeout: 10_000 });
+  return page.evaluate(([k, t]) => {
     const m = window.harbor.game.scene.keys.Map as { units: Map<string, { x: number; y: number }> };
     const v = m.units.get(k)!;
-    return { x: v.x + 12, y: v.y + 12 };
-  }, key);
+    return { x: v.x + t / 2, y: v.y + t / 2 };
+  }, [key, TILE] as const);
 }
 
 async function deployment(page: Page): Promise<{ replicas: number; available: number } | undefined> {
@@ -119,7 +120,7 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
     }
     throw new Error('no free building cell');
   });
-  const at = await focus(page, cell.x * 24 + 36, cell.y * 24 + 36);
+  const at = await focus(page, cell.x * TILE + TILE * 1.5, cell.y * TILE + TILE * 1.5);
   await page.mouse.move(at.x, at.y);
   await page.mouse.click(at.x, at.y);
 
@@ -168,7 +169,7 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   }, `${NS}/${NAME}`)).toBe(true);
 
   // Select the factory (click its cell) and order one more unit.
-  let bAt = await focus(page, cell.x * 24 + 36, cell.y * 24 + 36);
+  let bAt = await focus(page, cell.x * TILE + TILE * 1.5, cell.y * TILE + TILE * 1.5);
   await page.mouse.click(bAt.x, bAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`b:${NS}/${NAME}`]);
   await page.mouse.click(cmd(0).x, cmd(0).y);
@@ -237,7 +238,7 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   );
 
   // Sell the structure: needs a confirming second click.
-  bAt = await focus(page, cell.x * 24 + 36, cell.y * 24 + 36);
+  bAt = await focus(page, cell.x * TILE + TILE * 1.5, cell.y * TILE + TILE * 1.5);
   await page.mouse.click(bAt.x, bAt.y);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`b:${NS}/${NAME}`]);
   await page.mouse.click(cmd(2).x, cmd(2).y);
