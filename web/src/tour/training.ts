@@ -2,7 +2,7 @@ import { eva, link, source, store } from '../app';
 import { demoSnapshot } from '../demo/demo';
 import { connectWebSocket } from '../store/source';
 import { startDemo } from '../demo/demo';
-import { nsKey, type Deployment, type Pod, type Workload } from '../store/cluster';
+import { nsKey, type Deployment, type Pod, type Snapshot, type Workload } from '../store/cluster';
 
 /**
  * Training harbor: the tour runs on demo data, and every API call the HUD
@@ -13,13 +13,20 @@ export const training = { active: false };
 
 let liveWasDemo = false;
 
-export function enterTraining(): void {
-  if (training.active) return;
-  liveWasDemo = new URLSearchParams(location.search).has('demo');
-  source.stop?.();
-  source.stop = undefined;
-  training.active = true;
-  store.replace(demoSnapshot());
+/**
+ * Enters the training harbor with the demo harbor, or with a level's own
+ * fixture. Calling it while already training swaps the harbor in place.
+ */
+export function enterTraining(snapshot: Snapshot = demoSnapshot()): void {
+  if (!training.active) {
+    liveWasDemo = new URLSearchParams(location.search).has('demo');
+    source.stop?.();
+    source.stop = undefined;
+    training.active = true;
+  }
+  for (const t of timers) clearTimeout(t);
+  timers.length = 0;
+  store.replace(snapshot);
   link.set('demo');
 }
 

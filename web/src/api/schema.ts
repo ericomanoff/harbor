@@ -293,6 +293,40 @@ export interface paths {
         patch: operations["setDeploymentMapPos"];
         trace?: never;
     };
+    "/api/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Harbor Academy progress for this machine */
+        get: operations["getProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/progress/{level}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Record a level result (best values are kept) */
+        put: operations["putLevelProgress"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/helm/repos": {
         parameters: {
             query?: never;
@@ -694,6 +728,19 @@ export interface components {
             replicas: number;
             /** @description Pod names to retire first when scaling down ("sell this unit"). Implemented with the controller.kubernetes.io/pod-deletion-cost annotation, so the ReplicaSet removes these before any others. */
             retireFirst?: string[];
+        };
+        LevelProgress: {
+            stars: number;
+            /** Format: double */
+            bestSeconds?: number;
+            hintsUsed?: number;
+            /** Format: date-time */
+            completedAt?: string;
+        };
+        Progress: {
+            levels: {
+                [key: string]: components["schemas"]["LevelProgress"];
+            };
         };
         HelmRepo: {
             name: string;
@@ -1189,6 +1236,54 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Progress"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putLevelProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                level: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LevelProgress"];
+            };
+        };
+        responses: {
+            /** @description Stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Progress"];
+                };
             };
             default: components["responses"]["Error"];
         };

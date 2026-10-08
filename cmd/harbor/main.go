@@ -1,4 +1,4 @@
-// Command harbor serves the Command & Conquer style Kubernetes GUI.
+// Command harbor serves the Kubernetes harbor GUI.
 //
 // It binds to loopback only: the process runs as the local user with their own
 // kubeconfig, so exposing it on a network interface would hand that access to
@@ -22,10 +22,14 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:8080", "listen address (keep this on loopback)")
 	kctx := flag.String("context", "", "kubeconfig context to watch at startup (default: kubeconfig current-context)")
 	noConnect := flag.Bool("no-connect", false, "do not connect to any cluster at startup; wait for the UI to pick one")
+	progressPath := flag.String("progress", "", "academy progress file (default: ~/.config/harbor/progress.json)")
 	flag.Parse()
 
 	server := api.NewServer()
 	defer server.Close()
+	if *progressPath != "" {
+		server.SetProgressPath(*progressPath)
+	}
 
 	srv := &http.Server{
 		Addr:              *addr,

@@ -438,6 +438,35 @@ func TestDeleteIngress(t *testing.T) {
 	}
 }
 
+func TestProgressRoutes(t *testing.T) {
+	s := NewServer()
+	s.SetProgressPath(filepath.Join(t.TempDir(), "progress.json"))
+	h := s.Handler()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/progress", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"levels":{}`) {
+		t.Fatalf("fresh progress: %d %s", rec.Code, rec.Body.String())
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/progress/academy%2F1", strings.NewReader(`{"stars":2,"bestSeconds":42.5,"hintsUsed":0}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put: %d %s", rec.Code, rec.Body.String())
+	}
+	var p gen.Progress
+	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil || p.Levels["academy/1"].Stars != 2 {
+		t.Errorf("progress = %+v (%v)", p, err)
+	}
+	req = httptest.NewRequest(http.MethodPut, "/api/progress/academy%2F1", strings.NewReader(`{"stars":7}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("bad stars: %d, want 400", rec.Code)
+	}
+}
+
 func TestRootServesFrontendOrPlaceholder(t *testing.T) {
 	rec := httptest.NewRecorder()
 	NewHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))

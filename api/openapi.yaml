@@ -304,6 +304,46 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/progress:
+    get:
+      operationId: getProgress
+      summary: Harbor Academy progress for this machine
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Progress"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/progress/{level}:
+    put:
+      operationId: putLevelProgress
+      summary: Record a level result (best values are kept)
+      parameters:
+        - name: level
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LevelProgress"
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Progress"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/helm/repos:
     get:
       operationId: listHelmRepos
@@ -1031,6 +1071,32 @@ components:
             annotation, so the ReplicaSet removes these before any others.
           items:
             type: string
+
+    LevelProgress:
+      type: object
+      required: [stars]
+      properties:
+        stars:
+          type: integer
+          minimum: 0
+          maximum: 3
+        bestSeconds:
+          type: number
+          format: double
+        hintsUsed:
+          type: integer
+        completedAt:
+          type: string
+          format: date-time
+
+    Progress:
+      type: object
+      required: [levels]
+      properties:
+        levels:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/LevelProgress"
 
     HelmRepo:
       type: object

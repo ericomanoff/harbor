@@ -42,6 +42,7 @@
         <button class="rail-btn" data-rail="locate" title="Locate (/)"><span class="glyph">🔭</span>Find</button>
         <button class="rail-btn" data-rail="fleets" title="Fleets filter (F)"><span class="glyph">⚑</span>Fleets</button>
         <button class="rail-btn" data-rail="help" title="Welcome tour"><span class="glyph">🧭</span>Help</button>
+        <button class="rail-btn" data-rail="academy" title="Harbor Select: Open Harbor, your cluster, the Academy"><span class="glyph">🎓</span>Academy</button>
         <button class="rail-btn" data-rail="glossary" title="Glossary (G)"><span class="glyph">📖</span>Terms</button>
       </div>
       <div class="hud-right-rail">
@@ -70,9 +71,11 @@
         <div class="title"></div>
         <div class="text"></div>
         <div class="cta" hidden></div>
+        <div class="hint" hidden></div>
         <div class="foot">
           <div class="dots"></div>
           <div class="btns">
+            <button class="pill secondary" data-tour="hint" hidden>Hint</button>
             <button class="pill secondary" data-tour="skip">Skip tour</button>
             <button class="pill secondary" data-tour="back">Back</button>
             <button class="pill primary" data-tour="next">Next</button>
@@ -144,6 +147,10 @@
           <label>MOUNT PATH <input name="mount" placeholder="/data" /></label>
           <label>STORAGE CLASS <input name="storageClass" placeholder="default" /></label>
         </div>
+        <details class="manifest" data-no-terms>
+          <summary>Ship's manifest <span class="sub">the YAML these fields become</span></summary>
+          <pre class="yaml"></pre>
+        </details>
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">BUILD</button>
@@ -283,6 +290,59 @@
           <button type="button" data-close>CLOSE</button>
         </div>
         <pre class="log"></pre>
+      </div>
+    </div>
+    <div id="academy" class="overlay" hidden>
+      <div class="panel wide academy">
+        <h2>HARBOR SELECT <span class="where" data-where></span></h2>
+        <div class="harbors">
+          <div class="harbor-card">
+            <div class="icon">⚓</div>
+            <b>Open Harbor</b>
+            <span class="desc">A busy demo harbor with everything built: explore the interface freely.</span>
+            <button type="button" data-open-harbor>EXPLORE</button>
+          </div>
+          <div class="harbor-card">
+            <div class="icon">🛰️</div>
+            <b>Your cluster</b>
+            <span class="desc">The kubeconfig context the harbor binary is watching.</span>
+            <button type="button" data-your-cluster>SAIL</button>
+          </div>
+        </div>
+        <h3>Harbor Academy <span class="where">one Kubernetes idea per level, in the training harbor</span></h3>
+        <div class="levels"></div>
+        <div class="actions"><button type="button" data-close>CLOSE</button></div>
+      </div>
+    </div>
+    <div id="success" class="hud" hidden>
+      <canvas></canvas>
+      <div class="banner card">
+        <div class="eyebrow">HARBOR SECURED</div>
+        <div class="level"></div>
+        <div class="stars"><span>★</span><span>★</span><span>★</span></div>
+        <div class="time"></div>
+        <button class="pill primary big" data-continue>Continue</button>
+      </div>
+    </div>
+    <div id="summary" class="overlay" hidden>
+      <div class="panel wide summary">
+        <h2><span class="lvl"></span> <span class="where"></span><span class="stars"></span></h2>
+        <div class="columns">
+          <div class="col"><h4>In the harbor</h4><p data-col="naval"></p></div>
+          <div class="col"><h4>In Kubernetes</h4><p data-col="k8s"></p></div>
+          <div class="col"><h4>On the job</h4><p data-col="devops"></p></div>
+        </div>
+        <div class="manifest" data-no-terms>
+          <h4>Ship's manifest <span class="where">the YAML, with harbor words beside each field</span></h4>
+          <pre class="yaml"></pre>
+          <div class="kubectl-row"><h4>With kubectl</h4><pre class="kubectl"></pre></div>
+        </div>
+        <div class="actions">
+          <button type="button" data-next>NEXT LEVEL</button>
+          <button type="button" data-replay>REPLAY</button>
+          <button type="button" data-select>HARBOR SELECT</button>
+          <button type="button" data-leave>BACK TO THE HARBOR</button>
+        </div>
       </div>
     </div>
     <div id="mission" class="overlay" hidden>

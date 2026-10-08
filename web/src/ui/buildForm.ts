@@ -1,5 +1,6 @@
 import type { CreateDeploymentRequest, CreateStatefulSetRequest, MapPos } from '../api/client';
 import { modal } from '../app';
+import { deploymentYaml } from '../levels/manifest';
 
 export type BuildKind = 'Deployment' | 'StatefulSet';
 
@@ -37,6 +38,21 @@ export function openBuildForm(opts: BuildFormOptions): void {
   err.hidden = true;
   form.reset();
   if (opts.defaultNamespace) nsSel.value = opts.defaultNamespace;
+  // Ship's manifest: the YAML the fields become, kept in step as they change.
+  const manifest = $<HTMLDetailsElement>(form, 'details.manifest');
+  manifest.hidden = opts.kind !== 'Deployment';
+  const renderManifest = (): void => {
+    if (opts.kind !== 'Deployment') return;
+    const data = new FormData(form);
+    const str = (k: string): string => String(data.get(k) ?? '').trim();
+    const req: CreateDeploymentRequest = { ns: str('ns'), name: str('name') || 'my-ship', image: str('image'), replicas: Number(str('replicas') || 1) };
+    if (str('port')) req.port = Number(str('port'));
+    if (str('cpu')) req.cpuRequest = str('cpu');
+    if (str('mem')) req.memRequest = str('mem');
+    $<HTMLPreElement>(manifest, 'pre').textContent = deploymentYaml(req);
+  };
+  form.oninput = renderManifest;
+  renderManifest();
 
   const close = (): void => {
     root.hidden = true;

@@ -12,6 +12,7 @@ import { GateView } from '../entities/Gate';
 import { Sea } from '../world/Sea';
 import { floatText, splash } from '../world/fx';
 import { maybeAutoStartTour, startTour } from '../tour/tour';
+import { openHarborSelect, playLevelById } from '../screens/harborSelect';
 import { openGlossary } from '../glossary';
 import { splash as loadingSplash } from '../boot/splash';
 import { ingressesForService, podsForService, servicesForIngress, servicesForPod } from '../game/selector';
@@ -168,7 +169,18 @@ export class MapScene extends Phaser.Scene implements MapApi {
     this.homeCamera();
     new Hud(this);
     document.querySelector<HTMLButtonElement>('#hud [data-rail=help]')?.addEventListener('click', () => startTour(this));
-    void loadingSplash().done().then(() => maybeAutoStartTour(this));
+    document.querySelector<HTMLButtonElement>('#hud [data-rail=academy]')?.addEventListener('click', () => openHarborSelect(this));
+    void loadingSplash().done().then(() => {
+      // Deep links: ?level=academy/2 plays a level; ?academy opens Harbor Select.
+      const params = new URLSearchParams(location.search);
+      const level = params.get('level');
+      if (level && playLevelById(level, this)) return;
+      if (params.has('academy')) {
+        openHarborSelect(this);
+        return;
+      }
+      maybeAutoStartTour(this);
+    });
   }
 
   update(time: number, delta: number): void {

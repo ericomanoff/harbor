@@ -17,6 +17,7 @@ import (
 	"github.com/ericomanoff/harbor/internal/assets"
 	"github.com/ericomanoff/harbor/internal/helm"
 	"github.com/ericomanoff/harbor/internal/kube"
+	"github.com/ericomanoff/harbor/internal/progress"
 )
 
 // Version is set at build time via -ldflags "-X .../internal/api.Version=...".
@@ -38,6 +39,8 @@ type Server struct {
 	mu      sync.Mutex
 	watcher *kube.Watcher
 	helm    *helm.Client
+
+	progress *progress.Store
 }
 
 var _ gen.ServerInterface = (*Server)(nil)
@@ -50,7 +53,22 @@ func NewServer() *Server {
 		listContexts: kube.ListContexts,
 		newWatcher:   connectWatcher,
 		newHelm:      helm.New,
+		progress:     progress.New(progressPath()),
 	}
+}
+
+func progressPath() string {
+	p, err := progress.DefaultPath()
+	if err != nil {
+		log.Printf("progress: no user config dir (%v); using ./harbor-progress.json", err)
+		return "harbor-progress.json"
+	}
+	return p
+}
+
+// SetProgressPath points the academy progress file elsewhere (tests).
+func (s *Server) SetProgressPath(path string) {
+	s.progress = progress.New(path)
 }
 
 // NewHandler is a convenience for callers that need no handle on the Server.

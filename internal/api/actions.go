@@ -305,3 +305,25 @@ func (s *Server) CreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, kube.ConvertJob(job))
 }
+
+func (s *Server) GetProgress(w http.ResponseWriter, _ *http.Request) {
+	p, err := s.progress.Load()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+func (s *Server) PutLevelProgress(w http.ResponseWriter, r *http.Request, level string) {
+	var req gen.LevelProgress
+	if !decode(w, r, &req) {
+		return
+	}
+	p, err := s.progress.Record(level, req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}

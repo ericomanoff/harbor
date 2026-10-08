@@ -485,6 +485,14 @@ type KubeContext struct {
 	User      string  `json:"user"`
 }
 
+// LevelProgress defines model for LevelProgress.
+type LevelProgress struct {
+	BestSeconds *float64   `json:"bestSeconds,omitempty"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	HintsUsed   *int       `json:"hintsUsed,omitempty"`
+	Stars       int        `json:"stars"`
+}
+
 // MapPos Tile coordinates on the map grid.
 type MapPos struct {
 	X int `json:"x"`
@@ -539,6 +547,11 @@ type Pod struct {
 	// Reason Waiting or terminated reason of the worst container, e.g. CrashLoopBackOff.
 	Reason   *string `json:"reason,omitempty"`
 	Restarts int     `json:"restarts"`
+}
+
+// Progress defines model for Progress.
+type Progress struct {
+	Levels map[string]LevelProgress `json:"levels"`
 }
 
 // ScaleRequest defines model for ScaleRequest.
@@ -696,6 +709,9 @@ type AddHelmRepoJSONRequestBody = HelmRepo
 
 // CreateIngressJSONRequestBody defines body for CreateIngress for application/json ContentType.
 type CreateIngressJSONRequestBody = CreateIngressRequest
+
+// PutLevelProgressJSONRequestBody defines body for PutLevelProgress for application/json ContentType.
+type PutLevelProgressJSONRequestBody = LevelProgress
 
 // CreateJobJSONRequestBody defines body for CreateJob for application/json ContentType.
 type CreateJobJSONRequestBody = CreateJobRequest
@@ -1047,6 +1063,12 @@ type ServerInterface interface {
 	// GetPodLogs Recent log lines of a pod's container (default container if unspecified)
 	// (GET /api/pods/{ns}/{name}/logs)
 	GetPodLogs(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam, params GetPodLogsParams)
+	// GetProgress Harbor Academy progress for this machine
+	// (GET /api/progress)
+	GetProgress(w http.ResponseWriter, r *http.Request)
+	// PutLevelProgress Record a level result (best values are kept)
+	// (PUT /api/progress/{level})
+	PutLevelProgress(w http.ResponseWriter, r *http.Request, level string)
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
@@ -1686,6 +1708,46 @@ func (siw *ServerInterfaceWrapper) GetPodLogs(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetProgress operation middleware
+func (siw *ServerInterfaceWrapper) GetProgress(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProgress(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutLevelProgress operation middleware
+func (siw *ServerInterfaceWrapper) PutLevelProgress(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "level" -------------
+	var level string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "level", r.PathValue("level"), &level, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutLevelProgress(w, r, level)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSnapshot operation middleware
 func (siw *ServerInterfaceWrapper) GetSnapshot(w http.ResponseWriter, r *http.Request) {
 
@@ -1997,6 +2059,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/pods/{ns}/{name}", wrapper.DeletePod)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/scale", wrapper.ScaleDeployment)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/mappos", wrapper.SetDeploymentMapPos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/progress", wrapper.GetProgress)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/progress/{level}", wrapper.PutLevelProgress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/helm/repos", wrapper.ListHelmRepos)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/helm/repos", wrapper.AddHelmRepo)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/helm/repos/update", wrapper.UpdateHelmRepos)
