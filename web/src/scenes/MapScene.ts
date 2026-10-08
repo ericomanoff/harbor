@@ -1,20 +1,21 @@
 import Phaser from 'phaser';
-import { createDeployment, setMapPos } from '../api/client';
+import { createDeployment, setMapPos, workloads as workloadApi } from '../api/client';
 import { eva, modal, mode, selection, settings, store } from '../app';
 import { PALETTE, SEA } from '../config';
 import { Hud, type MapApi } from '../hud/hud';
-import { BuildingView } from '../entities/Shipyard';
+import { BuildingView, structureOfDeployment, structureOfStatefulSet } from '../entities/Shipyard';
 import { DockView } from '../entities/Dock';
 import { UnitView } from '../entities/Ship';
 import { ReleaseView } from '../entities/Anchorage';
 import { ServiceView } from '../entities/Lighthouse';
 import { Sea } from '../world/Sea';
 import { floatText, splash } from '../world/fx';
+import { maybeAutoStartTour, startTour } from '../tour/tour';
 import { podsForService, servicesForPod } from '../game/selector';
 import { openMissionSelect } from '../ui/missionSelect';
 import { openTechTree } from '../ui/techTree';
 import { isSystemNamespace } from '../layout/colors';
-import { BUILD_CELL, SEA_PAD, TILE, cellAt, computeLayout, isCellFree, type Cell, type MapLayout } from '../layout/grid';
+import { BUILD_CELL, SEA_PAD, TILE, cellAt, computeLayout, isCellFree, structureKeyOf, type Cell, type MapLayout } from '../layout/grid';
 import { nsKey, type ClusterEvent } from '../store/cluster';
 import { isObsolete } from '../game/unitState';
 import { openBuildForm } from '../ui/buildForm';
@@ -154,6 +155,8 @@ export class MapScene extends Phaser.Scene implements MapApi {
     this.rebuild();
     this.homeCamera();
     new Hud(this);
+    document.querySelector<HTMLButtonElement>('#hud [data-rail=help]')?.addEventListener('click', () => startTour(this));
+    maybeAutoStartTour(this);
   }
 
   update(time: number, delta: number): void {
@@ -193,6 +196,42 @@ export class MapScene extends Phaser.Scene implements MapApi {
     cam.setZoom(Phaser.Math.Clamp(cam.zoom * factor, ZOOM_MIN, ZOOM_MAX));
   }
 
+  /** World rectangle of a selectable thing, or undefined. */
+  private worldRectOf(key: string): Phaser.Geom.Rectangle | undefined {
+    const id = key.slice(key.indexOf(':') + 1);
+    if (key.startsWith('b:')) return this.buildings.get(id)?.rect();
+    if (key.startsWith('u:')) return this.units.get(id)?.rect();
+    if (key.startsWith('s:')) return this.services.get(id)?.rect();
+    if (key.startsWith('r:')) return this.releases.get(id)?.plateRect();
+    if (key.startsWith('dock:')) {
+      const p = this.layout.plateaus.find((pl) => pl.node === id);
+      return p ? new Phaser.Geom.Rectangle(p.x * TILE, p.y * TILE, p.w * TILE, p.h * TILE) : undefined;
+    }
+    if (key.startsWith('unit-of:')) {
+      for (const u of this.units.values()) if (!u.dying && u.pod.deployment && nsKey(u.pod.ns, u.pod.deployment) === id) return u.rect();
+    }
+    return undefined;
+  }
+
+  screenRectOf(key: string): { x: number; y: number; width: number; height: number } | undefined {
+    const r = this.worldRectOf(key);
+    if (!r) return undefined;
+    // From scroll and zoom rather than worldView, which lags a frame after a pan.
+    const cam = this.cameras.main;
+    const vx = cam.scrollX + (cam.width / 2) * (1 - 1 / cam.zoom);
+    const vy = cam.scrollY + (cam.height / 2) * (1 - 1 / cam.zoom);
+    return { x: (r.x - vx) * cam.zoom, y: (r.y - vy) * cam.zoom, width: r.width * cam.zoom, height: r.height * cam.zoom };
+  }
+
+  focusKey(key: string): void {
+    const r = this.worldRectOf(key);
+    if (!r) return;
+    const cam = this.cameras.main;
+    const target = key.startsWith('dock:') ? Math.min(1, Math.max(ZOOM_MIN, (MAP_H() - 260) / r.height)) : 1.3;
+    cam.setZoom(Phaser.Math.Clamp(target, ZOOM_MIN, ZOOM_MAX));
+    cam.centerOn(r.centerX, r.centerY + 40 / cam.zoom);
+  }
+
   cameraView(): { x: number; y: number; width: number; height: number } {
     const v = this.cameras.main.worldView;
     return { x: v.x, y: v.y, width: v.width, height: v.height };
@@ -201,7 +240,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
   /** "/" search overlay; picking a hit selects it and pans to it. */
   openSearch(): void {
     openSearch((hit) => {
-      const v = hit.kind === 'structure' ? this.buildings.get(hit.key.slice(2)) : hit.kind === 'service' ? this.services.get(hit.key.slice(2)) : this.units.get(hit.key.slice(2));
+      const v = hit.kind === 'structure' ? this.buildings.get(hit.key.slice(2)) : hit.kind === 'service' ? this.services.get(hit.key.slice(2)) : hit.kind === 'workload' ? undefined : this.units.get(hit.key.slice(2));
       if (v) this.centerOnWorld(v.x + TILE, v.y + TILE);
     });
   }
@@ -386,9 +425,10 @@ export class MapScene extends Phaser.Scene implements MapApi {
         eva.emit('CANNOT DEPLOY HERE');
         return;
       }
-      const { ns, name } = view.dep;
+      const { ns, name, kind } = view.dep;
       const cell = t.cell;
-      setMapPos(ns, name, { x: cell.x, y: cell.y })
+      const call = kind === 'StatefulSet' ? workloadApi.setMapPos('StatefulSet', ns, name, { x: cell.x, y: cell.y }) : setMapPos(ns, name, { x: cell.x, y: cell.y });
+      call
         .then(() => eva.emit(`STRUCTURE RELOCATED: ${name}`))
         .catch((e: unknown) => eva.emit(`UNABLE TO COMPLY: ${e instanceof Error ? e.message : String(e)}`));
       return;
@@ -410,6 +450,18 @@ export class MapScene extends Phaser.Scene implements MapApi {
     for (const u of this.units.values()) {
       if (!u.dying && u.rect().contains(end.x, end.y)) {
         selection.set([unitKey(u.key)]);
+        return;
+      }
+    }
+    for (const sv of this.services.values()) {
+      if (sv.rect().contains(end.x, end.y)) {
+        selection.set([serviceKey(sv.key)]);
+        return;
+      }
+    }
+    for (const r of this.releases.values()) {
+      if (r.plateRect().contains(end.x, end.y)) {
+        selection.set([releaseKey(r.key)]);
         return;
       }
     }
@@ -464,7 +516,8 @@ export class MapScene extends Phaser.Scene implements MapApi {
     const deployments = [...store.deployments.values()].filter((d) => show(d.ns));
     const pods = [...store.pods.values()].filter((p) => show(p.ns));
     const services = [...store.services.values()].filter((sv) => show(sv.ns));
-    this.layout = computeLayout([...store.nodes.values()], deployments, pods, services);
+    const workloads = [...store.workloads.values()].filter((w) => show(w.ns));
+    this.layout = computeLayout([...store.nodes.values()], deployments, pods, services, workloads);
     const L = this.layout;
 
     const pad = SEA_PAD * TILE;
@@ -486,14 +539,17 @@ export class MapScene extends Phaser.Scene implements MapApi {
     }
 
     const liveDeps = new Set<string>();
-    for (const d of deployments) {
-      const key = nsKey(d.ns, d.name);
+    const structures = [
+      ...deployments.map((d) => ({ key: nsKey(d.ns, d.name), model: structureOfDeployment(d) })),
+      ...workloads.filter((w) => w.kind === 'StatefulSet').map((w) => ({ key: `sts:${nsKey(w.ns, w.name)}`, model: structureOfStatefulSet(w) })),
+    ];
+    for (const { key, model } of structures) {
       const place = L.buildings.get(key);
       if (!place) continue;
       liveDeps.add(key);
       const v = this.buildings.get(key);
-      if (v) v.update(d, place);
-      else this.buildings.set(key, new BuildingView(this, key, d, place));
+      if (v) v.update(model, place);
+      else this.buildings.set(key, new BuildingView(this, key, model, place));
     }
     for (const [k, v] of this.buildings) {
       if (!liveDeps.has(k)) {
@@ -548,7 +604,8 @@ export class MapScene extends Phaser.Scene implements MapApi {
       if (v && !v.dying) {
         v.update(p, place, obsolete);
       } else {
-        const building = p.deployment ? this.buildings.get(nsKey(p.ns, p.deployment)) : undefined;
+        const sk = structureKeyOf(p);
+        const building = sk ? this.buildings.get(sk) : undefined;
         const from = this.initialised && building ? building.door() : undefined;
         this.units.set(key, new UnitView(this, key, p, place, from));
         if (from) {
@@ -569,6 +626,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
       if (kind === 'b') return !liveDeps.has(key);
       if (kind === 'r') return !liveRels.has(key);
       if (kind === 's') return !liveSvcs.has(key);
+      if (kind === 'w') return !store.workloads.has(key);
       return !livePods.has(key);
     });
     if (stale.length) selection.set([...selection.keys].filter((k) => !stale.includes(k)));

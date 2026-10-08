@@ -223,3 +223,45 @@
 
 /* While the shop is open the bottom HUD gets out of its way. */
 body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { display: none; }
+
+/* ---- welcome tour ---------------------------------------------------- */
+#tour { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+#tour .spot {
+  position: absolute;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgba(10, 30, 50, 0.45), 0 0 0 3px #fff, 0 0 24px 6px rgba(255, 255, 255, 0.5);
+  transition: left 0.25s, top 0.25s, width 0.25s, height 0.25s;
+  pointer-events: none;
+}
+#tour .bubble {
+  position: absolute;
+  width: 440px;
+  pointer-events: auto;
+  transition: left 0.25s, top 0.25s;
+}
+#tour .bubble .master { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+#tour .bubble .face { font-size: 26px; background: var(--sea); border: 2px solid var(--olive); border-radius: 50%; width: 38px; height: 38px; display: grid; place-items: center; }
+#tour .bubble .who { font-size: 10px; letter-spacing: 1.5px; color: var(--ink-soft); font-weight: 900; }
+#tour .bubble .title { font-size: 18px; font-weight: 900; margin-bottom: 4px; }
+#tour .bubble .text { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+#tour .bubble .cta { margin-top: 8px; padding: 6px 10px; background: var(--olive-dark); color: #fff; border-radius: 10px; font-weight: 800; font-size: 12px; animation: tour-nudge 1.2s ease-in-out infinite; }
+#tour .bubble .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
+#tour .bubble .dots { display: flex; gap: 4px; flex-wrap: wrap; }
+#tour .bubble .dot { width: 7px; height: 7px; border-radius: 50%; background: #d9cfb0; }
+#tour .bubble .dot.on { background: var(--green); }
+#tour .bubble .btns { display: flex; gap: 6px; }
+#tour .bubble .btns .pill { padding: 5px 12px; font-size: 12px; white-space: nowrap; }
+#tour .bubble::after {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  background: var(--cream);
+  border: 2px solid var(--olive);
+  transform: rotate(45deg);
+  left: calc(50% - 8px);
+}
+#tour .bubble[data-place="bottom"]::after { top: -10px; border-right: none; border-bottom: none; }
+#tour .bubble[data-place="top"]::after { bottom: -10px; border-left: none; border-top: none; }
+#tour .bubble[data-place="left"]::after { right: -10px; top: calc(50% - 8px); left: auto; border-left: none; border-bottom: none; }
+#tour .bubble[data-place="right"]::after { left: -10px; top: calc(50% - 8px); border-right: none; border-top: none; }
+@keyframes tour-nudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }

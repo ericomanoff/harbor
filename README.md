@@ -24,7 +24,14 @@ fake cluster with no backend.
 
 The map is a harbor: each node is an island dock, Deployments are shipyards
 on the land, pods are ships moored in the shallows, Services are lighthouses,
-Helm releases are anchorages ringed by a mooring boom.
+Helm releases are anchorages ringed by a mooring boom. StatefulSets are
+tanker terminals launching numbered tankers, DaemonSets are tug companies
+with one tugboat per dock, Jobs are fishing fleets that come home when the
+catch is landed.
+
+The first visit starts a welcome tour in a training harbor (nothing touches
+your cluster); replay it any time with the Help button, or add `?notour` to
+the URL to suppress it.
 
 Controls: left-click selects, drag box-selects ships, drag a shipyard to move
 it, right-drag pans, wheel or the right rail zooms, arrows or WASD scroll, H
@@ -72,6 +79,7 @@ make test      # go vet + go test + tsc + vitest
 make test-kind # integration test against the kind cluster (~5 s)
 make test-e2e  # Playwright plays a round in the real game against kind (~20 s)
 make test-visual # screenshot regression of ?style and ?demo (baselines per machine)
+cd web && npx playwright test tour.spec.ts   # plays the welcome tour (no cluster needed)
 make dist      # single binaries for macOS, Linux and Windows in dist/
 make kind-down
 ```

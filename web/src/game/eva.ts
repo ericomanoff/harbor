@@ -9,6 +9,8 @@ export class EvaFeed {
   private readonly seenPods = new Set<string>();
   private readonly avail = new Map<string, number>();
   private readonly relStatus = new Map<string, string>();
+  private readonly seenWl = new Set<string>();
+  private readonly jobDone = new Map<string, boolean>();
 
   constructor(private readonly store: ClusterStore) {}
 
@@ -27,6 +29,12 @@ export class EvaFeed {
         for (const k of s.pods.keys()) this.seenPods.add(k);
         this.relStatus.clear();
         for (const [k, r] of s.releases) this.relStatus.set(k, r.status);
+        this.seenWl.clear();
+        this.jobDone.clear();
+        for (const [k, w] of s.workloads) {
+          this.seenWl.add(k);
+          if (w.kind === 'Job') this.jobDone.set(k, !!w.complete);
+        }
         return s.context ? ['BATTLEFIELD CONTROL ESTABLISHED'] : [];
       }
       case 'deployment': {
@@ -55,6 +63,26 @@ export class EvaFeed {
         if (this.seenPods.has(e.key)) return [];
         this.seenPods.add(e.key);
         return [`UNIT DEPLOYED: ${name}`];
+      }
+      case 'workload': {
+        const w = s.workloads.get(e.key);
+        const name = e.key.split('/')[1] ?? e.key;
+        if (e.op === 'delete') {
+          this.seenWl.delete(e.key);
+          this.jobDone.delete(e.key);
+          return e.key.startsWith('Job:') ? [`FLEET RECALLED: ${name}`] : [`STRUCTURE SOLD: ${name}`];
+        }
+        if (!w) return [];
+        if (!this.seenWl.has(e.key)) {
+          this.seenWl.add(e.key);
+          if (w.kind === 'Job') this.jobDone.set(e.key, !!w.complete);
+          return w.kind === 'StatefulSet' ? [`NEW CONSTRUCTION: ${w.ns}/${w.name}`] : w.kind === 'Job' ? [`FLEET SAILED: ${name}`] : [];
+        }
+        if (w.kind === 'Job' && !this.jobDone.get(e.key) && w.complete) {
+          this.jobDone.set(e.key, true);
+          return [(w.failed ?? 0) > 0 && w.ready < w.desired ? `CATCH LOST: ${name}` : `CATCH LANDED: ${name}`];
+        }
+        return [];
       }
       case 'release': {
         const name = e.key.split('/')[1] ?? e.key;

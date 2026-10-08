@@ -1,4 +1,5 @@
 import type { components } from './schema';
+import { simulate, training } from '../tour/training';
 
 export type Health = components['schemas']['Health'];
 export type CreateDeploymentRequest = components['schemas']['CreateDeploymentRequest'];
@@ -21,6 +22,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown, fetchFn: typeof fetch = fetch): Promise<T> {
+  if (training.active) return simulate(method, path, body) as T;
   const res = await fetchFn(path, {
     method,
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
@@ -91,6 +93,7 @@ export const helm = {
 };
 
 export async function getPodLogs(ns: string, name: string, tail = 200, container?: string, fetchFn: typeof fetch = fetch): Promise<string> {
+  if (training.active) return simulate('GET', `/api/pods/${enc(ns)}/${enc(name)}/logs`, undefined) as string;
   const res = await fetchFn(`/api/pods/${enc(ns)}/${enc(name)}/logs?tail=${tail}${container ? `&container=${enc(container)}` : ''}`);
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
@@ -108,4 +111,15 @@ export async function getPodLogs(ns: string, name: string, tail = 200, container
 export const contexts = {
   list: (f: typeof fetch = fetch) => request<ContextList>('GET', '/api/contexts', undefined, f),
   select: (name: string, f: typeof fetch = fetch) => request<void>('POST', `/api/contexts/${enc(name)}/select`, undefined, f),
+};
+
+export type WorkloadKind = 'StatefulSet' | 'DaemonSet' | 'Job';
+
+export const workloads = {
+  scale: (kind: WorkloadKind, ns: string, name: string, replicas: number, f: typeof fetch = fetch) =>
+    request<void>('PATCH', `/api/workloads/${kind}/${enc(ns)}/${enc(name)}/scale`, { replicas }, f),
+  remove: (kind: WorkloadKind, ns: string, name: string, f: typeof fetch = fetch) =>
+    request<void>('DELETE', `/api/workloads/${kind}/${enc(ns)}/${enc(name)}`, undefined, f),
+  setMapPos: (kind: WorkloadKind, ns: string, name: string, mp: MapPos, f: typeof fetch = fetch) =>
+    request<void>('PATCH', `/api/workloads/${kind}/${enc(ns)}/${enc(name)}/mappos`, mp, f),
 };

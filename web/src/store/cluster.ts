@@ -7,6 +7,10 @@ export type Pod = components['schemas']['Pod'];
 export type ClusterEvent = components['schemas']['Event'];
 export type HelmRelease = components['schemas']['HelmRelease'];
 export type Service = components['schemas']['Service'];
+export type Workload = components['schemas']['Workload'];
+
+/** Store key for a workload: "Kind:ns/name". */
+export const wlKey = (kind: string, ns: string, name: string): string => `${kind}:${ns}/${name}`;
 export type Snapshot = components['schemas']['Snapshot'];
 export type WsMessage = components['schemas']['WsMessage'];
 
@@ -15,7 +19,7 @@ export const nsKey = (ns: string, name: string): string => `${ns}/${name}`;
 
 export type StoreEvent =
   | { type: 'snapshot' }
-  | { type: 'node' | 'namespace' | 'deployment' | 'pod' | 'release' | 'service'; op: 'upsert' | 'delete'; key: string }
+  | { type: 'node' | 'namespace' | 'deployment' | 'pod' | 'release' | 'service' | 'workload'; op: 'upsert' | 'delete'; key: string }
   | { type: 'event'; event: ClusterEvent };
 
 const MAX_EVENTS = 100;
@@ -32,6 +36,7 @@ export class ClusterStore {
   readonly pods = new Map<string, Pod>();
   readonly releases = new Map<string, HelmRelease>();
   readonly services = new Map<string, Service>();
+  readonly workloads = new Map<string, Workload>();
   readonly events: ClusterEvent[] = [];
 
   private readonly listeners = new Set<(e: StoreEvent) => void>();
@@ -54,6 +59,7 @@ export class ClusterStore {
     this.pods.clear();
     this.releases.clear();
     this.services.clear();
+    this.workloads.clear();
     this.events.length = 0;
     for (const n of snap.nodes) this.nodes.set(n.name, n);
     for (const ns of snap.namespaces) this.namespaces.set(ns.name, ns);
@@ -61,6 +67,7 @@ export class ClusterStore {
     for (const p of snap.pods) this.pods.set(nsKey(p.ns, p.name), p);
     for (const r of snap.releases ?? []) this.releases.set(nsKey(r.ns, r.name), r);
     for (const svc of snap.services ?? []) this.services.set(nsKey(svc.ns, svc.name), svc);
+    for (const w of snap.workloads ?? []) this.workloads.set(wlKey(w.kind, w.ns, w.name), w);
     this.emit({ type: 'snapshot' });
   }
 
@@ -109,6 +116,14 @@ export class ClusterStore {
         if (del) this.services.delete(key);
         else this.services.set(key, svc);
         this.emit({ type: 'service', op, key });
+        break;
+      }
+      case 'Workload': {
+        const w = msg.obj as Workload;
+        const key = wlKey(w.kind, w.ns, w.name);
+        if (del) this.workloads.delete(key);
+        else this.workloads.set(key, w);
+        this.emit({ type: 'workload', op, key });
         break;
       }
       case 'HelmRelease': {

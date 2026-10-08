@@ -13,6 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -205,6 +206,7 @@ func TestActionsRequireAContext(t *testing.T) {
 		{http.MethodPatch, "/api/deployments/default/web/mappos"},
 		{http.MethodDelete, "/api/deployments/default/web"},
 		{http.MethodDelete, "/api/pods/default/web-1"},
+		{http.MethodDelete, "/api/workloads/StatefulSet/default/db"},
 	} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`)))
@@ -303,6 +305,44 @@ func TestPodLogs(t *testing.T) {
 	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/pods/sandbox/web-1/logs?tail=0", nil))
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("tail below minimum: %d, want 400", rec.Code)
+	}
+}
+
+func TestWorkloadRoutes(t *testing.T) {
+	s := fakeServer(t)
+	ctx := context.Background()
+	if err := s.SelectContextByName(ctx, "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	one := int32(1)
+	if _, err := s.current().Client().AppsV1().StatefulSets("sandbox").Create(ctx, &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "sandbox"}, Spec: appsv1.StatefulSetSpec{Replicas: &one}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := do(http.MethodPatch, "/api/workloads/StatefulSet/sandbox/db/scale", `{"replicas":2}`); rec.Code != http.StatusNoContent {
+		t.Fatalf("scale: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodPatch, "/api/workloads/DaemonSet/sandbox/db/scale", `{"replicas":2}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("scaling a DaemonSet: %d, want 400", rec.Code)
+	}
+	if rec := do(http.MethodPatch, "/api/workloads/Pirate/sandbox/db/scale", `{"replicas":2}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown kind: %d, want 400", rec.Code)
+	}
+	if rec := do(http.MethodPatch, "/api/workloads/StatefulSet/sandbox/db/mappos", `{"x":1,"y":2}`); rec.Code != http.StatusNoContent {
+		t.Errorf("mappos: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodDelete, "/api/workloads/StatefulSet/sandbox/db", ""); rec.Code != http.StatusNoContent {
+		t.Errorf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodDelete, "/api/workloads/StatefulSet/sandbox/db", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("delete twice: %d, want 404", rec.Code)
 	}
 }
 

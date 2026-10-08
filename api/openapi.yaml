@@ -96,6 +96,60 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/workloads/{kind}/{ns}/{name}:
+    delete:
+      operationId: deleteWorkload
+      summary: Delete a StatefulSet, DaemonSet or Job (and its pods)
+      parameters:
+        - $ref: "#/components/parameters/WorkloadKindParam"
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "204":
+          description: Deleted
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/workloads/{kind}/{ns}/{name}/scale:
+    patch:
+      operationId: scaleWorkload
+      summary: Set replicas on a StatefulSet (other kinds cannot be scaled)
+      parameters:
+        - $ref: "#/components/parameters/WorkloadKindParam"
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScaleRequest"
+      responses:
+        "204":
+          description: Scaled
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/workloads/{kind}/{ns}/{name}/mappos:
+    patch:
+      operationId: setWorkloadMapPos
+      summary: Persist a workload structure's map tile as an annotation
+      parameters:
+        - $ref: "#/components/parameters/WorkloadKindParam"
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapPos"
+      responses:
+        "204":
+          description: Stored
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/pods/{ns}/{name}/logs:
     get:
       operationId: getPodLogs
@@ -375,6 +429,13 @@ paths:
 
 components:
   parameters:
+    WorkloadKindParam:
+      name: kind
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [StatefulSet, DaemonSet, Job]
     ContextNameParam:
       name: name
       in: path
@@ -566,6 +627,11 @@ components:
         reason:
           type: string
           description: Waiting or terminated reason of the worst container, e.g. CrashLoopBackOff.
+        ownerKind:
+          type: string
+          description: Controller kind that owns the pod (Deployment, StatefulSet, DaemonSet, Job, ReplicaSet, Node, ...), if any.
+        ownerName:
+          type: string
         ownerRS:
           type: string
         deployment:
@@ -574,6 +640,44 @@ components:
         created:
           type: string
           format: date-time
+
+    Workload:
+      type: object
+      description: A StatefulSet (tanker terminal), DaemonSet (tug company) or Job (fishing fleet).
+      required: [kind, ns, name, image, desired, ready, conditions]
+      properties:
+        kind:
+          type: string
+          enum: [StatefulSet, DaemonSet, Job]
+        ns:
+          type: string
+        name:
+          type: string
+        image:
+          type: string
+        desired:
+          type: integer
+          description: StatefulSet replicas, DaemonSet desiredNumberScheduled, Job completions (or parallelism).
+        ready:
+          type: integer
+          description: StatefulSet readyReplicas, DaemonSet numberReady, Job succeeded.
+        active:
+          type: integer
+          description: Job pods still running.
+        failed:
+          type: integer
+          description: Job pods that failed.
+        complete:
+          type: boolean
+          description: Job finished (Complete or Failed condition).
+        mapPos:
+          $ref: "#/components/schemas/MapPos"
+        release:
+          type: string
+        conditions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Condition"
 
     ServicePort:
       type: object
@@ -634,10 +738,14 @@ components:
 
     Snapshot:
       type: object
-      required: [context, nodes, namespaces, deployments, pods, releases, services]
+      required: [context, nodes, namespaces, deployments, pods, releases, services, workloads]
       properties:
         context:
           type: string
+        workloads:
+          type: array
+          items:
+            $ref: "#/components/schemas/Workload"
         releases:
           type: array
           items:
@@ -833,7 +941,7 @@ components:
           enum: [snapshot, added, modified, deleted]
         kind:
           type: string
-          enum: [Node, Namespace, Deployment, Pod, Service, Event, HelmRelease, Snapshot]
+          enum: [Node, Namespace, Deployment, Workload, Pod, Service, Event, HelmRelease, Snapshot]
         obj:
           description: Wire model of the given kind; a Snapshot when type is snapshot.
           oneOf:
@@ -841,6 +949,7 @@ components:
             - $ref: "#/components/schemas/Namespace"
             - $ref: "#/components/schemas/Deployment"
             - $ref: "#/components/schemas/Pod"
+            - $ref: "#/components/schemas/Workload"
             - $ref: "#/components/schemas/Service"
             - $ref: "#/components/schemas/Event"
             - $ref: "#/components/schemas/HelmRelease"

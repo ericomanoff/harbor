@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { store } from '../app';
+import { source, store } from '../app';
 import { GAME_HEIGHT, GAME_WIDTH, PALETTE } from '../config';
 import { startDemo } from '../demo/demo';
 import { createPackAnims, loadPackAssets } from '../gfx/anims';
@@ -37,8 +37,7 @@ export class BootScene extends Phaser.Scene {
       return;
     }
     const demo = params.has('demo');
-    if (demo) startDemo(store);
-    else connectWebSocket(store);
+    source.stop = demo ? startDemo(store) : connectWebSocket(store);
 
     // Let the map font arrive so labels never fall back to a system face.
     const fonts = document.fonts?.load('800 12px Nunito') ?? Promise.resolve();

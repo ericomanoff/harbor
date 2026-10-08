@@ -1,6 +1,6 @@
 # Harbor redesign: a naval scene for Kubernetes and Helm
 
-Status: V0-V4 done, 2026-10-08. The naval redesign is complete; remaining work is Phase 6 of PLAN.md (Ingress, exec, workload kinds) and bespoke art if ever wanted. Supersedes `PLAN-VILLAGE.md` (removed)
+Status: V0-V5 done, 2026-10-08. The naval redesign is complete, with the three extra workload kinds and a welcome tour; remaining work is Phase 6 of PLAN.md (Ingress, exec, create forms for StatefulSets/Jobs) and bespoke art if ever wanted. Supersedes `PLAN-VILLAGE.md` (removed)
 and the Tiberian Dawn art direction in `PLAN.md` section 3. Everything else
 in `PLAN.md` (architecture, backend, phases 0-6, testing layers) stands.
 
@@ -162,6 +162,27 @@ all four test layers, demo mode, `make dist`.
   per machine (`make test-visual-update`), kept out of the live e2e target.
 - Performance: the only hot spot found was the island render texture (V1);
   particles are capped per ship and stopped when idle.
+
+### V5: Workload kinds and the welcome tour — DONE 2026-10-08
+- StatefulSets are tanker terminals (grey apron with a tank farm) that
+  launch long tankers carrying their hull number; DaemonSets are tug
+  companies whose stubby tugboats sit one per dock and are never launched
+  by a shipyard; Jobs are fishing fleets whose boats come home grey when the
+  catch is landed. Pods carry `ownerKind`/`ownerName`; only StatefulSets get
+  a structure cell (and can be dragged); tugs and boats are reached through
+  Find and their cards.
+- Welcome tour: a harbor-master character in speech bubbles with a
+  spotlight, fourteen steps, most of them interactive (click the shipyard,
+  press Launch ship, click a ship, click the lighthouse, open the Shop,
+  start placing). It runs in a training harbor: the live source is paused,
+  demo data is loaded, and every API call is answered by a simulator so
+  nothing touches a real cluster; at the end the live source reconnects.
+  Starts on the first visit (remembered in localStorage), replays from the
+  Help rail button, `?notour` suppresses it. The pure step engine is unit
+  tested; `e2e/tour.spec.ts` plays the whole tour.
+- Found while building it: clicking a lighthouse or an anchorage nameplate
+  had been dead since Phase 5 (their hit-tests were spliced against a loop
+  that had already moved). Fixed; the tour spec now guards it.
 
 ## 6. Risks
 

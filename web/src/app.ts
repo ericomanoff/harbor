@@ -68,6 +68,9 @@ export const modal = {
   },
 };
 
+/** The active data source (WebSocket or demo); the tour swaps it for the training harbor. */
+export const source: { stop?: () => void } = {};
+
 /** EVA announcements from anywhere; the HUD shows them in the log. */
 export const eva = new Emitter<string>();
 

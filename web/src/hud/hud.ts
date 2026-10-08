@@ -1,4 +1,5 @@
-import { deleteDeployment, deletePod, helm, scaleDeployment, type HelmRelease } from '../api/client';
+import { deleteDeployment, deletePod, helm, scaleDeployment, workloads as workloadApi, type HelmRelease } from '../api/client';
+import { hullNumber, shipVariant } from '../entities/Ship';
 import { eva, link, mode, modal, selection, settings, store, type LinkStatus } from '../app';
 import { sfx } from '../game/audio';
 import { sellPlan } from '../game/commands';
@@ -8,7 +9,7 @@ import { computePower, formatPower, type PowerLevel } from '../game/power';
 import { podsForService } from '../game/selector';
 import { voiceLineFor } from '../game/voice';
 import { hexString, namespaceColor } from '../layout/colors';
-import { nsKey, type StoreEvent } from '../store/cluster';
+import { nsKey, wlKey, type StoreEvent, type Workload } from '../store/cluster';
 import { openFilter } from '../ui/filterPanel';
 import { openLogs } from '../ui/logsPanel';
 import { openMissionSelect } from '../ui/missionSelect';
@@ -260,6 +261,27 @@ export class Hud {
       return;
     }
     const k0 = keys[0]!;
+    if (keys.length === 1 && k0.startsWith('b:sts:')) {
+      const w = store.workloads.get(wlKey('StatefulSet', ...splitNs(k0.slice(6))));
+      if (!w) return;
+      this.setCard(`Tanker terminal ${w.name}`, [
+        `${w.ns} · ${w.image} · StatefulSet`,
+        `${w.ready}/${w.desired} tankers moored · hull numbers retire highest first`,
+        w.mapPos ? `berth ${w.mapPos.x},${w.mapPos.y}` : 'auto-berthed (drag to choose a site)',
+      ], [
+        { label: 'Launch tanker', kind: 'primary', enabled: true, run: async () => { await workloadApi.scale('StatefulSet', w.ns, w.name, w.desired + 1); this.announce(`UNIT ORDERED: ${w.name}`); } },
+        { label: 'Scrap one', kind: 'secondary', enabled: w.desired > 0, run: async () => { await workloadApi.scale('StatefulSet', w.ns, w.name, w.desired - 1); this.announce(`UNIT RETIRED: ${w.name}`); } },
+        { label: 'Sell terminal', kind: 'danger', confirm: 'Confirm: sell and lose its tankers?', enabled: true, run: async () => { await workloadApi.remove('StatefulSet', w.ns, w.name); this.announce(`STRUCTURE SOLD: ${w.name}`); selection.clear(); } },
+      ], namespaceColor(w.ns));
+      return;
+    }
+    if (keys.length === 1 && k0.startsWith('w:')) {
+      const [kind, rest] = [k0.slice(2).split(':')[0] ?? '', k0.slice(2).split(':').slice(1).join(':')];
+      const w = store.workloads.get(wlKey(kind, ...splitNs(rest)));
+      if (!w) return;
+      this.workloadCard(w);
+      return;
+    }
     if (keys.length === 1 && k0.startsWith('b:')) {
       const d = store.deployments.get(k0.slice(2));
       if (!d) return;
@@ -333,15 +355,43 @@ export class Hud {
       const p = pods[0]!;
       const dep = p.deployment ? store.deployments.get(nsKey(p.ns, p.deployment)) : undefined;
       const old = !!(dep?.currentRS && p.ownerRS && p.ownerRS !== dep.currentRS);
-      actions.unshift({ label: "Ship's log", kind: 'primary', enabled: true, run: async () => openLogs(p) });
-      this.setCard(`Ship ${p.name}`, [
+      const variant = shipVariant(p);
+      const owner = p.ownerKind && p.ownerName ? store.workloads.get(wlKey(p.ownerKind, p.ns, p.ownerName)) : undefined;
+      const title = variant === 'tanker' ? `Tanker ${p.name} · hull ${hullNumber(p)}` : variant === 'tug' ? `Tugboat ${p.name}` : variant === 'boat' ? `Fishing boat ${p.name}` : `Ship ${p.name}`;
+      const from = p.deployment ? `from shipyard ${p.deployment}${old ? ' (old refit)' : ''}`
+        : variant === 'tanker' ? `from tanker terminal ${p.ownerName} (${owner ? `${owner.ready}/${owner.desired} moored` : '…'})`
+        : variant === 'tug' ? `tug company ${p.ownerName} (${owner ? `${owner.ready}/${owner.desired} docks served` : '…'})`
+        : variant === 'boat' ? `fleet ${p.ownerName} (${owner ? `${owner.ready}/${owner.desired} catches landed${owner.complete ? ', home' : ''}` : '…'})`
+        : 'no shipyard (static pod)';
+      // Tankers retire by hull number, tugs and fishing boats are not scrapped one by one.
+      const tail = variant === 'ship' ? actions : actions.filter((a) => !/scrap/i.test(a.label));
+      if (variant === 'tug' && owner) tail.push({ label: 'Disband tug company', kind: 'danger', confirm: 'Confirm: delete the DaemonSet?', enabled: true, run: async () => { await workloadApi.remove('DaemonSet', owner.ns, owner.name); this.announce(`STRUCTURE SOLD: ${owner.name}`); selection.clear(); } });
+      if (variant === 'boat' && owner) tail.push({ label: 'Recall fleet', kind: 'danger', confirm: 'Confirm: delete the Job?', enabled: true, run: async () => { await workloadApi.remove('Job', owner.ns, owner.name); this.announce(`FLEET RECALLED: ${owner.name}`); selection.clear(); } });
+      tail.unshift({ label: "Ship's log", kind: 'primary', enabled: true, run: async () => openLogs(p) });
+      this.setCard(title, [
         `${p.ns} · ${p.phase}${p.ready ? ' · ready' : ''} · ${p.restarts} restart${p.restarts === 1 ? '' : 's'}`,
         `dock ${p.node || '(not yet berthed)'} · cargo ${p.containers.join(', ') || 'none'}`,
         p.reason ? `⚠ ${p.reason}` : '',
-        p.deployment ? `from shipyard ${p.deployment}${old ? ' (old refit)' : ''}` : 'no shipyard (daemon or static)',
-      ], actions, namespaceColor(p.ns));
+        from,
+      ], tail, namespaceColor(p.ns));
     } else {
       this.setCard(`${pods.length} ships selected`, [], actions);
+    }
+  }
+
+  /** Card for a DaemonSet or Job reached through locate. */
+  private workloadCard(w: Workload): void {
+    if (w.kind === 'DaemonSet') {
+      this.setCard(`Tug company ${w.name}`, [`${w.ns} · ${w.image} · DaemonSet`, `${w.ready}/${w.desired} docks served (one tug per dock)`], [
+        { label: 'Disband', kind: 'danger', confirm: 'Confirm: delete the DaemonSet?', enabled: true, run: async () => { await workloadApi.remove('DaemonSet', w.ns, w.name); this.announce(`STRUCTURE SOLD: ${w.name}`); selection.clear(); } },
+      ], namespaceColor(w.ns));
+    } else {
+      this.setCard(`Fishing fleet ${w.name}`, [
+        `${w.ns} · ${w.image} · Job${w.complete ? ' · home' : ' · at sea'}`,
+        `${w.ready}/${w.desired} catches landed · ${w.active ?? 0} at sea · ${w.failed ?? 0} lost`,
+      ], [
+        { label: 'Recall fleet', kind: 'danger', confirm: 'Confirm: delete the Job?', enabled: true, run: async () => { await workloadApi.remove('Job', w.ns, w.name); this.announce(`FLEET RECALLED: ${w.name}`); selection.clear(); } },
+      ], namespaceColor(w.ns));
     }
   }
 
@@ -350,10 +400,16 @@ export class Hud {
   private onStore(e: StoreEvent): void {
     for (const line of this.feed.announce(e)) this.announce(line);
     if (e.type === 'snapshot' || e.type === 'node' || e.type === 'pod' || e.type === 'namespace') this.refreshStatus();
+    if (e.type === 'workload' && e.op === 'delete') selection.clear();
     if (e.type === 'event' && e.event.type === 'Warning') this.map.flashFor(e.event);
     if (e.type === 'release') this.relDetails.delete(e.key);
     this.refreshSelection();
   }
+}
+
+function splitNs(key: string): [string, string] {
+  const i = key.indexOf('/');
+  return [key.slice(0, i), key.slice(i + 1)];
 }
 
 /** Opens one of the HUD's own overlays (log, settings) with the shared modal flag. */
@@ -399,6 +455,10 @@ export function navalise(line: string): string {
     .replace(/^TECH UNLOCKED: (.*)/, 'Chart library added: $1')
     .replace(/^TECH TREE UPDATED/, 'Chart libraries refreshed')
     .replace(/^THEATER CHANGED: (.*)/, 'Sailed to harbor $1')
+    .replace(/^FLEET SAILED: (.*)/, 'Fishing fleet sailed: $1')
+    .replace(/^FLEET RECALLED: (.*)/, 'Fleet recalled: $1')
+    .replace(/^CATCH LANDED: (.*)/, 'Catch landed: $1')
+    .replace(/^CATCH LOST: (.*)/, 'Catch lost: $1')
     .replace(/^UNABLE TO COMPLY: (.*)/, 'Unable to comply: $1')
     .replace(/^CANNOT DEPLOY HERE/, 'Cannot build there')
     .replace(/^LINK TO BACKEND LOST/, 'Lost contact with the harbor master')

@@ -11,6 +11,24 @@ import type { Pod } from '../store/cluster';
 
 const SHIP_SCALE = 0.42; // 66x113 frame → ~28x47 px; overhangs its tile, which reads better than a speck
 
+export type ShipVariant = 'ship' | 'tanker' | 'tug' | 'boat';
+
+/** Which hull a pod sails: by the controller that owns it. */
+export function shipVariant(pod: Pod): ShipVariant {
+  switch (pod.ownerKind) {
+    case 'StatefulSet': return 'tanker';
+    case 'DaemonSet': return 'tug';
+    case 'Job': return 'boat';
+    default: return 'ship';
+  }
+}
+
+/** Hull number for a tanker: the StatefulSet ordinal at the end of its name. */
+export function hullNumber(pod: Pod): string {
+  const m = /-(\d+)$/.exec(pod.name);
+  return m ? m[1]! : '';
+}
+
 /** Pastel ensign: tint multiplies, so mix toward white to keep hulls readable. */
 function ensignTint(color: number): number {
   const c = Phaser.Display.Color.ValueToColor(color);
@@ -30,6 +48,8 @@ export class UnitView extends Phaser.GameObjects.Container {
   private readonly hull: Phaser.GameObjects.Container;
   private readonly ship: Phaser.GameObjects.Image;
   private readonly crates: Phaser.GameObjects.Image[];
+  private readonly number: Phaser.GameObjects.Text;
+  private variant: ShipVariant = 'ship';
   private wake?: Phaser.GameObjects.Particles.ParticleEmitter;
   private smoke?: Phaser.GameObjects.Particles.ParticleEmitter;
   private readonly fire: Phaser.GameObjects.Sprite;
@@ -51,7 +71,8 @@ export class UnitView extends Phaser.GameObjects.Container {
     this.ship = scene.add.image(0, 0, ATLAS.ships.key, SPRITES.ship(0, hashString(key) % 4).frame).setScale(SHIP_SCALE);
     // Cargo: one crate per container (up to three) stacked along the deck.
     this.crates = [0, 1, 2].map((i) => scene.add.image(0, -4 + i * 6, ATLAS.tiles.key, TILES.crate).setScale(TILE_SCALE * 0.28).setVisible(false));
-    this.hull = scene.add.container(TILE / 2, TILE / 2, [this.ship, ...this.crates]);
+    this.number = scene.add.text(0, 0, '', { fontFamily: 'Nunito, sans-serif', fontSize: '9px', fontStyle: '900', color: '#ffffff', stroke: '#000000', strokeThickness: 2 }).setOrigin(0.5).setVisible(false);
+    this.hull = scene.add.container(TILE / 2, TILE / 2, [this.ship, ...this.crates, this.number]);
     this.fire = scene.add.sprite(TILE / 2, TILE / 2 - 2, ATLAS.ships.key, SPRITES.fire[0].frame).setScale(0.45).setOrigin(0.5, 1).setVisible(false);
     this.marks = scene.add.graphics();
     this.sel = scene.add.graphics();
@@ -131,8 +152,24 @@ export class UnitView extends Phaser.GameObjects.Container {
   private redraw(): void {
     const color = ensignTint(namespaceColor(this.pod.ns));
     this.status = unitState(this.pod);
+    this.variant = shipVariant(this.pod);
     this.setAlpha(1);
-    this.ship.setAlpha(1).setTint(color).setTexture(ATLAS.ships.key, SPRITES.ship(0, hashString(this.key) % 4).frame).setScale(SHIP_SCALE);
+    this.ship.setAlpha(1).setTint(color);
+    this.number.setVisible(false);
+    switch (this.variant) {
+      case 'tanker': // long hull, no sails, hull number on deck
+        this.ship.setTexture(ATLAS.ships.key, SPRITES.hullLarge(1).frame).setScale(SHIP_SCALE * 1.15);
+        this.number.setText(hullNumber(this.pod)).setVisible(true);
+        break;
+      case 'tug': // small, stubby, never from a shipyard
+        this.ship.setTexture(ATLAS.ships.key, SPRITES.dinghy(hashString(this.key) % 3).frame).setScale(SHIP_SCALE * 0.9);
+        break;
+      case 'boat': // fishing boat: a small hull with a short sail
+        this.ship.setTexture(ATLAS.ships.key, SPRITES.ship(0, 3).frame).setScale(SHIP_SCALE * 0.8);
+        break;
+      default:
+        this.ship.setTexture(ATLAS.ships.key, SPRITES.ship(0, hashString(this.key) % 4).frame).setScale(SHIP_SCALE);
+    }
     this.marks.clear();
     this.fire.setVisible(false).stop();
     this.smoke?.stop();
@@ -141,6 +178,7 @@ export class UnitView extends Phaser.GameObjects.Container {
     switch (this.status) {
       case 'pending':
         this.ship.setTexture(ATLAS.ships.key, SPRITES.hullSmall(0).frame).setScale(SHIP_SCALE * 1.1).setTint(color);
+        this.number.setVisible(false);
         break;
       case 'ok':
         break;
@@ -155,8 +193,8 @@ export class UnitView extends Phaser.GameObjects.Container {
       case 'terminating':
         this.setAlpha(0.45);
         break;
-      case 'done':
-        this.ship.setTint(0x777777);
+      case 'done': // a fishing boat home with its catch, or a wreck
+        this.ship.setTint(this.variant === 'boat' && this.pod.phase === 'Succeeded' ? 0xb8b8b8 : 0x777777);
         break;
     }
     if (this.obsolete) {

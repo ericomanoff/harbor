@@ -20,7 +20,7 @@ export function openSearch(onPick: (hit: SearchHit) => void): void {
     cursor = Math.min(cursor, Math.max(0, hits.length - 1));
     list.replaceChildren(...hits.map((h, i) => {
       const li = document.createElement('li');
-      li.textContent = `${h.kind === 'structure' ? '▣' : h.kind === 'service' ? '◎' : '▪'} ${h.ns}/${h.name}`;
+      li.textContent = `${h.kind === 'structure' ? '▣' : h.kind === 'service' ? '◎' : h.kind === 'workload' ? '⚓' : '▪'} ${h.ns}/${h.name}`;
       li.className = i === cursor ? 'active' : '';
       li.onmousedown = () => pick(h);
       return li;

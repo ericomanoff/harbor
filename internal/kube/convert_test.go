@@ -5,6 +5,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -284,5 +285,53 @@ func TestConvertPodLabelsAndContainers(t *testing.T) {
 	}
 	if bare := ConvertPod(&corev1.Pod{}, ""); bare.Labels == nil || bare.Containers == nil {
 		t.Error("labels and containers must be non-nil for JSON")
+	}
+}
+
+func TestConvertWorkloads(t *testing.T) {
+	two := int32(2)
+	ss := ConvertStatefulSet(&appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "a", Annotations: map[string]string{MapPosAnnotation: "3,4", "meta.helm.sh/release-name": "outpost"}},
+		Spec:       appsv1.StatefulSetSpec{Replicas: &two, Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Image: "postgres:16"}}}}},
+		Status:     appsv1.StatefulSetStatus{ReadyReplicas: 1},
+	})
+	if ss.Kind != gen.WorkloadKindStatefulSet || ss.Desired != 2 || ss.Ready != 1 || ss.Image != "postgres:16" || ss.MapPos == nil || ss.MapPos.X != 3 || ss.Release == nil || *ss.Release != "outpost" {
+		t.Errorf("statefulset = %+v", ss)
+	}
+	ds := ConvertDaemonSet(&appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "agent", Namespace: "a"},
+		Status:     appsv1.DaemonSetStatus{DesiredNumberScheduled: 3, NumberReady: 2},
+	})
+	if ds.Kind != gen.WorkloadKindDaemonSet || ds.Desired != 3 || ds.Ready != 2 || ds.MapPos != nil {
+		t.Errorf("daemonset = %+v", ds)
+	}
+	three := int32(3)
+	job := ConvertJob(&batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "backup", Namespace: "a"},
+		Spec:       batchv1.JobSpec{Completions: &three},
+		Status:     batchv1.JobStatus{Succeeded: 3, Active: 0, Failed: 1, Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}},
+	})
+	if job.Kind != gen.WorkloadKindJob || job.Desired != 3 || job.Ready != 3 || job.Failed == nil || *job.Failed != 1 || job.Complete == nil || !*job.Complete {
+		t.Errorf("job = %+v", job)
+	}
+	running := ConvertJob(&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "j"}, Status: batchv1.JobStatus{Active: 1}})
+	if running.Desired != 1 || running.Complete == nil || *running.Complete || running.Active == nil || *running.Active != 1 {
+		t.Errorf("running job = %+v", running)
+	}
+}
+
+func TestConvertPodOwner(t *testing.T) {
+	ctrl := true
+	p := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "db-0", OwnerReferences: []metav1.OwnerReference{{Kind: "StatefulSet", Name: "db", Controller: &ctrl}}}}
+	got := ConvertPod(p, "")
+	if got.OwnerKind == nil || *got.OwnerKind != "StatefulSet" || got.OwnerName == nil || *got.OwnerName != "db" {
+		t.Errorf("owner = %v/%v", got.OwnerKind, got.OwnerName)
+	}
+	dep := ConvertPod(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "web-1", OwnerReferences: []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "web-abc", Controller: &ctrl}}}}, "web")
+	if dep.OwnerKind == nil || *dep.OwnerKind != "Deployment" || *dep.OwnerName != "web" {
+		t.Errorf("deployment-owned pod = %v/%v", dep.OwnerKind, dep.OwnerName)
+	}
+	if bare := ConvertPod(&corev1.Pod{}, ""); bare.OwnerKind != nil {
+		t.Error("ownerless pod should have no owner")
 	}
 }

@@ -14,6 +14,10 @@ export interface MapApi {
   home(): void;
   openSearch(): void;
   flashFor(ev: ClusterEvent): void;
+  /** Screen rectangle of a selectable thing ("b:", "u:", "s:", "r:", "dock:<node>", "unit-of:<ns/deployment>"), if present. */
+  screenRectOf(key: string): { x: number; y: number; width: number; height: number } | undefined;
+  /** Pan (and zoom in a little) so the thing is comfortably in view. */
+  focusKey(key: string): void;
 }
 
 /** The chart table: a minimap drawn on a 2D canvas; click to sail the camera there. */

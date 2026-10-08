@@ -35,6 +35,12 @@ export function demoSnapshot(): Snapshot {
     releases: [
       { ns: 'sandbox', name: 'outpost', revision: 2, status: 'deployed', chart: 'podinfo', chartVersion: '6.15.0', appVersion: '6.15.0' },
     ],
+    workloads: [
+      { kind: 'StatefulSet', ns: 'sandbox', name: 'db', image: 'postgres:16', desired: 2, ready: 2, conditions: [] },
+      { kind: 'DaemonSet', ns: 'kube-system', name: 'kube-proxy', image: 'kube-proxy', desired: 3, ready: 3, conditions: [] },
+      { kind: 'DaemonSet', ns: 'sandbox', name: 'log-agent', image: 'fluent-bit', desired: 3, ready: 2, conditions: [] },
+      { kind: 'Job', ns: 'sandbox', name: 'backup', image: 'pg-dump', desired: 2, ready: 1, active: 1, failed: 0, complete: false, conditions: [] },
+    ],
     services: [
       { ns: 'sandbox', name: 'nginx', type: 'ClusterIP', clusterIP: '10.96.0.10', ports: [{ port: 80, targetPort: '80', protocol: 'TCP', name: 'http' }], selector: { app: 'nginx' } },
       { ns: 'sandbox', name: 'outpost-podinfo', type: 'LoadBalancer', clusterIP: '10.96.0.20', ports: [{ port: 9898, targetPort: 'http', protocol: 'TCP' }], selector: { app: 'outpost-podinfo' } },
@@ -54,6 +60,13 @@ export function demoSnapshot(): Snapshot {
       pod('sandbox', 'outpost-podinfo-1', 'harbor-worker', 'outpost-podinfo'),
       pod('sandbox', 'outpost-podinfo-2', 'harbor-worker2', 'outpost-podinfo'),
       pod('sandbox', 'outpost-redis-1', 'harbor-worker', 'outpost-redis'),
+      pod('sandbox', 'db-0', 'harbor-control-plane', '', { ownerKind: 'StatefulSet', ownerName: 'db', labels: { app: 'db' }, containers: ['postgres'] }),
+      pod('sandbox', 'db-1', 'harbor-worker', '', { ownerKind: 'StatefulSet', ownerName: 'db', labels: { app: 'db' }, containers: ['postgres'] }),
+      pod('sandbox', 'log-agent-a', 'harbor-control-plane', '', { ownerKind: 'DaemonSet', ownerName: 'log-agent' }),
+      pod('sandbox', 'log-agent-b', 'harbor-worker', '', { ownerKind: 'DaemonSet', ownerName: 'log-agent' }),
+      pod('sandbox', 'log-agent-c', 'harbor-worker2', '', { ownerKind: 'DaemonSet', ownerName: 'log-agent', ready: false }),
+      pod('sandbox', 'backup-x1', 'harbor-worker', '', { ownerKind: 'Job', ownerName: 'backup', phase: 'Succeeded', ready: false }),
+      pod('sandbox', 'backup-x2', 'harbor-worker2', '', { ownerKind: 'Job', ownerName: 'backup' }),
     ],
   };
 }

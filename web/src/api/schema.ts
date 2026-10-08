@@ -106,6 +106,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workloads/{kind}/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a StatefulSet, DaemonSet or Job (and its pods) */
+        delete: operations["deleteWorkload"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workloads/{kind}/{ns}/{name}/scale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set replicas on a StatefulSet (other kinds cannot be scaled) */
+        patch: operations["scaleWorkload"];
+        trace?: never;
+    };
+    "/api/workloads/{kind}/{ns}/{name}/mappos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Persist a workload structure's map tile as an annotation */
+        patch: operations["setWorkloadMapPos"];
+        trace?: never;
+    };
     "/api/pods/{ns}/{name}/logs": {
         parameters: {
             query?: never;
@@ -418,11 +469,35 @@ export interface components {
             restarts: number;
             /** @description Waiting or terminated reason of the worst container, e.g. CrashLoopBackOff. */
             reason?: string;
+            /** @description Controller kind that owns the pod (Deployment, StatefulSet, DaemonSet, Job, ReplicaSet, Node, ...), if any. */
+            ownerKind?: string;
+            ownerName?: string;
             ownerRS?: string;
             /** @description Owning Deployment name resolved through the ReplicaSet. */
             deployment?: string;
             /** Format: date-time */
             created: string;
+        };
+        /** @description A StatefulSet (tanker terminal), DaemonSet (tug company) or Job (fishing fleet). */
+        Workload: {
+            /** @enum {string} */
+            kind: "StatefulSet" | "DaemonSet" | "Job";
+            ns: string;
+            name: string;
+            image: string;
+            /** @description StatefulSet replicas, DaemonSet desiredNumberScheduled, Job completions (or parallelism). */
+            desired: number;
+            /** @description StatefulSet readyReplicas, DaemonSet numberReady, Job succeeded. */
+            ready: number;
+            /** @description Job pods still running. */
+            active?: number;
+            /** @description Job pods that failed. */
+            failed?: number;
+            /** @description Job finished (Complete or Failed condition). */
+            complete?: boolean;
+            mapPos?: components["schemas"]["MapPos"];
+            release?: string;
+            conditions: components["schemas"]["Condition"][];
         };
         ServicePort: {
             port: number;
@@ -455,6 +530,7 @@ export interface components {
         };
         Snapshot: {
             context: string;
+            workloads: components["schemas"]["Workload"][];
             releases: components["schemas"]["HelmRelease"][];
             services: components["schemas"]["Service"][];
             nodes: components["schemas"]["Node"][];
@@ -544,9 +620,9 @@ export interface components {
             /** @enum {string} */
             type: "snapshot" | "added" | "modified" | "deleted";
             /** @enum {string} */
-            kind: "Node" | "Namespace" | "Deployment" | "Pod" | "Service" | "Event" | "HelmRelease" | "Snapshot";
+            kind: "Node" | "Namespace" | "Deployment" | "Workload" | "Pod" | "Service" | "Event" | "HelmRelease" | "Snapshot";
             /** @description Wire model of the given kind; a Snapshot when type is snapshot. */
-            obj?: components["schemas"]["Node"] | components["schemas"]["Namespace"] | components["schemas"]["Deployment"] | components["schemas"]["Pod"] | components["schemas"]["Service"] | components["schemas"]["Event"] | components["schemas"]["HelmRelease"] | components["schemas"]["Snapshot"];
+            obj?: components["schemas"]["Node"] | components["schemas"]["Namespace"] | components["schemas"]["Deployment"] | components["schemas"]["Pod"] | components["schemas"]["Workload"] | components["schemas"]["Service"] | components["schemas"]["Event"] | components["schemas"]["HelmRelease"] | components["schemas"]["Snapshot"];
         };
     };
     responses: {
@@ -561,6 +637,7 @@ export interface components {
         };
     };
     parameters: {
+        WorkloadKindParam: "StatefulSet" | "DaemonSet" | "Job";
         ContextNameParam: string;
         NamespaceParam: string;
         NameParam: string;
@@ -692,6 +769,83 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteWorkload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["parameters"]["WorkloadKindParam"];
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    scaleWorkload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["parameters"]["WorkloadKindParam"];
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScaleRequest"];
+            };
+        };
+        responses: {
+            /** @description Scaled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setWorkloadMapPos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["parameters"]["WorkloadKindParam"];
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapPos"];
+            };
+        };
+        responses: {
+            /** @description Stored */
             204: {
                 headers: {
                     [name: string]: unknown;

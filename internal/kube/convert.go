@@ -7,6 +7,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -195,6 +196,84 @@ func ConvertDeployment(d *appsv1.Deployment) gen.Deployment {
 	return out
 }
 
+// firstImage returns the first container image of a pod template.
+func firstImage(spec corev1.PodSpec) string {
+	if len(spec.Containers) > 0 {
+		return spec.Containers[0].Image
+	}
+	return ""
+}
+
+func convertConditions[T any](items []T, get func(T) (string, string, string, string)) []gen.Condition {
+	out := make([]gen.Condition, 0, len(items))
+	for _, it := range items {
+		typ, status, reason, msg := get(it)
+		out = append(out, gen.Condition{Type: typ, Status: status, Reason: optString(reason), Message: optString(msg)})
+	}
+	return out
+}
+
+// ConvertStatefulSet: a tanker terminal.
+func ConvertStatefulSet(ss *appsv1.StatefulSet) gen.Workload {
+	desired := 1
+	if ss.Spec.Replicas != nil {
+		desired = int(*ss.Spec.Replicas)
+	}
+	out := gen.Workload{
+		Kind: gen.WorkloadKindStatefulSet, Ns: ss.Namespace, Name: ss.Name,
+		Image: firstImage(ss.Spec.Template.Spec), Desired: desired, Ready: int(ss.Status.ReadyReplicas),
+		Conditions: convertConditions(ss.Status.Conditions, func(c appsv1.StatefulSetCondition) (string, string, string, string) {
+			return string(c.Type), string(c.Status), c.Reason, c.Message
+		}),
+	}
+	if mp, ok := ParseMapPos(ss.Annotations[MapPosAnnotation]); ok {
+		out.MapPos = &mp
+	}
+	out.Release = optString(ss.Annotations[helmReleaseAnnotation])
+	return out
+}
+
+// ConvertDaemonSet: a tug company, one tug per dock.
+func ConvertDaemonSet(ds *appsv1.DaemonSet) gen.Workload {
+	out := gen.Workload{
+		Kind: gen.WorkloadKindDaemonSet, Ns: ds.Namespace, Name: ds.Name,
+		Image: firstImage(ds.Spec.Template.Spec), Desired: int(ds.Status.DesiredNumberScheduled), Ready: int(ds.Status.NumberReady),
+		Conditions: convertConditions(ds.Status.Conditions, func(c appsv1.DaemonSetCondition) (string, string, string, string) {
+			return string(c.Type), string(c.Status), c.Reason, c.Message
+		}),
+	}
+	out.Release = optString(ds.Annotations[helmReleaseAnnotation])
+	return out
+}
+
+// ConvertJob: a fishing fleet that comes home when the catch is landed.
+func ConvertJob(j *batchv1.Job) gen.Workload {
+	desired := 1
+	if j.Spec.Completions != nil {
+		desired = int(*j.Spec.Completions)
+	} else if j.Spec.Parallelism != nil {
+		desired = int(*j.Spec.Parallelism)
+	}
+	active := int(j.Status.Active)
+	failed := int(j.Status.Failed)
+	complete := false
+	for _, c := range j.Status.Conditions {
+		if (c.Type == batchv1.JobComplete || c.Type == batchv1.JobFailed) && c.Status == corev1.ConditionTrue {
+			complete = true
+		}
+	}
+	out := gen.Workload{
+		Kind: gen.WorkloadKindJob, Ns: j.Namespace, Name: j.Name,
+		Image: firstImage(j.Spec.Template.Spec), Desired: desired, Ready: int(j.Status.Succeeded),
+		Active: &active, Failed: &failed, Complete: &complete,
+		Conditions: convertConditions(j.Status.Conditions, func(c batchv1.JobCondition) (string, string, string, string) {
+			return string(c.Type), string(c.Status), c.Reason, c.Message
+		}),
+	}
+	out.Release = optString(j.Annotations[helmReleaseAnnotation])
+	return out
+}
+
 // ConvertPod summarises a pod. deployment is the owning Deployment name if
 // the caller could resolve it through the ReplicaSet, else "".
 func ConvertPod(p *corev1.Pod, deployment string) gen.Pod {
@@ -244,6 +323,12 @@ func ConvertPod(p *corev1.Pod, deployment string) gen.Pod {
 		OwnerRS:    optString(OwnerOfKind(p.OwnerReferences, "ReplicaSet")),
 	}
 	out.Deployment = optString(deployment)
+	// Direct controller, with ReplicaSets collapsed to their Deployment.
+	if deployment != "" {
+		out.OwnerKind, out.OwnerName = optString("Deployment"), optString(deployment)
+	} else if c := metav1.GetControllerOf(p); c != nil {
+		out.OwnerKind, out.OwnerName = optString(c.Kind), optString(c.Name)
+	}
 	return out
 }
 

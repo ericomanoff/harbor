@@ -30,6 +30,27 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for WorkloadKind.
+const (
+	WorkloadKindDaemonSet   WorkloadKind = "DaemonSet"
+	WorkloadKindJob         WorkloadKind = "Job"
+	WorkloadKindStatefulSet WorkloadKind = "StatefulSet"
+)
+
+// Valid indicates whether the value is a known member of the WorkloadKind enum.
+func (e WorkloadKind) Valid() bool {
+	switch e {
+	case WorkloadKindDaemonSet:
+		return true
+	case WorkloadKindJob:
+		return true
+	case WorkloadKindStatefulSet:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WsMessageKind.
 const (
 	WsMessageKindDeployment  WsMessageKind = "Deployment"
@@ -40,6 +61,7 @@ const (
 	WsMessageKindPod         WsMessageKind = "Pod"
 	WsMessageKindService     WsMessageKind = "Service"
 	WsMessageKindSnapshot    WsMessageKind = "Snapshot"
+	WsMessageKindWorkload    WsMessageKind = "Workload"
 )
 
 // Valid indicates whether the value is a known member of the WsMessageKind enum.
@@ -60,6 +82,8 @@ func (e WsMessageKind) Valid() bool {
 	case WsMessageKindService:
 		return true
 	case WsMessageKindSnapshot:
+		return true
+	case WsMessageKindWorkload:
 		return true
 	default:
 		return false
@@ -84,6 +108,90 @@ func (e WsMessageType) Valid() bool {
 	case WsMessageTypeModified:
 		return true
 	case WsMessageTypeSnapshot:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkloadKindParam.
+const (
+	WorkloadKindParamDaemonSet   WorkloadKindParam = "DaemonSet"
+	WorkloadKindParamJob         WorkloadKindParam = "Job"
+	WorkloadKindParamStatefulSet WorkloadKindParam = "StatefulSet"
+)
+
+// Valid indicates whether the value is a known member of the WorkloadKindParam enum.
+func (e WorkloadKindParam) Valid() bool {
+	switch e {
+	case WorkloadKindParamDaemonSet:
+		return true
+	case WorkloadKindParamJob:
+		return true
+	case WorkloadKindParamStatefulSet:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeleteWorkloadParamsKind.
+const (
+	DeleteWorkloadParamsKindDaemonSet   DeleteWorkloadParamsKind = "DaemonSet"
+	DeleteWorkloadParamsKindJob         DeleteWorkloadParamsKind = "Job"
+	DeleteWorkloadParamsKindStatefulSet DeleteWorkloadParamsKind = "StatefulSet"
+)
+
+// Valid indicates whether the value is a known member of the DeleteWorkloadParamsKind enum.
+func (e DeleteWorkloadParamsKind) Valid() bool {
+	switch e {
+	case DeleteWorkloadParamsKindDaemonSet:
+		return true
+	case DeleteWorkloadParamsKindJob:
+		return true
+	case DeleteWorkloadParamsKindStatefulSet:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SetWorkloadMapPosParamsKind.
+const (
+	SetWorkloadMapPosParamsKindDaemonSet   SetWorkloadMapPosParamsKind = "DaemonSet"
+	SetWorkloadMapPosParamsKindJob         SetWorkloadMapPosParamsKind = "Job"
+	SetWorkloadMapPosParamsKindStatefulSet SetWorkloadMapPosParamsKind = "StatefulSet"
+)
+
+// Valid indicates whether the value is a known member of the SetWorkloadMapPosParamsKind enum.
+func (e SetWorkloadMapPosParamsKind) Valid() bool {
+	switch e {
+	case SetWorkloadMapPosParamsKindDaemonSet:
+		return true
+	case SetWorkloadMapPosParamsKindJob:
+		return true
+	case SetWorkloadMapPosParamsKindStatefulSet:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScaleWorkloadParamsKind.
+const (
+	ScaleWorkloadParamsKindDaemonSet   ScaleWorkloadParamsKind = "DaemonSet"
+	ScaleWorkloadParamsKindJob         ScaleWorkloadParamsKind = "Job"
+	ScaleWorkloadParamsKindStatefulSet ScaleWorkloadParamsKind = "StatefulSet"
+)
+
+// Valid indicates whether the value is a known member of the ScaleWorkloadParamsKind enum.
+func (e ScaleWorkloadParamsKind) Valid() bool {
+	switch e {
+	case ScaleWorkloadParamsKindDaemonSet:
+		return true
+	case ScaleWorkloadParamsKindJob:
+		return true
+	case ScaleWorkloadParamsKindStatefulSet:
 		return true
 	default:
 		return false
@@ -301,11 +409,15 @@ type Pod struct {
 	Name       string            `json:"name"`
 
 	// Node Scheduled node name, empty while Pending.
-	Node    string  `json:"node"`
-	Ns      string  `json:"ns"`
-	OwnerRS *string `json:"ownerRS,omitempty"`
-	Phase   string  `json:"phase"`
-	Ready   bool    `json:"ready"`
+	Node string `json:"node"`
+	Ns   string `json:"ns"`
+
+	// OwnerKind Controller kind that owns the pod (Deployment, StatefulSet, DaemonSet, Job, ReplicaSet, Node, ...), if any.
+	OwnerKind *string `json:"ownerKind,omitempty"`
+	OwnerName *string `json:"ownerName,omitempty"`
+	OwnerRS   *string `json:"ownerRS,omitempty"`
+	Phase     string  `json:"phase"`
+	Ready     bool    `json:"ready"`
 
 	// Reason Waiting or terminated reason of the worst container, e.g. CrashLoopBackOff.
 	Reason   *string `json:"reason,omitempty"`
@@ -349,7 +461,38 @@ type Snapshot struct {
 	Pods        []Pod         `json:"pods"`
 	Releases    []HelmRelease `json:"releases"`
 	Services    []Service     `json:"services"`
+	Workloads   []Workload    `json:"workloads"`
 }
+
+// Workload A StatefulSet (tanker terminal), DaemonSet (tug company) or Job (fishing fleet).
+type Workload struct {
+	// Active Job pods still running.
+	Active *int `json:"active,omitempty"`
+
+	// Complete Job finished (Complete or Failed condition).
+	Complete   *bool       `json:"complete,omitempty"`
+	Conditions []Condition `json:"conditions"`
+
+	// Desired StatefulSet replicas, DaemonSet desiredNumberScheduled, Job completions (or parallelism).
+	Desired int `json:"desired"`
+
+	// Failed Job pods that failed.
+	Failed *int         `json:"failed,omitempty"`
+	Image  string       `json:"image"`
+	Kind   WorkloadKind `json:"kind"`
+
+	// MapPos Tile coordinates on the map grid.
+	MapPos *MapPos `json:"mapPos,omitempty"`
+	Name   string  `json:"name"`
+	Ns     string  `json:"ns"`
+
+	// Ready StatefulSet readyReplicas, DaemonSet numberReady, Job succeeded.
+	Ready   int     `json:"ready"`
+	Release *string `json:"release,omitempty"`
+}
+
+// WorkloadKind defines model for Workload.Kind.
+type WorkloadKind string
 
 // WsMessage One message on the /ws event stream.
 type WsMessage struct {
@@ -380,6 +523,9 @@ type NameParam = string
 // NamespaceParam defines model for NamespaceParam.
 type NamespaceParam = string
 
+// WorkloadKindParam defines model for WorkloadKindParam.
+type WorkloadKindParam string
+
 // SearchHelmChartsParams defines parameters for SearchHelmCharts.
 type SearchHelmChartsParams struct {
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
@@ -399,6 +545,15 @@ type GetPodLogsParams struct {
 	// Tail Lines from the end; default 200.
 	Tail *int `form:"tail,omitempty" json:"tail,omitempty"`
 }
+
+// DeleteWorkloadParamsKind defines parameters for DeleteWorkload.
+type DeleteWorkloadParamsKind string
+
+// SetWorkloadMapPosParamsKind defines parameters for SetWorkloadMapPos.
+type SetWorkloadMapPosParamsKind string
+
+// ScaleWorkloadParamsKind defines parameters for ScaleWorkload.
+type ScaleWorkloadParamsKind string
 
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
 type CreateDeploymentJSONRequestBody = CreateDeploymentRequest
@@ -420,6 +575,12 @@ type UpgradeHelmReleaseJSONRequestBody = HelmUpgradeRequest
 
 // AddHelmRepoJSONRequestBody defines body for AddHelmRepo for application/json ContentType.
 type AddHelmRepoJSONRequestBody = HelmRepo
+
+// SetWorkloadMapPosJSONRequestBody defines body for SetWorkloadMapPos for application/json ContentType.
+type SetWorkloadMapPosJSONRequestBody = MapPos
+
+// ScaleWorkloadJSONRequestBody defines body for ScaleWorkload for application/json ContentType.
+type ScaleWorkloadJSONRequestBody = ScaleRequest
 
 // AsNode returns the union data inside the WsMessage_Obj as a Node
 func (t WsMessage_Obj) AsNode() (Node, error) {
@@ -515,6 +676,32 @@ func (t *WsMessage_Obj) FromPod(v Pod) error {
 
 // MergePod performs a merge with any union data inside the WsMessage_Obj, using the provided Pod
 func (t *WsMessage_Obj) MergePod(v Pod) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsWorkload returns the union data inside the WsMessage_Obj as a Workload
+func (t WsMessage_Obj) AsWorkload() (Workload, error) {
+	var body Workload
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromWorkload overwrites any union data inside the WsMessage_Obj as the provided Workload
+func (t *WsMessage_Obj) FromWorkload(v Workload) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeWorkload performs a merge with any union data inside the WsMessage_Obj, using the provided Workload
+func (t *WsMessage_Obj) MergeWorkload(v Workload) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -704,6 +891,15 @@ type ServerInterface interface {
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
+	// DeleteWorkload Delete a StatefulSet, DaemonSet or Job (and its pods)
+	// (DELETE /api/workloads/{kind}/{ns}/{name})
+	DeleteWorkload(w http.ResponseWriter, r *http.Request, kind DeleteWorkloadParamsKind, ns NamespaceParam, name NameParam)
+	// SetWorkloadMapPos Persist a workload structure's map tile as an annotation
+	// (PATCH /api/workloads/{kind}/{ns}/{name}/mappos)
+	SetWorkloadMapPos(w http.ResponseWriter, r *http.Request, kind SetWorkloadMapPosParamsKind, ns NamespaceParam, name NameParam)
+	// ScaleWorkload Set replicas on a StatefulSet (other kinds cannot be scaled)
+	// (PATCH /api/workloads/{kind}/{ns}/{name}/scale)
+	ScaleWorkload(w http.ResponseWriter, r *http.Request, kind ScaleWorkloadParamsKind, ns NamespaceParam, name NameParam)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1290,6 +1486,138 @@ func (siw *ServerInterfaceWrapper) GetSnapshot(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteWorkload operation middleware
+func (siw *ServerInterfaceWrapper) DeleteWorkload(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "kind" -------------
+	var kind DeleteWorkloadParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteWorkload(w, r, kind, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetWorkloadMapPos operation middleware
+func (siw *ServerInterfaceWrapper) SetWorkloadMapPos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "kind" -------------
+	var kind SetWorkloadMapPosParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetWorkloadMapPos(w, r, kind, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ScaleWorkload operation middleware
+func (siw *ServerInterfaceWrapper) ScaleWorkload(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "kind" -------------
+	var kind ScaleWorkloadParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ScaleWorkload(w, r, kind, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1416,6 +1744,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/snapshot", wrapper.GetSnapshot)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/deployments", wrapper.CreateDeployment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/deployments/{ns}/{name}", wrapper.DeleteDeployment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}", wrapper.DeleteWorkload)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/scale", wrapper.ScaleWorkload)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/mappos", wrapper.SetWorkloadMapPos)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/pods/{ns}/{name}/logs", wrapper.GetPodLogs)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/pods/{ns}/{name}", wrapper.DeletePod)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/scale", wrapper.ScaleDeployment)

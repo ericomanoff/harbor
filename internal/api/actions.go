@@ -179,3 +179,57 @@ func (s *Server) GetPodLogs(w http.ResponseWriter, r *http.Request, ns gen.Names
 	w.WriteHeader(http.StatusOK)
 	_, _ = io.Copy(w, rc)
 }
+
+func (s *Server) ScaleWorkload(w http.ResponseWriter, r *http.Request, kind gen.ScaleWorkloadParamsKind, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	if string(kind) != string(gen.WorkloadKindStatefulSet) {
+		writeError(w, http.StatusBadRequest, "only StatefulSets can be scaled")
+		return
+	}
+	var req gen.ScaleRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.ScaleStatefulSet(ctx, cur.Client(), ns, name, req.Replicas); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) DeleteWorkload(w http.ResponseWriter, r *http.Request, kind gen.DeleteWorkloadParamsKind, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.DeleteWorkload(ctx, cur.Client(), gen.WorkloadKind(kind), ns, name); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) SetWorkloadMapPos(w http.ResponseWriter, r *http.Request, kind gen.SetWorkloadMapPosParamsKind, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var mp gen.MapPos
+	if !decode(w, r, &mp) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.SetWorkloadMapPos(ctx, cur.Client(), gen.WorkloadKind(kind), ns, name, mp); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Deployment, Node, Pod, Service } from '../store/cluster';
+import type { Deployment, Node, Pod, Service, Workload } from '../store/cluster';
 import { buildingCells, cellAt, computeLayout, isCellFree, layoutPlateaus, plateauWidth, unitCells } from './grid';
 
 const node = (name: string, cpu = 4000, ready = true): Node => ({ name, ready, cpuAlloc: cpu, memAlloc: 0, cpuReq: 0, memReq: 0, labels: {} });
@@ -115,6 +115,19 @@ describe('computeLayout', () => {
     // Stable when a unit is added.
     const l2 = computeLayout(nodes, [dep('a', 'web')], [...pods, p('web-4', 'w2')], [svc]);
     expect(l2.services.get('a/web')).toEqual(s);
+  });
+
+  it('gives StatefulSets a structure cell and queues their pending tankers beside it', () => {
+    const sts: Workload = { kind: 'StatefulSet', ns: 'a', name: 'db', image: 'pg', desired: 2, ready: 1, conditions: [] };
+    const tanker = (name: string, nodeName: string): Pod => ({ ...pod('a', name, nodeName), ownerKind: 'StatefulSet', ownerName: 'db' });
+    const l = computeLayout(nodes, [dep('a', 'web')], [tanker('db-0', 'w1'), tanker('db-1', '')], [], [sts]);
+    const b = l.buildings.get('sts:a/db')!;
+    expect(b.kind).toBe('plateau');
+    expect(l.buildings.get('a/web')).toBeDefined();
+    expect(l.units.get('a/db-1')).toMatchObject({ kind: 'queue', x: b.x + 3, y: b.y });
+    // DaemonSets and Jobs get no structure.
+    const l2 = computeLayout(nodes, [], [], [], [{ kind: 'DaemonSet', ns: 'a', name: 'agent', image: 'x', desired: 2, ready: 2, conditions: [] }]);
+    expect(l2.buildings.size).toBe(0);
   });
 
   it('with no nodes everything lands in the void strip and the world still has a size', () => {

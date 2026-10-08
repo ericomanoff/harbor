@@ -3,15 +3,35 @@ import { MAP_FONT, SEA } from '../config';
 import { ATLAS, SPRITES, TILES } from '../gfx/manifest';
 import { hexString, namespaceColor } from '../layout/colors';
 import { BUILD_CELL, TILE, TILE_SCALE, type Placement } from '../layout/grid';
-import type { Deployment } from '../store/cluster';
+import type { Deployment, Workload } from '../store/cluster';
+
+/** What a structure needs to draw itself; Deployments and StatefulSets both fit. */
+export interface StructureModel {
+  kind: 'Deployment' | 'StatefulSet';
+  ns: string;
+  name: string;
+  image: string;
+  replicas: number;
+  available: number;
+  updated: number;
+  mapPos?: { x: number; y: number };
+}
+
+export function structureOfDeployment(d: Deployment): StructureModel {
+  return { kind: 'Deployment', ns: d.ns, name: d.name, image: d.image, replicas: d.replicas, available: d.available, updated: d.updated, ...(d.mapPos ? { mapPos: d.mapPos } : {}) };
+}
+
+export function structureOfStatefulSet(w: Workload): StructureModel {
+  return { kind: 'StatefulSet', ns: w.ns, name: w.name, image: w.image, replicas: w.desired, available: w.ready, updated: w.desired, ...(w.mapPos ? { mapPos: w.mapPos } : {}) };
+}
 
 const CELL_PX = BUILD_CELL * TILE; // 96
 export const BUILDING_PX = CELL_PX;
 
-/** A Deployment: a shipyard with a hull on the slipway and crates on the dock. */
+/** A Deployment (shipyard) or StatefulSet (tanker terminal): a slipway with a hull and crates. */
 export class BuildingView extends Phaser.GameObjects.Container {
   readonly key: string;
-  dep: Deployment;
+  dep: StructureModel;
   placement: Placement;
 
   private readonly slip: Phaser.GameObjects.Graphics;
@@ -26,7 +46,7 @@ export class BuildingView extends Phaser.GameObjects.Container {
   private readonly rollout: Phaser.GameObjects.Text;
   private flashUntil = 0;
 
-  constructor(scene: Phaser.Scene, key: string, dep: Deployment, placement: Placement) {
+  constructor(scene: Phaser.Scene, key: string, dep: StructureModel, placement: Placement) {
     super(scene, placement.x * TILE, placement.y * TILE);
     this.key = key;
     this.dep = dep;
@@ -56,7 +76,7 @@ export class BuildingView extends Phaser.GameObjects.Container {
     return new Phaser.Geom.Rectangle(this.x + 4, this.y + 4, CELL_PX - 8, CELL_PX - 8);
   }
 
-  update(dep: Deployment, placement: Placement): void {
+  update(dep: StructureModel, placement: Placement): void {
     this.dep = dep;
     const moved = placement.x !== this.placement.x || placement.y !== this.placement.y;
     this.placement = placement;
@@ -83,11 +103,18 @@ export class BuildingView extends Phaser.GameObjects.Container {
   private redraw(): void {
     const color = namespaceColor(this.dep.ns);
     const g = this.slip;
+    const terminal = this.dep.kind === 'StatefulSet';
     g.clear();
-    g.fillStyle(0x6b4a2b, 1).fillRoundedRect(22, 16, CELL_PX - 36, CELL_PX - 30, 6);
-    g.fillStyle(0x8a6239, 1);
+    // Shipyard: timber slipway. Tanker terminal: concrete apron with a tank farm.
+    g.fillStyle(terminal ? 0x6f7470 : 0x6b4a2b, 1).fillRoundedRect(22, 16, CELL_PX - 36, CELL_PX - 30, 6);
+    g.fillStyle(terminal ? 0x8c918d : 0x8a6239, 1);
     for (let y = 22; y < CELL_PX - 20; y += 10) g.fillRect(26, y, CELL_PX - 44, 4);
-    g.lineStyle(3, 0xd9c79a, 1).strokeRoundedRect(22, 16, CELL_PX - 36, CELL_PX - 30, 6);
+    if (terminal) {
+      g.fillStyle(0xd9dcd8, 1).fillCircle(32, 28, 7).fillCircle(32, 46, 7);
+      g.lineStyle(2, 0x4a4f4c, 1).strokeCircle(32, 28, 7).strokeCircle(32, 46, 7);
+    }
+    g.lineStyle(3, terminal ? 0xe8e8e0 : 0xd9c79a, 1).strokeRoundedRect(22, 16, CELL_PX - 36, CELL_PX - 30, 6);
+    this.hull.setTexture(ATLAS.ships.key, SPRITES.hullLarge(terminal ? 1 : 0).frame);
     this.flag.setTint(color);
     const frac = this.dep.replicas > 0 ? Math.min(1, this.dep.available / this.dep.replicas) : 1;
     const barColor = frac >= 1 ? 0x5cb82a : frac > 0 ? 0xe8b33a : 0xe5473a;

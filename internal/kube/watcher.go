@@ -10,12 +10,14 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	appslisters "k8s.io/client-go/listers/apps/v1"
+	batchlisters "k8s.io/client-go/listers/batch/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 
@@ -39,13 +41,16 @@ type Watcher struct {
 	hub     *Hub
 	factory informers.SharedInformerFactory
 
-	nodes       corelisters.NodeLister
-	namespaces  corelisters.NamespaceLister
-	services    corelisters.ServiceLister
-	pods        corelisters.PodLister
-	podIndexer  cache.Indexer
-	deployments appslisters.DeploymentLister
-	replicasets appslisters.ReplicaSetLister
+	nodes        corelisters.NodeLister
+	namespaces   corelisters.NamespaceLister
+	services     corelisters.ServiceLister
+	pods         corelisters.PodLister
+	podIndexer   cache.Indexer
+	deployments  appslisters.DeploymentLister
+	replicasets  appslisters.ReplicaSetLister
+	statefulsets appslisters.StatefulSetLister
+	daemonsets   appslisters.DaemonSetLister
+	jobs         batchlisters.JobLister
 
 	// Helm release secrets live in their own factory so the label selector
 	// does not narrow the other informers.
@@ -75,6 +80,9 @@ func NewWatcher(contextName string, client kubernetes.Interface, hub *Hub) *Watc
 	rsInf := f.Apps().V1().ReplicaSets()
 	evInf := f.Core().V1().Events()
 	svcInf := f.Core().V1().Services()
+	ssInf := f.Apps().V1().StatefulSets()
+	dsInf := f.Apps().V1().DaemonSets()
+	jobInf := f.Batch().V1().Jobs()
 
 	if err := podInf.Informer().AddIndexers(cache.Indexers{byNodeIndex: podNodeIndex}); err != nil {
 		panic(err) // only fails if the index name is already registered
@@ -87,12 +95,18 @@ func NewWatcher(contextName string, client kubernetes.Interface, hub *Hub) *Watc
 	w.deployments = depInf.Lister()
 	w.replicasets = rsInf.Lister()
 	w.services = svcInf.Lister()
+	w.statefulsets = ssInf.Lister()
+	w.daemonsets = dsInf.Lister()
+	w.jobs = jobInf.Lister()
 
 	addHandlers(nodeInf.Informer(), w.onNode, w.onNodeDeleted)
 	addHandlers(nsInf.Informer(), w.onNamespace, w.onNamespaceDeleted)
 	addHandlers(depInf.Informer(), w.onDeployment, w.onDeploymentDeleted)
 	addHandlers(podInf.Informer(), w.onPod, w.onPodDeleted)
 	addHandlers(svcInf.Informer(), w.onService, w.onServiceDeleted)
+	addHandlers(ssInf.Informer(), func(ss *appsv1.StatefulSet) { w.onWorkload(ConvertStatefulSet(ss)) }, func(ss *appsv1.StatefulSet) { w.onWorkloadDeleted(gen.WorkloadKindStatefulSet, ss.Namespace, ss.Name) })
+	addHandlers(dsInf.Informer(), func(ds *appsv1.DaemonSet) { w.onWorkload(ConvertDaemonSet(ds)) }, func(ds *appsv1.DaemonSet) { w.onWorkloadDeleted(gen.WorkloadKindDaemonSet, ds.Namespace, ds.Name) })
+	addHandlers(jobInf.Informer(), func(j *batchv1.Job) { w.onWorkload(ConvertJob(j)) }, func(j *batchv1.Job) { w.onWorkloadDeleted(gen.WorkloadKindJob, j.Namespace, j.Name) })
 	_, _ = podInf.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		UpdateFunc: func(oldObj, _ any) { w.onPodMoved(oldObj) },
 	})
@@ -200,6 +214,22 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 		Pods:        []gen.Pod{},
 		Releases:    []gen.HelmRelease{},
 		Services:    []gen.Service{},
+		Workloads:   []gen.Workload{},
+	}
+	if sss, err := w.statefulsets.List(labels.Everything()); err == nil {
+		for _, ss := range sss {
+			snap.Workloads = append(snap.Workloads, ConvertStatefulSet(ss))
+		}
+	}
+	if dss, err := w.daemonsets.List(labels.Everything()); err == nil {
+		for _, ds := range dss {
+			snap.Workloads = append(snap.Workloads, ConvertDaemonSet(ds))
+		}
+	}
+	if jobs, err := w.jobs.List(labels.Everything()); err == nil {
+		for _, j := range jobs {
+			snap.Workloads = append(snap.Workloads, ConvertJob(j))
+		}
 	}
 	if svcs, err := w.services.List(labels.Everything()); err == nil {
 		for _, s := range svcs {
@@ -240,6 +270,10 @@ func (w *Watcher) Snapshot() gen.Snapshot {
 	sort.Slice(snap.Services, func(i, j int) bool {
 		a, b := snap.Services[i], snap.Services[j]
 		return a.Ns < b.Ns || (a.Ns == b.Ns && a.Name < b.Name)
+	})
+	sort.Slice(snap.Workloads, func(i, j int) bool {
+		a, b := snap.Workloads[i], snap.Workloads[j]
+		return a.Kind < b.Kind || (a.Kind == b.Kind && (a.Ns < b.Ns || (a.Ns == b.Ns && a.Name < b.Name)))
 	})
 	return snap
 }
@@ -373,6 +407,14 @@ func (w *Watcher) republishNode(name string) {
 		return
 	}
 	w.onNode(n)
+}
+
+func (w *Watcher) onWorkload(wl gen.Workload) {
+	w.publish(gen.WsMessageTypeModified, wl)
+}
+
+func (w *Watcher) onWorkloadDeleted(kind gen.WorkloadKind, ns, name string) {
+	w.publish(gen.WsMessageTypeDeleted, gen.Workload{Kind: kind, Ns: ns, Name: name, Conditions: []gen.Condition{}})
 }
 
 func (w *Watcher) onService(svc *corev1.Service) {

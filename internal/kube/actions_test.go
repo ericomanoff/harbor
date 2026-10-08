@@ -112,3 +112,38 @@ func TestCreateScaleAndMapPosAgainstFake(t *testing.T) {
 		t.Error("deleting twice should fail with NotFound")
 	}
 }
+
+func TestWorkloadActions(t *testing.T) {
+	ctx := context.Background()
+	one := int32(1)
+	client := fake.NewClientset(
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "a"}, Spec: appsv1.StatefulSetSpec{Replicas: &one}},
+		&appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "agent", Namespace: "a"}},
+	)
+	if err := ScaleStatefulSet(ctx, client, "a", "db", 3); err != nil {
+		t.Fatal(err)
+	}
+	ss, _ := client.AppsV1().StatefulSets("a").Get(ctx, "db", metav1.GetOptions{})
+	if *ss.Spec.Replicas != 3 {
+		t.Errorf("replicas = %d", *ss.Spec.Replicas)
+	}
+	if err := SetWorkloadMapPos(ctx, client, gen.WorkloadKindStatefulSet, "a", "db", gen.MapPos{X: 2, Y: 5}); err != nil {
+		t.Fatal(err)
+	}
+	ss, _ = client.AppsV1().StatefulSets("a").Get(ctx, "db", metav1.GetOptions{})
+	if ss.Annotations[MapPosAnnotation] != "2,5" {
+		t.Errorf("mappos = %q", ss.Annotations[MapPosAnnotation])
+	}
+	if err := SetWorkloadMapPos(ctx, client, gen.WorkloadKindDaemonSet, "a", "agent", gen.MapPos{}); err == nil {
+		t.Error("daemonsets have no structure to place")
+	}
+	if err := DeleteWorkload(ctx, client, gen.WorkloadKindDaemonSet, "a", "agent"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.AppsV1().DaemonSets("a").Get(ctx, "agent", metav1.GetOptions{}); err == nil {
+		t.Error("daemonset should be gone")
+	}
+	if err := DeleteWorkload(ctx, client, gen.WorkloadKindJob, "a", "nope"); err == nil {
+		t.Error("deleting a missing job should fail")
+	}
+}

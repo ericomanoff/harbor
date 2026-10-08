@@ -165,3 +165,39 @@ func PodLogs(ctx context.Context, client kubernetes.Interface, ns, name, contain
 	}
 	return client.CoreV1().Pods(ns).GetLogs(name, opts).Stream(ctx)
 }
+
+// ScaleStatefulSet sets replicas; StatefulSets retire the highest ordinal first.
+func ScaleStatefulSet(ctx context.Context, client kubernetes.Interface, ns, name string, replicas int) error {
+	if replicas < 0 {
+		return invalid("replicas must be >= 0")
+	}
+	patch, _ := json.Marshal(map[string]any{"spec": map[string]any{"replicas": replicas}})
+	_, err := client.AppsV1().StatefulSets(ns).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	return err
+}
+
+// DeleteWorkload removes a StatefulSet, DaemonSet or Job with its pods.
+func DeleteWorkload(ctx context.Context, client kubernetes.Interface, kind gen.WorkloadKind, ns, name string) error {
+	policy := metav1.DeletePropagationBackground
+	opts := metav1.DeleteOptions{PropagationPolicy: &policy}
+	switch kind {
+	case gen.WorkloadKindStatefulSet:
+		return client.AppsV1().StatefulSets(ns).Delete(ctx, name, opts)
+	case gen.WorkloadKindDaemonSet:
+		return client.AppsV1().DaemonSets(ns).Delete(ctx, name, opts)
+	case gen.WorkloadKindJob:
+		return client.BatchV1().Jobs(ns).Delete(ctx, name, opts)
+	default:
+		return invalid("unknown workload kind %q", kind)
+	}
+}
+
+// SetWorkloadMapPos stores a StatefulSet structure's tile; other kinds have no structure.
+func SetWorkloadMapPos(ctx context.Context, client kubernetes.Interface, kind gen.WorkloadKind, ns, name string, mp gen.MapPos) error {
+	if kind != gen.WorkloadKindStatefulSet {
+		return invalid("%s has no structure to place", kind)
+	}
+	patch := annotationPatch(MapPosAnnotation, FormatMapPos(mp))
+	_, err := client.AppsV1().StatefulSets(ns).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	return err
+}

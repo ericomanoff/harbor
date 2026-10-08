@@ -114,6 +114,57 @@ func waitRelease(t *testing.T, ch <-chan gen.WsMessage, pred func(gen.HelmReleas
 	}
 }
 
+func TestWatcherTracksWorkloads(t *testing.T) {
+	one := int32(1)
+	ctrl := true
+	objs := append(testCluster(),
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "sandbox"}, Spec: appsv1.StatefulSetSpec{Replicas: &one}, Status: appsv1.StatefulSetStatus{ReadyReplicas: 1}},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "db-0", Namespace: "sandbox", OwnerReferences: []metav1.OwnerReference{{Kind: "StatefulSet", Name: "db", Controller: &ctrl}}},
+			Spec:       corev1.PodSpec{NodeName: "worker-1"}, Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		},
+	)
+	client := fake.NewClientset(objs...)
+	hub := NewHub()
+	w := NewWatcher("test", client, hub)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := w.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer w.Stop()
+	snap := w.Snapshot()
+	if len(snap.Workloads) != 1 || snap.Workloads[0].Kind != gen.WorkloadKindStatefulSet || snap.Workloads[0].Name != "db" {
+		t.Fatalf("workloads = %+v", snap.Workloads)
+	}
+	var tanker *gen.Pod
+	for i := range snap.Pods {
+		if snap.Pods[i].Name == "db-0" {
+			tanker = &snap.Pods[i]
+		}
+	}
+	if tanker == nil || tanker.OwnerKind == nil || *tanker.OwnerKind != "StatefulSet" || tanker.Deployment != nil {
+		t.Errorf("tanker = %+v", tanker)
+	}
+
+	ch, unsub := hub.Subscribe(64)
+	defer unsub()
+	if err := client.AppsV1().StatefulSets("sandbox").Delete(ctx, "db", metav1.DeleteOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case m := <-ch:
+			if m.Kind == gen.WsMessageKindWorkload && m.Type == gen.WsMessageTypeDeleted {
+				return
+			}
+		case <-deadline:
+			t.Fatal("no deleted Workload message")
+		}
+	}
+}
+
 func startWatcher(t *testing.T) (*Watcher, *fake.Clientset, *Hub) {
 	t.Helper()
 	client := fake.NewClientset(testCluster()...)

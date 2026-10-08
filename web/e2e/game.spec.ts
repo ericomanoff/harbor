@@ -20,17 +20,6 @@ const action = (i: number): string => `#hud .selection button[data-action="${i}"
 const NS = 'default';
 const NAME = `e2e-${Date.now().toString(36)}`;
 
-declare global {
-  interface Window {
-    harbor: {
-      store: { context: string; deployments: Map<string, unknown>; pods: Map<string, unknown> };
-      selection: { keys: Set<string> };
-      mode: { current: string };
-      game: { scene: { keys: Record<string, unknown> } };
-    };
-  }
-}
-
 function kubectl(...args: string[]): string {
   return execFileSync('kubectl', ['--context', 'kind-harbor', ...args], { encoding: 'utf8' });
 }
@@ -80,6 +69,10 @@ async function podsOf(page: Page): Promise<{ name: string; ready: boolean }[]> {
     NAME,
   );
 }
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('harbor.tour.v1', 'done'));
+});
 
 test.afterEach(() => {
   try {

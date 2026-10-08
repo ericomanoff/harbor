@@ -5,6 +5,10 @@ import { expect, test } from '@playwright/test';
  * this file and are platform-specific (fonts, GPU): regenerate with
  * `make test-visual-update` on the machine that will run them.
  */
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('harbor.tour.v1', 'done'));
+});
+
 test.describe('visual', () => {
   test('style page', async ({ page }) => {
     await page.setViewportSize({ width: 1320, height: 600 });

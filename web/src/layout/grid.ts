@@ -1,4 +1,4 @@
-import type { Deployment, Node, Pod, Service } from '../store/cluster';
+import type { Deployment, Node, Pod, Service, Workload } from '../store/cluster';
 import { podsForService } from '../game/selector';
 import { nsKey } from '../store/cluster';
 import { hashString } from './hash';
@@ -46,6 +46,33 @@ export interface ReleaseBox {
   y: number;
   w: number;
   h: number;
+}
+
+/** Anything that gets a 3x3 structure cell: Deployments and StatefulSets. */
+export interface Structure {
+  /** Placement key: "ns/name" for Deployments, "sts:ns/name" for StatefulSets. */
+  key: string;
+  ns: string;
+  name: string;
+  mapPos?: { x: number; y: number };
+  release?: string;
+}
+
+export function structuresOf(deployments: Iterable<Deployment>, workloads: Iterable<Workload>): Structure[] {
+  const out: Structure[] = [];
+  for (const d of deployments) out.push({ key: nsKey(d.ns, d.name), ns: d.ns, name: d.name, ...(d.mapPos ? { mapPos: d.mapPos } : {}), ...(d.release ? { release: d.release } : {}) });
+  for (const w of workloads) {
+    if (w.kind !== 'StatefulSet') continue;
+    out.push({ key: `sts:${nsKey(w.ns, w.name)}`, ns: w.ns, name: w.name, ...(w.mapPos ? { mapPos: w.mapPos } : {}), ...(w.release ? { release: w.release } : {}) });
+  }
+  return out;
+}
+
+/** The structure a pod belongs to, by placement key, if it has one. */
+export function structureKeyOf(pod: Pod): string | undefined {
+  if (pod.deployment) return nsKey(pod.ns, pod.deployment);
+  if (pod.ownerKind === 'StatefulSet' && pod.ownerName) return `sts:${nsKey(pod.ns, pod.ownerName)}`;
+  return undefined;
 }
 
 export interface MapLayout {
@@ -128,7 +155,8 @@ function claimFrom(taken: Set<number>, count: number, start: number): number {
  * yields the same picture, and adding one object moves nothing else unless
  * a hash collision forces a probe.
  */
-export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Pod[], services: Service[] = []): MapLayout {
+export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Pod[], services: Service[] = [], workloads: Workload[] = []): MapLayout {
+  const structures = structuresOf(deployments, workloads);
   const plateaus = layoutPlateaus(nodes);
   const right = plateaus.reduce((m, p) => Math.max(m, p.x + p.w), 0);
   const bottom = plateaus.reduce((m, p) => Math.max(m, p.y + p.h), 0);
@@ -141,23 +169,23 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
   const cells = plateaus.flatMap((p) => buildingCells(p).map((c) => ({ ...c, plateau: p.node })));
   const takenCells = new Set<number>();
   const buildings = new Map<string, Placement>();
-  const sortedDeps = [...deployments].sort((a, b) => nsKey(a.ns, a.name).localeCompare(nsKey(b.ns, b.name)));
+  const sortedDeps = [...structures].sort((a, b) => a.key.localeCompare(b.key));
   for (const d of sortedDeps) {
     if (!d.mapPos) continue;
     const idx = cells.findIndex((c) => c.x === d.mapPos?.x && c.y === d.mapPos?.y);
     if (idx >= 0 && !takenCells.has(idx)) {
       takenCells.add(idx);
       const c = cells[idx]!;
-      buildings.set(nsKey(d.ns, d.name), { x: c.x, y: c.y, kind: 'plateau', plateau: c.plateau });
+      buildings.set(d.key, { x: c.x, y: c.y, kind: 'plateau', plateau: c.plateau });
     }
   }
   const voidTaken = new Set<number>();
   const voidCols = Math.max(1, Math.floor((width - 2 * MARGIN) / BUILD_CELL));
   // Release members are placed as a block: the first by hash, the rest in
   // the next free cells, so a base expansion reads as one compound.
-  const groups = new Map<string, Deployment[]>();
+  const groups = new Map<string, Structure[]>();
   for (const d of sortedDeps) {
-    if (!d.release || buildings.has(nsKey(d.ns, d.name))) continue;
+    if (!d.release || buildings.has(d.key)) continue;
     const gk = nsKey(d.ns, d.release);
     groups.set(gk, [...(groups.get(gk) ?? []), d]);
   }
@@ -167,12 +195,12 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
       const idx = claimFrom(takenCells, cells.length, Math.max(0, next));
       if (idx < 0) break;
       const c = cells[idx]!;
-      buildings.set(nsKey(d.ns, d.name), { x: c.x, y: c.y, kind: 'plateau', plateau: c.plateau });
+      buildings.set(d.key, { x: c.x, y: c.y, kind: 'plateau', plateau: c.plateau });
       next = idx + 1;
     }
   }
   for (const d of sortedDeps) {
-    const key = nsKey(d.ns, d.name);
+    const key = d.key;
     if (buildings.has(key)) continue;
     const idx = claim(takenCells, cells.length, key);
     if (idx >= 0) {
@@ -230,9 +258,10 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
         continue;
       }
     }
-    const building = p.deployment ? buildings.get(nsKey(p.ns, p.deployment)) : undefined;
-    if (!p.node && building) {
-      const bk = nsKey(p.ns, p.deployment!);
+    const sk = structureKeyOf(p);
+    const building = sk ? buildings.get(sk) : undefined;
+    if (!p.node && building && sk) {
+      const bk = sk;
       const n = queueCount.get(bk) ?? 0;
       queueCount.set(bk, n + 1);
       units.set(key, { x: building.x + BUILD_CELL, y: building.y + (n % BUILD_CELL), kind: 'queue' });
@@ -247,7 +276,7 @@ export function computeLayout(nodes: Node[], deployments: Deployment[], pods: Po
   const releases = new Map<string, ReleaseBox>();
   for (const d of sortedDeps) {
     if (!d.release) continue;
-    const b = buildings.get(nsKey(d.ns, d.name));
+    const b = buildings.get(d.key);
     if (!b || b.kind !== 'plateau') continue;
     const key = nsKey(d.ns, d.release);
     const cur = releases.get(key);
