@@ -184,6 +184,73 @@ all four test layers, demo mode, `make dist`.
   had been dead since Phase 5 (their hit-tests were spliced against a loop
   that had already moved). Fixed; the tour spec now guards it.
 
+### V6: Loading screen — PLAN (2026-10-08)
+
+What is left of the old theme: `BootScene` paints a radar-green box with a
+monospace "HARBOR" and "ESTABLISHING BATTLEFIELD CONTROL...", the Go
+placeholder page (served when no frontend build is embedded) is green on
+black monospace, and `config.ts` still exports the C&C `PALETTE` and
+`FONT` that only the boot scene uses. The page has no favicon.
+
+Target: the loading screen is the harbor's front door. It should look like
+the game before the game loads, say what is happening in harbor speak, and
+fail honestly when the backend is unreachable.
+
+Design
+- HTML, not canvas. A `#splash` layer in `index.html` is visible from the
+  very first paint, before Phaser and the atlases exist, and fades out when
+  the map scene is ready. Same approach as the HUD, same tokens
+  (`hud.css`), Nunito as soon as the font arrives (system sans until then).
+- Look: full-screen sea gradient (`--sea` to `--sea-deep`) with two CSS
+  wave bands drifting at different speeds; a cream card in the centre with
+  an anchor mark, the wordmark "Harbor" (Nunito 900), the subtitle "your
+  Kubernetes harbor", a progress bar styled like the BERTHS bar, and one
+  line of status under it. Version from `/api/healthz` in small print.
+- Stages and their lines (the status text is a pure function of a stage
+  enum so it can be unit tested):
+  1. `assets`  — "Loading the charts…" (Phaser loader progress 0-70%)
+  2. `fonts`   — "Hoisting the flags…" (Nunito ready, capped at 1.5 s)
+  3. `backend` — "Hailing the harbor master…" (`/api/healthz`, then
+     `/api/contexts` to name the harbor: "Hailing kind-harbor…")
+  4. `sail`    — "Sailing in…" (map scene starting, then fade)
+  Failure state: when `/api/healthz` does not answer within 4 s, the bar
+  turns red with "No harbor in sight. Is the harbor binary running?" and
+  Retry / Demo harbor buttons (Demo loads `?demo`). Demo mode skips the
+  backend stage. `?style` skips the splash entirely.
+- Minimum display of 600 ms so a fast load does not flash; the fade is
+  350 ms; `prefers-reduced-motion` disables the wave drift.
+- The harbor master gets a cameo: a rotating nautical tip under the bar
+  ("Tip: Tab cycles the selection", "Tip: drag a shipyard to move it", …),
+  drawn from a small list; the same list later feeds an idle hint in the HUD.
+
+Changes
+- `web/index.html`: `#splash` markup; `<title>Harbor</title>`; an anchor
+  favicon as an inline SVG data URI (no file, no licence question).
+- `web/src/boot/splash.ts`: `Splash` class (`setStage`, `setProgress`,
+  `fail`, `done`) plus the pure `stageLine(stage, harbor?)` and `tips`.
+- `web/src/scenes/BootScene.ts`: no drawing. `preload` wires
+  `load.on('progress')` to the splash; `create` runs fonts → backend hail →
+  source connect → `scene.start('Map')`; the map scene calls `splash.done()`
+  after its first `rebuild`. Backend hail uses `getHealth` and
+  `contexts.list` with a timeout; demo mode skips it.
+- `web/src/config.ts`: remove `PALETTE` and `FONT`; keep `SEA` and
+  `MAP_FONT`. `GAME_WIDTH/HEIGHT` stay for the style page.
+- `internal/assets/embed.go`: the placeholder page becomes a cream card on
+  a sea gradient with the same wording ("No charts aboard: run make web").
+- `README.md`: mention the demo harbor button and `?notour`.
+
+Tests
+- Vitest: `stageLine` for every stage, with and without a harbor name;
+  tips cycle without repeating consecutively.
+- Playwright: `visual.spec.ts` snapshots the splash at the `backend` stage
+  with the backend stubbed slow (`page.route` on `/api/healthz`), and the
+  failure state; `game.spec.ts` asserts the splash is hidden once the HUD
+  shows. Go: a handler test that the placeholder page mentions `make web`.
+
+Effort: about one session. Risks: none architectural; the one judgment call
+is the failure state, which must not trap the user when they only wanted
+the demo (hence the Demo harbor button).
+
 ## 6. Risks
 
 | Risk | Mitigation |
