@@ -77,6 +77,9 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(() => {
   try {
     kubectl('delete', 'deployment', NAME, '-n', NS, '--ignore-not-found');
+    kubectl('delete', 'statefulset', `${NAME}-db`, '-n', NS, '--ignore-not-found');
+    kubectl('delete', 'service', `${NAME}-db`, '-n', NS, '--ignore-not-found');
+    kubectl('delete', 'ingress', `${NAME}-gate`, '-n', NS, '--ignore-not-found');
   } catch {
     /* cluster gone; nothing to clean */
   }
@@ -245,4 +248,73 @@ test('build, order, sell, repair and sell the structure', async ({ page }) => {
   await page.locator(action(2)).click();
   await page.waitForFunction((key) => !window.harbor.store.deployments.has(key), `${NS}/${NAME}`, { timeout: 60_000 });
   expect(() => kubectl('get', 'deployment', NAME, '-n', NS)).toThrow();
+});
+
+test('build a tanker terminal and open a gate from the shop', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => window.harbor?.store.context === 'kind-harbor', null, { timeout: 30_000 })
+    .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
+  await page.waitForFunction(() => !document.getElementById('hud')?.hidden && document.getElementById('splash')?.hidden);
+
+  // Terminal: place it like a shipyard, with 1 Gi of storage per tanker.
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=terminal] button').click();
+  await expect.poll(() => page.evaluate(() => window.harbor.mode.current)).toBe('place');
+  const cell = await page.evaluate(() => {
+    const m = window.harbor.game.scene.keys.Map as {
+      layout: { plateaus: { x: number; y: number; w: number }[]; buildings: Map<string, { x: number; y: number; kind: string }> };
+    };
+    const taken = new Set([...m.layout.buildings.values()].filter((b) => b.kind === 'plateau').map((b) => `${b.x},${b.y}`));
+    for (const p of m.layout.plateaus) {
+      const cols = Math.floor((p.w - 2) / 3);
+      for (let r = 0; r < 2; r++) for (let c = 0; c < cols; c++) {
+        const x = p.x + 1 + c * 3;
+        const y = p.y + 1 + r * 3;
+        if (!taken.has(`${x},${y}`)) return { x, y };
+      }
+    }
+    throw new Error('no free cell');
+  });
+  const at = await focus(page, cell.x * TILE + TILE * 1.5, cell.y * TILE + TILE * 1.5);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.click(at.x, at.y);
+  const form = page.locator('#build-form');
+  await expect(form).toBeVisible();
+  await expect(form.locator('h2 .kind')).toHaveText('TANKER TERMINAL');
+  await form.locator('select[name=ns]').selectOption(NS);
+  await form.locator('input[name=name]').fill(`${NAME}-db`);
+  await form.locator('input[name=replicas]').fill('1');
+  await form.locator('input[name=port]').fill('5432');
+  await form.locator('input[name=storage]').fill('100Mi');
+  await form.locator('button[type=submit]').click();
+  await expect(form).toBeHidden();
+  await page.waitForFunction((key) => {
+    const w = (window.harbor.store as unknown as { workloads: Map<string, { ready: number }> }).workloads.get(key);
+    return w?.ready === 1;
+  }, `StatefulSet:${NS}/${NAME}-db`, { timeout: 180_000 });
+  expect(kubectl('get', 'service', `${NAME}-db`, '-n', NS, '-o', 'jsonpath={.spec.clusterIP}')).toBe('None');
+
+  // Gate: a host rule to the terminal's headless service.
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=gate] button').click();
+  const gate = page.locator('#gate-form');
+  await expect(gate).toBeVisible();
+  await gate.locator('select[name=ns]').selectOption(NS);
+  await gate.locator('input[name=name]').fill(`${NAME}-gate`);
+  await gate.locator('input[name=host]').fill('tankers.example');
+  await gate.locator('select[name=service]').selectOption(`${NAME}-db`);
+  await gate.locator('input[name=tls]').check();
+  await gate.locator('button[type=submit]').click();
+  await expect(gate).toBeHidden();
+  await page.waitForFunction((key) => (window.harbor.store as unknown as { ingresses: Map<string, unknown> }).ingresses.has(key), `${NS}/${NAME}-gate`, { timeout: 60_000 });
+  expect(kubectl('get', 'ingress', `${NAME}-gate`, '-n', NS, '-o', 'jsonpath={.spec.rules[0].host}')).toBe('tankers.example');
+
+  // Sell the terminal from its card; the headless service goes with it.
+  const bAt = await focus(page, cell.x * TILE + TILE * 1.5, cell.y * TILE + TILE * 1.5);
+  await page.mouse.click(bAt.x, bAt.y);
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`b:sts:${NS}/${NAME}-db`]);
+  await page.locator(action(2)).click();
+  await page.locator(action(2)).click();
+  await page.waitForFunction((key) => !(window.harbor.store as unknown as { workloads: Map<string, unknown> }).workloads.has(key), `StatefulSet:${NS}/${NAME}-db`, { timeout: 60_000 });
+  expect(() => kubectl('get', 'service', `${NAME}-db`, '-n', NS)).toThrow();
 });

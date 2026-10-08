@@ -48,10 +48,15 @@ export const settings = {
 export type Mode = 'idle' | 'place';
 
 /** What the pointer does on the map: select things, or place a War Factory. */
+export type PlaceKind = 'Deployment' | 'StatefulSet';
+
 export const mode = {
   current: 'idle' as Mode,
+  /** What a placement will create; shipyard by default. */
+  placeKind: 'Deployment' as PlaceKind,
   changed: new Emitter<Mode>(),
-  set(m: Mode): void {
+  set(m: Mode, kind: PlaceKind = 'Deployment'): void {
+    if (m === 'place') this.placeKind = kind;
     if (this.current === m) return;
     this.current = m;
     this.changed.emit(m);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, createDeployment, deleteDeployment, deletePod, formatHealth, getHealth, helm, scaleDeployment, setMapPos } from './client';
+import { ApiError, createDeployment, createIngress, createStatefulSet, deleteDeployment, deletePod, formatHealth, getHealth, helm, scaleDeployment, setMapPos } from './client';
 
 const fakeFetch = (status: number, body?: unknown) =>
   vi.fn(async () => new Response(body === undefined ? null : JSON.stringify(body), { status })) as unknown as typeof fetch;
@@ -62,6 +62,19 @@ describe('actions', () => {
     const [url, init] = (f as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/deployments/a/web/mappos');
     expect(init.method).toBe('PATCH');
+  });
+});
+
+describe('create forms', () => {
+  it('post terminals and gates as JSON', async () => {
+    const f = fakeFetch(201, {});
+    await createStatefulSet({ ns: 'a', name: 'db', image: 'pg', replicas: 1, storage: '1Gi' }, f);
+    await createIngress({ ns: 'a', name: 'gate', service: 'web', port: '80', tls: true }, f);
+    const calls = (f as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+    expect(calls[0]?.[0]).toBe('/api/workloads/statefulsets');
+    expect(JSON.parse(calls[0]?.[1].body as string)).toMatchObject({ name: 'db', storage: '1Gi' });
+    expect(calls[1]?.[0]).toBe('/api/ingresses');
+    expect(JSON.parse(calls[1]?.[1].body as string)).toMatchObject({ service: 'web', port: '80', tls: true });
   });
 });
 

@@ -147,3 +147,89 @@ func TestWorkloadActions(t *testing.T) {
 		t.Error("deleting a missing job should fail")
 	}
 }
+
+func TestBuildStatefulSet(t *testing.T) {
+	ss, svc, err := BuildStatefulSet(gen.CreateStatefulSetRequest{
+		Ns: "a", Name: "db", Image: "postgres:16", Replicas: 2, Port: ptr(5432),
+		Storage: ptr("1Gi"), MountPath: ptr("/var/lib/pg"), StorageClass: ptr("standard"), MapPos: &gen.MapPos{X: 1, Y: 2},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *ss.Spec.Replicas != 2 || ss.Spec.ServiceName != "db" || ss.Spec.Selector.MatchLabels["app"] != "db" || ss.Annotations[MapPosAnnotation] != "1,2" {
+		t.Errorf("statefulset = %+v", ss.Spec)
+	}
+	c := ss.Spec.Template.Spec.Containers[0]
+	if c.Ports[0].ContainerPort != 5432 || c.VolumeMounts[0].MountPath != "/var/lib/pg" || c.VolumeMounts[0].Name != "data" {
+		t.Errorf("container = %+v", c)
+	}
+	if len(ss.Spec.VolumeClaimTemplates) != 1 || *ss.Spec.VolumeClaimTemplates[0].Spec.StorageClassName != "standard" {
+		t.Errorf("claims = %+v", ss.Spec.VolumeClaimTemplates)
+	}
+	if svc.Spec.ClusterIP != "None" || svc.Spec.Selector["app"] != "db" || svc.Spec.Ports[0].Port != 5432 || svc.Labels[ManagedByLabel] != "harbor" {
+		t.Errorf("headless service = %+v", svc.Spec)
+	}
+	plain, _, err := BuildStatefulSet(gen.CreateStatefulSetRequest{Ns: "a", Name: "db", Image: "x", Replicas: 1})
+	if err != nil || len(plain.Spec.VolumeClaimTemplates) != 0 || len(plain.Spec.Template.Spec.Containers[0].VolumeMounts) != 0 {
+		t.Errorf("no storage requested but got claims: %v (%v)", plain.Spec.VolumeClaimTemplates, err)
+	}
+	for name, req := range map[string]gen.CreateStatefulSetRequest{
+		"bad storage": {Ns: "a", Name: "db", Image: "x", Replicas: 1, Storage: ptr("lots")},
+		"bad mount":   {Ns: "a", Name: "db", Image: "x", Replicas: 1, Storage: ptr("1Gi"), MountPath: ptr("data")},
+		"bad name":    {Ns: "a", Name: "DB", Image: "x", Replicas: 1},
+	} {
+		if _, _, err := BuildStatefulSet(req); err == nil {
+			t.Errorf("%s: expected a validation error", name)
+		}
+	}
+}
+
+func TestCreateAndDeleteStatefulSetWithHeadlessService(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewClientset()
+	if _, err := CreateStatefulSet(ctx, client, gen.CreateStatefulSetRequest{Ns: "a", Name: "db", Image: "x", Replicas: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CoreV1().Services("a").Get(ctx, "db", metav1.GetOptions{}); err != nil {
+		t.Fatalf("headless service missing: %v", err)
+	}
+	// Creating again reuses the service and fails on the StatefulSet.
+	if _, err := CreateStatefulSet(ctx, client, gen.CreateStatefulSetRequest{Ns: "a", Name: "db", Image: "x", Replicas: 1}); err == nil {
+		t.Error("second create should fail")
+	}
+	if err := DeleteWorkload(ctx, client, gen.WorkloadKindStatefulSet, "a", "db"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CoreV1().Services("a").Get(ctx, "db", metav1.GetOptions{}); err == nil {
+		t.Error("the headless service harbor created should go with the terminal")
+	}
+}
+
+func TestBuildIngress(t *testing.T) {
+	ing, err := BuildIngress(gen.CreateIngressRequest{Ns: "a", Name: "gate", Host: ptr("shop.example"), Path: ptr("/api"), Service: "api", Port: "http", Class: ptr("nginx"), Tls: ptr(true), TlsSecret: ptr("shop-tls")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule := ing.Spec.Rules[0]
+	if rule.Host != "shop.example" || rule.HTTP.Paths[0].Path != "/api" || rule.HTTP.Paths[0].Backend.Service.Port.Name != "http" || *ing.Spec.IngressClassName != "nginx" {
+		t.Errorf("ingress = %+v", ing.Spec)
+	}
+	if len(ing.Spec.TLS) != 1 || ing.Spec.TLS[0].SecretName != "shop-tls" || ing.Spec.TLS[0].Hosts[0] != "shop.example" {
+		t.Errorf("tls = %+v", ing.Spec.TLS)
+	}
+	num, err := BuildIngress(gen.CreateIngressRequest{Ns: "a", Name: "g", Service: "web", Port: "80"})
+	if err != nil || num.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number != 80 || num.Spec.Rules[0].HTTP.Paths[0].Path != "/" || num.Spec.Rules[0].Host != "" || len(num.Spec.TLS) != 0 {
+		t.Errorf("numeric port ingress = %+v (%v)", num.Spec, err)
+	}
+	for name, req := range map[string]gen.CreateIngressRequest{
+		"no service": {Ns: "a", Name: "g", Port: "80"},
+		"no port":    {Ns: "a", Name: "g", Service: "web"},
+		"bad port":   {Ns: "a", Name: "g", Service: "web", Port: "99999"},
+		"bad path":   {Ns: "a", Name: "g", Service: "web", Port: "80", Path: ptr("api")},
+		"bad host":   {Ns: "a", Name: "g", Service: "web", Port: "80", Host: ptr("not a host")},
+	} {
+		if _, err := BuildIngress(req); err == nil {
+			t.Errorf("%s: expected a validation error", name)
+		}
+	}
+}

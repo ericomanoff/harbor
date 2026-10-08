@@ -2,8 +2,9 @@ import { helm, type HelmChart } from '../api/client';
 import { mode, store } from '../app';
 import { openOverlay } from '../ui/overlay';
 import { openTechTree } from '../ui/techTree';
+import { openGateForm } from '../ui/gateForm';
 
-type Tab = 'all' | 'shipyards' | 'lighthouses' | 'charts';
+type Tab = 'all' | 'shipyards' | 'harbor' | 'charts';
 
 /** The shop drawer: structures to build and charts to lay down. */
 export function openShop(): void {
@@ -35,9 +36,11 @@ export function openShop(): void {
     tabs.forEach((t) => t.classList.toggle('active', t.dataset['tab'] === tab));
     const out: HTMLElement[] = [];
     if (tab === 'all' || tab === 'shipyards') {
-      out.push(card({ id: 'shipyard', icon: '⚓', title: 'Shipyard', sub: 'Deployment', button: 'Build', kind: 'primary', enabled: store.nodes.size > 0, onClick: () => { close(); mode.set('place'); } }));
+      out.push(card({ id: 'shipyard', icon: '⚓', title: 'Shipyard', sub: 'Deployment', button: 'Build', kind: 'primary', enabled: store.nodes.size > 0, onClick: () => { close(); mode.set('place', 'Deployment'); } }));
+      out.push(card({ id: 'terminal', icon: '🛢️', title: 'Tanker terminal', sub: 'StatefulSet', button: 'Build', kind: 'primary', enabled: store.nodes.size > 0, onClick: () => { close(); mode.set('place', 'StatefulSet'); } }));
     }
-    if (tab === 'all' || tab === 'lighthouses') {
+    if (tab === 'all' || tab === 'harbor') {
+      out.push(card({ id: 'gate', icon: '⛩', title: 'Gate', sub: 'Ingress', button: 'Open', kind: 'primary', enabled: store.services.size > 0, onClick: () => { close(); openGateForm(); } }));
       out.push(card({ icon: '🗼', title: 'Lighthouse', sub: 'Service · soon', button: 'Soon', kind: 'secondary', enabled: false }));
     }
     if (tab === 'all' || tab === 'charts') {

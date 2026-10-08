@@ -77,7 +77,7 @@ html, body {
 .panel input:focus, .panel select:focus {
   border-color: #5cb82a;
 }
-.panel input:invalid {
+.panel input:user-invalid {
   border-color: #e5473a;
 }
 .panel .row {

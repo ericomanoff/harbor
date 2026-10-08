@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { createDeployment, setMapPos, workloads as workloadApi } from '../api/client';
+import { createDeployment, createStatefulSet, setMapPos, workloads as workloadApi, type CreateStatefulSetRequest } from '../api/client';
 import { eva, modal, mode, selection, settings, store } from '../app';
 import { SEA } from '../config';
 import { Hud, type MapApi } from '../hud/hud';
@@ -336,12 +336,15 @@ export class MapScene extends Phaser.Scene implements MapApi {
       const sb = isSystemNamespace(b) ? 1 : 0;
       return sa - sb || a.localeCompare(b);
     });
+    const kind = mode.placeKind;
     openBuildForm({
+      kind,
       namespaces: names,
       defaultNamespace: names.includes('default') ? 'default' : names[0],
       mapPos: { x: cell.x, y: cell.y },
       onSubmit: async (req) => {
-        await createDeployment(req);
+        if (kind === 'StatefulSet') await createStatefulSet(req as CreateStatefulSetRequest);
+        else await createDeployment(req);
         eva.emit(`CONSTRUCTION STARTED: ${req.name}`);
       },
     });

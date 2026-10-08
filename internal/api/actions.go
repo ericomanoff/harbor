@@ -248,3 +248,41 @@ func (s *Server) DeleteIngress(w http.ResponseWriter, r *http.Request, ns gen.Na
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *Server) CreateStatefulSet(w http.ResponseWriter, r *http.Request) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.CreateStatefulSetRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	ss, err := kube.CreateStatefulSet(ctx, cur.Client(), req)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, kube.ConvertStatefulSet(ss))
+}
+
+func (s *Server) CreateIngress(w http.ResponseWriter, r *http.Request) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.CreateIngressRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	ing, err := kube.CreateIngress(ctx, cur.Client(), req)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, kube.ConvertIngress(ing))
+}

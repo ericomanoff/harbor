@@ -106,6 +106,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workloads/statefulsets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Build a tanker terminal (StatefulSet plus its headless Service) */
+        post: operations["createStatefulSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ingresses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Open a gate (create an Ingress) */
+        post: operations["createIngress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workloads/{kind}/{ns}/{name}": {
         parameters: {
             query?: never;
@@ -587,6 +621,38 @@ export interface components {
             /** @description Memory request per pod (e.g. "64Mi"). Defaults to 64Mi. */
             memRequest?: string;
         };
+        CreateStatefulSetRequest: {
+            ns: string;
+            name: string;
+            image: string;
+            replicas: number;
+            port?: number;
+            mapPos?: components["schemas"]["MapPos"];
+            cpuRequest?: string;
+            memRequest?: string;
+            /** @description Size of a persistent volume per tanker (e.g. "1Gi"); empty for none. */
+            storage?: string;
+            /** @description Where the volume mounts; defaults to /data. */
+            mountPath?: string;
+            storageClass?: string;
+        };
+        CreateIngressRequest: {
+            ns: string;
+            name: string;
+            /** @description Empty matches any host. */
+            host?: string;
+            /** @description Defaults to "/". */
+            path?: string;
+            /** @description Backend Service name (a lighthouse in the same namespace). */
+            service: string;
+            /** @description Service port number or name. */
+            port: string;
+            /** @description IngressClass name, optional. */
+            class?: string;
+            tls?: boolean;
+            /** @description TLS secret name, optional even when tls is true. */
+            tlsSecret?: string;
+        };
         ScaleRequest: {
             replicas: number;
             /** @description Pod names to retire first when scaling down ("sell this unit"). Implemented with the controller.kubernetes.io/pod-deletion-cost annotation, so the ReplicaSet removes these before any others. */
@@ -810,6 +876,56 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createStatefulSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStatefulSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workload"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createIngress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIngressRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ingress"];
+                };
             };
             default: components["responses"]["Error"];
         };

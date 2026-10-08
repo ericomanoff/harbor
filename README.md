@@ -43,8 +43,10 @@ context, Find (or `/`) locates, Fleets (or F) filters namespaces, the bell
 (or M) toggles sound, Tab cycles the selection, Esc cancels or clears. The
 selection card at the bottom carries the actions for whatever is selected.
 
-Playing: open the Shop, Build a shipyard on a free slipway (the land rows of
-an island) and fill in the form to create a Deployment. Select the shipyard
+Playing: open the Shop, Build a shipyard (Deployment) or a tanker terminal
+(StatefulSet with its headless Service and an optional volume per tanker) on
+a free slipway (the land rows of an island) and fill in the form. The Harbor
+tab opens a gate: an Ingress with one host and path pointing at a lighthouse. Select the shipyard
 to Launch or Scrap ships (scale replicas) or Sell it (confirm twice). Select
 ships to Scrap exactly those pods, Refit them (delete so the ReplicaSet
 replaces them), or read the Ship's log. Ships from an old rollout look

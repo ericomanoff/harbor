@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 
@@ -182,7 +186,13 @@ func DeleteWorkload(ctx context.Context, client kubernetes.Interface, kind gen.W
 	opts := metav1.DeleteOptions{PropagationPolicy: &policy}
 	switch kind {
 	case gen.WorkloadKindStatefulSet:
-		return client.AppsV1().StatefulSets(ns).Delete(ctx, name, opts)
+		if err := client.AppsV1().StatefulSets(ns).Delete(ctx, name, opts); err != nil {
+			return err
+		}
+		if svc, err := client.CoreV1().Services(ns).Get(ctx, name, metav1.GetOptions{}); err == nil && svc.Labels[ManagedByLabel] == managedByValue {
+			_ = client.CoreV1().Services(ns).Delete(ctx, name, metav1.DeleteOptions{})
+		}
+		return nil
 	case gen.WorkloadKindDaemonSet:
 		return client.AppsV1().DaemonSets(ns).Delete(ctx, name, opts)
 	case gen.WorkloadKindJob:
@@ -205,4 +215,200 @@ func SetWorkloadMapPos(ctx context.Context, client kubernetes.Interface, kind ge
 // DeleteIngress closes a gate.
 func DeleteIngress(ctx context.Context, client kubernetes.Interface, ns, name string) error {
 	return client.NetworkingV1().Ingresses(ns).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+const (
+	defaultMountPath = "/data"
+	volumeName       = "data"
+)
+
+// BuildStatefulSet turns a create request into a StatefulSet and the
+// headless Service that governs it.
+func BuildStatefulSet(req gen.CreateStatefulSetRequest) (*appsv1.StatefulSet, *corev1.Service, error) {
+	if errs := validation.IsDNS1123Label(req.Name); len(errs) > 0 {
+		return nil, nil, invalid("name %q: %s", req.Name, strings.Join(errs, "; "))
+	}
+	if errs := validation.IsDNS1123Label(req.Ns); len(errs) > 0 {
+		return nil, nil, invalid("namespace %q: %s", req.Ns, strings.Join(errs, "; "))
+	}
+	if strings.TrimSpace(req.Image) == "" {
+		return nil, nil, invalid("image is required")
+	}
+	if req.Replicas < 0 {
+		return nil, nil, invalid("replicas must be >= 0")
+	}
+	cpu, mem := defaultCPURequest, defaultMemRequest
+	if req.CpuRequest != nil && *req.CpuRequest != "" {
+		cpu = *req.CpuRequest
+	}
+	if req.MemRequest != nil && *req.MemRequest != "" {
+		mem = *req.MemRequest
+	}
+	cpuQ, err := resource.ParseQuantity(cpu)
+	if err != nil {
+		return nil, nil, invalid("cpuRequest %q: %v", cpu, err)
+	}
+	memQ, err := resource.ParseQuantity(mem)
+	if err != nil {
+		return nil, nil, invalid("memRequest %q: %v", mem, err)
+	}
+	labels := map[string]string{"app": req.Name, ManagedByLabel: managedByValue}
+	annotations := map[string]string{}
+	if req.MapPos != nil {
+		annotations[MapPosAnnotation] = FormatMapPos(*req.MapPos)
+	}
+	container := corev1.Container{
+		Name:  req.Name,
+		Image: strings.TrimSpace(req.Image),
+		Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    cpuQ,
+			corev1.ResourceMemory: memQ,
+		}},
+	}
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: req.Name, Namespace: req.Ns, Labels: labels},
+		Spec:       corev1.ServiceSpec{ClusterIP: corev1.ClusterIPNone, Selector: map[string]string{"app": req.Name}},
+	}
+	if req.Port != nil {
+		if *req.Port < 1 || *req.Port > 65535 {
+			return nil, nil, invalid("port must be 1-65535")
+		}
+		container.Ports = []corev1.ContainerPort{{ContainerPort: int32(*req.Port), Name: "http"}}
+		svc.Spec.Ports = []corev1.ServicePort{{Name: "http", Port: int32(*req.Port), TargetPort: intstr.FromInt32(int32(*req.Port))}}
+	}
+	var claims []corev1.PersistentVolumeClaim
+	if req.Storage != nil && strings.TrimSpace(*req.Storage) != "" {
+		size, err := resource.ParseQuantity(strings.TrimSpace(*req.Storage))
+		if err != nil {
+			return nil, nil, invalid("storage %q: %v", *req.Storage, err)
+		}
+		mount := defaultMountPath
+		if req.MountPath != nil && strings.TrimSpace(*req.MountPath) != "" {
+			mount = strings.TrimSpace(*req.MountPath)
+		}
+		if !strings.HasPrefix(mount, "/") {
+			return nil, nil, invalid("mountPath must be absolute")
+		}
+		claim := corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: volumeName},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources:   corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: size}},
+			},
+		}
+		if req.StorageClass != nil && *req.StorageClass != "" {
+			claim.Spec.StorageClassName = req.StorageClass
+		}
+		claims = []corev1.PersistentVolumeClaim{claim}
+		container.VolumeMounts = []corev1.VolumeMount{{Name: volumeName, MountPath: mount}}
+	}
+	replicas := int32(req.Replicas)
+	ss := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: req.Name, Namespace: req.Ns, Labels: labels, Annotations: annotations},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas:    &replicas,
+			ServiceName: req.Name,
+			Selector:    &metav1.LabelSelector{MatchLabels: map[string]string{"app": req.Name}},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": req.Name}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{container}},
+			},
+			VolumeClaimTemplates: claims,
+		},
+	}
+	return ss, svc, nil
+}
+
+// CreateStatefulSet builds a tanker terminal: the headless Service first,
+// then the StatefulSet. An existing Service with the same name is reused.
+func CreateStatefulSet(ctx context.Context, client kubernetes.Interface, req gen.CreateStatefulSetRequest) (*appsv1.StatefulSet, error) {
+	ss, svc, err := BuildStatefulSet(req)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := client.CoreV1().Services(req.Ns).Create(ctx, svc, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return nil, err
+	}
+	return client.AppsV1().StatefulSets(req.Ns).Create(ctx, ss, metav1.CreateOptions{})
+}
+
+// BuildIngress turns a create request into an Ingress manifest.
+func BuildIngress(req gen.CreateIngressRequest) (*netv1.Ingress, error) {
+	if errs := validation.IsDNS1123Subdomain(req.Name); len(errs) > 0 {
+		return nil, invalid("name %q: %s", req.Name, strings.Join(errs, "; "))
+	}
+	if errs := validation.IsDNS1123Label(req.Ns); len(errs) > 0 {
+		return nil, invalid("namespace %q: %s", req.Ns, strings.Join(errs, "; "))
+	}
+	if strings.TrimSpace(req.Service) == "" {
+		return nil, invalid("service (lighthouse) is required")
+	}
+	port := strings.TrimSpace(req.Port)
+	if port == "" {
+		return nil, invalid("port is required")
+	}
+	backend := netv1.IngressServiceBackend{Name: strings.TrimSpace(req.Service)}
+	if n, err := strconv.Atoi(port); err == nil {
+		if n < 1 || n > 65535 {
+			return nil, invalid("port must be 1-65535")
+		}
+		backend.Port.Number = int32(n)
+	} else {
+		if errs := validation.IsValidPortName(port); len(errs) > 0 {
+			return nil, invalid("port %q: %s", port, strings.Join(errs, "; "))
+		}
+		backend.Port.Name = port
+	}
+	host := ""
+	if req.Host != nil {
+		host = strings.TrimSpace(*req.Host)
+	}
+	if host != "" {
+		if errs := validation.IsDNS1123Subdomain(strings.TrimPrefix(host, "*.")); len(errs) > 0 {
+			return nil, invalid("host %q: %s", host, strings.Join(errs, "; "))
+		}
+	}
+	path := "/"
+	if req.Path != nil && strings.TrimSpace(*req.Path) != "" {
+		path = strings.TrimSpace(*req.Path)
+	}
+	if !strings.HasPrefix(path, "/") {
+		return nil, invalid("path must start with /")
+	}
+	pt := netv1.PathTypePrefix
+	ing := &netv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{Name: req.Name, Namespace: req.Ns, Labels: map[string]string{ManagedByLabel: managedByValue}},
+		Spec: netv1.IngressSpec{
+			Rules: []netv1.IngressRule{{
+				Host: host,
+				IngressRuleValue: netv1.IngressRuleValue{HTTP: &netv1.HTTPIngressRuleValue{Paths: []netv1.HTTPIngressPath{{
+					Path: path, PathType: &pt, Backend: netv1.IngressBackend{Service: &backend},
+				}}}},
+			}},
+		},
+	}
+	if req.Class != nil && strings.TrimSpace(*req.Class) != "" {
+		c := strings.TrimSpace(*req.Class)
+		ing.Spec.IngressClassName = &c
+	}
+	if req.Tls != nil && *req.Tls {
+		tls := netv1.IngressTLS{}
+		if host != "" {
+			tls.Hosts = []string{host}
+		}
+		if req.TlsSecret != nil && strings.TrimSpace(*req.TlsSecret) != "" {
+			tls.SecretName = strings.TrimSpace(*req.TlsSecret)
+		}
+		ing.Spec.TLS = []netv1.IngressTLS{tls}
+	}
+	return ing, nil
+}
+
+// CreateIngress opens a gate.
+func CreateIngress(ctx context.Context, client kubernetes.Interface, req gen.CreateIngressRequest) (*netv1.Ingress, error) {
+	ing, err := BuildIngress(req)
+	if err != nil {
+		return nil, err
+	}
+	return client.NetworkingV1().Ingresses(req.Ns).Create(ctx, ing, metav1.CreateOptions{})
 }

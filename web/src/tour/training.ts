@@ -2,7 +2,7 @@ import { eva, link, source, store } from '../app';
 import { demoSnapshot } from '../demo/demo';
 import { connectWebSocket } from '../store/source';
 import { startDemo } from '../demo/demo';
-import { nsKey, type Deployment, type Pod } from '../store/cluster';
+import { nsKey, type Deployment, type Pod, type Workload } from '../store/cluster';
 
 /**
  * Training harbor: the tour runs on demo data, and every API call the HUD
@@ -69,6 +69,29 @@ function scrap(dep: Deployment, names: string[]): void {
 export function simulate(method: string, path: string, body: unknown): unknown {
   const b = (body ?? {}) as Record<string, unknown>;
   let m: RegExpExecArray | null;
+  if (method === 'POST' && path === '/api/workloads/statefulsets') {
+    const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number } };
+    const wl: Workload = { kind: 'StatefulSet', ns: req.ns, name: req.name, image: req.image, desired: req.replicas, ready: 0, conditions: [], ...(req.mapPos ? { mapPos: req.mapPos } : {}) };
+    store.apply({ type: 'modified', kind: 'Workload', obj: wl });
+    for (let i = 0; i < req.replicas; i++) {
+      const name = `${req.name}-${i}`;
+      const tanker = (phase: 'Pending' | 'Running', node: string): Pod => ({ ...podOf(req.ns, name, '', node, phase), ownerKind: 'StatefulSet', ownerName: req.name, labels: { app: req.name }, containers: [req.name] });
+      store.apply({ type: 'modified', kind: 'Pod', obj: tanker('Pending', '') });
+      later(1200 + i * 900, () => {
+        const ns = nodes();
+        store.apply({ type: 'modified', kind: 'Pod', obj: tanker('Running', ns[i % Math.max(1, ns.length)] ?? '') });
+        const cur = store.workloads.get(`StatefulSet:${nsKey(req.ns, req.name)}`);
+        if (cur) store.apply({ type: 'modified', kind: 'Workload', obj: { ...cur, ready: Math.min(cur.desired, cur.ready + 1) } });
+      });
+    }
+    return wl;
+  }
+  if (method === 'POST' && path === '/api/ingresses') {
+    const req = b as { ns: string; name: string; host?: string; path?: string; service: string; port: string; tls?: boolean; class?: string };
+    const ing = { ns: req.ns, name: req.name, hosts: req.host ? [req.host] : [], tls: !!req.tls, addresses: [], rules: [{ host: req.host ?? '', path: req.path ?? '/', service: req.service, port: req.port }], ...(req.class ? { class: req.class } : {}) };
+    store.apply({ type: 'modified', kind: 'Ingress', obj: ing });
+    return ing;
+  }
   if (method === 'POST' && path === '/api/deployments') {
     const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number } };
     const dep: Deployment = { ns: req.ns, name: req.name, image: req.image, replicas: req.replicas, available: 0, updated: 0, conditions: [], ...(req.mapPos ? { mapPos: req.mapPos } : {}) };
@@ -110,6 +133,14 @@ export function simulate(method: string, path: string, body: unknown): unknown {
       const dep = store.deployments.get(nsKey(p.ns, p.deployment));
       if (dep) later(600, () => launch(dep, 1));
     }
+    return undefined;
+  }
+  if ((m = /^\/api\/workloads\/StatefulSet\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'DELETE') {
+    const key = `StatefulSet:${nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!))}`;
+    const wl = store.workloads.get(key);
+    if (!wl) throw new Error('no such terminal');
+    for (const p of [...store.pods.values()].filter((p) => p.ns === wl.ns && p.ownerKind === 'StatefulSet' && p.ownerName === wl.name)) store.apply({ type: 'deleted', kind: 'Pod', obj: p });
+    store.apply({ type: 'deleted', kind: 'Workload', obj: wl });
     return undefined;
   }
   if ((m = /^\/api\/ingresses\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'DELETE') {

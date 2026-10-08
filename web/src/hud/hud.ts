@@ -77,7 +77,10 @@ export class Hud {
 
     store.subscribe((e) => this.onStore(e));
     link.changed.on((s) => this.setLink(s));
-    selection.changed.on(() => this.refreshSelection());
+    selection.changed.on(() => {
+      this.pendingConfirm = undefined;
+      this.refreshSelection();
+    });
     mode.changed.on(() => this.refreshSelection());
     settings.changed.on(() => this.refreshStatus());
     eva.on((line) => this.announce(line));
@@ -202,10 +205,15 @@ export class Hud {
     $('.title', card).textContent = title;
     $('.title', card).style.color = accent !== undefined ? hexString(accent) : 'var(--ink)';
     $('.lines', card).replaceChildren(...lines.filter(Boolean).map((l) => Object.assign(document.createElement('div'), { textContent: l })));
+    // Cards re-render on every store event; an armed confirm must survive
+    // that as long as the same action is still offered.
+    const pending = this.pendingConfirm;
     this.actions = actions;
-    this.pendingConfirm = undefined;
+    if (pending && actions[pending.index]?.confirm !== this.pendingLabel) this.pendingConfirm = undefined;
     this.renderActions();
   }
+
+  private pendingLabel?: string;
 
   private renderActions(): void {
     const box = $('.selection .actions', this.root);
@@ -227,10 +235,12 @@ export class Hud {
     sfx.play('click');
     if (a.confirm && this.pendingConfirm?.index !== i) {
       this.pendingConfirm = { index: i, until: Date.now() + CONFIRM_MS };
+      this.pendingLabel = a.confirm;
       this.renderActions();
       return;
     }
     this.pendingConfirm = undefined;
+    this.pendingLabel = undefined;
     this.renderActions();
     try {
       await a.run();
@@ -251,7 +261,7 @@ export class Hud {
   private refreshSelection(): void {
     const card = $('.selection', this.root);
     if (mode.current === 'place') {
-      this.setCard('Place a shipyard', ['Click a free slipway on an island (the land rows).', 'Green is clear, red is blocked. Right-click or Esc cancels.'],
+      this.setCard(mode.placeKind === 'StatefulSet' ? 'Place a tanker terminal' : 'Place a shipyard', ['Click a free slipway on an island (the land rows).', 'Green is clear, red is blocked. Right-click or Esc cancels.'],
         [{ label: 'Cancel', kind: 'secondary', enabled: true, run: async () => mode.set('idle') }]);
       return;
     }

@@ -81,7 +81,7 @@
     </div>
     <div id="shop" class="overlay bottom" hidden>
       <div class="drawer hud">
-        <div class="tabs"><h3>Shop</h3><span class="tab active" data-tab="all">All</span><span class="tab" data-tab="shipyards">Shipyards</span><span class="tab" data-tab="lighthouses">Lighthouses</span><span class="tab" data-tab="charts">Charts</span><span style="flex:1"></span><button class="pill secondary" data-close>Close</button></div>
+        <div class="tabs"><h3>Shop</h3><span class="tab active" data-tab="all">All</span><span class="tab" data-tab="shipyards">Shipyards</span><span class="tab" data-tab="harbor">Harbor</span><span class="tab" data-tab="charts">Charts</span><span style="flex:1"></span><button class="pill secondary" data-close>Close</button></div>
         <div class="cards"></div>
       </div>
     </div>
@@ -114,7 +114,7 @@
     </div>
     <div id="build-form" class="overlay" hidden>
       <form class="panel" autocomplete="off">
-        <h2>WAR FACTORY <span class="where"></span></h2>
+        <h2><span class="kind">SHIPYARD</span> <span class="where"></span></h2>
         <label>NAMESPACE <select name="ns"></select></label>
         <label>NAME <input name="name" required maxlength="63" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?" placeholder="lowercase, dashes" /></label>
         <label>IMAGE <input name="image" required value="nginx:1.27-alpine" /></label>
@@ -126,9 +126,41 @@
           <label>CPU/UNIT <input name="cpu" value="50m" /></label>
           <label>MEM/UNIT <input name="mem" value="64Mi" /></label>
         </div>
+        <div class="row storage" hidden>
+          <label>STORAGE/TANKER <input name="storage" placeholder="none, or e.g. 1Gi" /></label>
+          <label>MOUNT PATH <input name="mount" placeholder="/data" /></label>
+          <label>STORAGE CLASS <input name="storageClass" placeholder="default" /></label>
+        </div>
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">BUILD</button>
+          <button type="button" data-cancel>CANCEL</button>
+        </div>
+      </form>
+    </div>
+    <div id="gate-form" class="overlay" hidden>
+      <form class="panel" autocomplete="off">
+        <h2>OPEN A GATE <span class="where">Ingress at the harbor mouth</span></h2>
+        <div class="row">
+          <label>NAMESPACE <select name="ns"></select></label>
+          <label>NAME <input name="name" required maxlength="63" pattern="[a-z0-9]([-a-z0-9.]*[a-z0-9])?" placeholder="lowercase, dashes" /></label>
+        </div>
+        <div class="row">
+          <label>HOST <input name="host" placeholder="any host" /></label>
+          <label>PATH <input name="path" value="/" /></label>
+        </div>
+        <div class="row">
+          <label>LIGHTHOUSE (service) <select name="service" required></select></label>
+          <label>PORT <select name="port"></select><input name="portText" placeholder="number or name" hidden /></label>
+        </div>
+        <div class="row">
+          <label>CLASS <input name="class" placeholder="optional, e.g. nginx" /></label>
+          <label>TLS SECRET <input name="tlsSecret" placeholder="optional" /></label>
+        </div>
+        <label class="inline"><input type="checkbox" name="tls" /> TLS (gold chain)</label>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="submit">OPEN GATE</button>
           <button type="button" data-cancel>CANCEL</button>
         </div>
       </form>

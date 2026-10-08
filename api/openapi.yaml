@@ -96,6 +96,46 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/workloads/statefulsets:
+    post:
+      operationId: createStatefulSet
+      summary: Build a tanker terminal (StatefulSet plus its headless Service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStatefulSetRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workload"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/ingresses:
+    post:
+      operationId: createIngress
+      summary: Open a gate (create an Ingress)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIngressRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ingress"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/workloads/{kind}/{ns}/{name}:
     delete:
       operationId: deleteWorkload
@@ -853,6 +893,65 @@ components:
         memRequest:
           type: string
           description: Memory request per pod (e.g. "64Mi"). Defaults to 64Mi.
+
+    CreateStatefulSetRequest:
+      type: object
+      required: [ns, name, image, replicas]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        image:
+          type: string
+        replicas:
+          type: integer
+          minimum: 0
+        port:
+          type: integer
+        mapPos:
+          $ref: "#/components/schemas/MapPos"
+        cpuRequest:
+          type: string
+        memRequest:
+          type: string
+        storage:
+          type: string
+          description: Size of a persistent volume per tanker (e.g. "1Gi"); empty for none.
+        mountPath:
+          type: string
+          description: Where the volume mounts; defaults to /data.
+        storageClass:
+          type: string
+
+    CreateIngressRequest:
+      type: object
+      required: [ns, name, service, port]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        host:
+          type: string
+          description: Empty matches any host.
+        path:
+          type: string
+          description: Defaults to "/".
+        service:
+          type: string
+          description: Backend Service name (a lighthouse in the same namespace).
+        port:
+          type: string
+          description: Service port number or name.
+        class:
+          type: string
+          description: IngressClass name, optional.
+        tls:
+          type: boolean
+        tlsSecret:
+          type: string
+          description: TLS secret name, optional even when tls is true.
 
     ScaleRequest:
       type: object

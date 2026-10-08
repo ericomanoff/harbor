@@ -348,6 +348,46 @@ func TestWorkloadRoutes(t *testing.T) {
 	}
 }
 
+func TestCreateStatefulSetAndIngressRoutes(t *testing.T) {
+	s := fakeServer(t)
+	if err := s.SelectContextByName(context.Background(), "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := do(http.MethodPost, "/api/workloads/statefulsets", `{"ns":"sandbox","name":"db","image":"postgres:16","replicas":2,"port":5432,"storage":"1Gi"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create sts: %d %s", rec.Code, rec.Body.String())
+	}
+	var wl gen.Workload
+	if err := json.Unmarshal(rec.Body.Bytes(), &wl); err != nil || wl.Kind != gen.WorkloadKindStatefulSet || wl.Desired != 2 {
+		t.Errorf("created = %+v (%v)", wl, err)
+	}
+	if rec = do(http.MethodPost, "/api/workloads/statefulsets", `{"ns":"sandbox","name":"db","image":"x","replicas":1,"storage":"lots"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad storage: %d, want 400", rec.Code)
+	}
+	rec = do(http.MethodPost, "/api/ingresses", `{"ns":"sandbox","name":"gate","host":"shop.example","service":"db","port":"5432","tls":true}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create ingress: %d %s", rec.Code, rec.Body.String())
+	}
+	var ing gen.Ingress
+	if err := json.Unmarshal(rec.Body.Bytes(), &ing); err != nil || !ing.Tls || len(ing.Rules) != 1 || ing.Rules[0].Service != "db" {
+		t.Errorf("ingress = %+v (%v)", ing, err)
+	}
+	if rec = do(http.MethodPost, "/api/ingresses", `{"ns":"sandbox","name":"gate","service":"db","port":"5432"}`); rec.Code != http.StatusConflict {
+		t.Errorf("duplicate ingress: %d, want 409", rec.Code)
+	}
+	if rec = do(http.MethodPost, "/api/ingresses", `{"ns":"sandbox","name":"g2","service":"","port":"80"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("missing service: %d, want 400", rec.Code)
+	}
+}
+
 func TestDeleteIngress(t *testing.T) {
 	s := fakeServer(t)
 	ctx := context.Background()

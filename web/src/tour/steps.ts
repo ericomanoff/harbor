@@ -90,7 +90,7 @@ export function tourSteps(): TourStep[] {
     {
       id: 'shop',
       title: 'Building',
-      text: 'New structures come from the Shop: shipyards now, charts from the libraries you add.',
+      text: 'New structures come from the Shop: shipyards and tanker terminals to build, gates to open, and charts from the libraries you add.',
       cta: 'Open the Shop',
       anchor: { kind: 'dom', selector: '#hud [data-shop-open]', placement: 'top' },
       waitFor: () => !document.getElementById('shop')?.hidden,

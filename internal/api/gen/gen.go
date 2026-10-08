@@ -236,6 +236,51 @@ type CreateDeploymentRequest struct {
 	Replicas int  `json:"replicas"`
 }
 
+// CreateIngressRequest defines model for CreateIngressRequest.
+type CreateIngressRequest struct {
+	// Class IngressClass name, optional.
+	Class *string `json:"class,omitempty"`
+
+	// Host Empty matches any host.
+	Host *string `json:"host,omitempty"`
+	Name string  `json:"name"`
+	Ns   string  `json:"ns"`
+
+	// Path Defaults to "/".
+	Path *string `json:"path,omitempty"`
+
+	// Port Service port number or name.
+	Port string `json:"port"`
+
+	// Service Backend Service name (a lighthouse in the same namespace).
+	Service string `json:"service"`
+	Tls     *bool  `json:"tls,omitempty"`
+
+	// TlsSecret TLS secret name, optional even when tls is true.
+	TlsSecret *string `json:"tlsSecret,omitempty"`
+}
+
+// CreateStatefulSetRequest defines model for CreateStatefulSetRequest.
+type CreateStatefulSetRequest struct {
+	CpuRequest *string `json:"cpuRequest,omitempty"`
+	Image      string  `json:"image"`
+
+	// MapPos Tile coordinates on the map grid.
+	MapPos     *MapPos `json:"mapPos,omitempty"`
+	MemRequest *string `json:"memRequest,omitempty"`
+
+	// MountPath Where the volume mounts; defaults to /data.
+	MountPath *string `json:"mountPath,omitempty"`
+	Name      string  `json:"name"`
+	Ns        string  `json:"ns"`
+	Port      *int    `json:"port,omitempty"`
+	Replicas  int     `json:"replicas"`
+
+	// Storage Size of a persistent volume per tanker (e.g. "1Gi"); empty for none.
+	Storage      *string `json:"storage,omitempty"`
+	StorageClass *string `json:"storageClass,omitempty"`
+}
+
 // Deployment defines model for Deployment.
 type Deployment struct {
 	Available  int         `json:"available"`
@@ -602,6 +647,12 @@ type UpgradeHelmReleaseJSONRequestBody = HelmUpgradeRequest
 // AddHelmRepoJSONRequestBody defines body for AddHelmRepo for application/json ContentType.
 type AddHelmRepoJSONRequestBody = HelmRepo
 
+// CreateIngressJSONRequestBody defines body for CreateIngress for application/json ContentType.
+type CreateIngressJSONRequestBody = CreateIngressRequest
+
+// CreateStatefulSetJSONRequestBody defines body for CreateStatefulSet for application/json ContentType.
+type CreateStatefulSetJSONRequestBody = CreateStatefulSetRequest
+
 // SetWorkloadMapPosJSONRequestBody defines body for SetWorkloadMapPos for application/json ContentType.
 type SetWorkloadMapPosJSONRequestBody = MapPos
 
@@ -934,6 +985,9 @@ type ServerInterface interface {
 	// UpdateHelmRepos Refresh every repository index
 	// (POST /api/helm/repos/update)
 	UpdateHelmRepos(w http.ResponseWriter, r *http.Request)
+	// CreateIngress Open a gate (create an Ingress)
+	// (POST /api/ingresses)
+	CreateIngress(w http.ResponseWriter, r *http.Request)
 	// DeleteIngress Close a gate (delete the Ingress)
 	// (DELETE /api/ingresses/{ns}/{name})
 	DeleteIngress(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
@@ -946,6 +1000,9 @@ type ServerInterface interface {
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
+	// CreateStatefulSet Build a tanker terminal (StatefulSet plus its headless Service)
+	// (POST /api/workloads/statefulsets)
+	CreateStatefulSet(w http.ResponseWriter, r *http.Request)
 	// DeleteWorkload Delete a StatefulSet, DaemonSet or Job (and its pods)
 	// (DELETE /api/workloads/{kind}/{ns}/{name})
 	DeleteWorkload(w http.ResponseWriter, r *http.Request, kind DeleteWorkloadParamsKind, ns NamespaceParam, name NameParam)
@@ -1428,6 +1485,20 @@ func (siw *ServerInterfaceWrapper) UpdateHelmRepos(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// CreateIngress operation middleware
+func (siw *ServerInterfaceWrapper) CreateIngress(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIngress(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteIngress operation middleware
 func (siw *ServerInterfaceWrapper) DeleteIngress(w http.ResponseWriter, r *http.Request) {
 
@@ -1567,6 +1638,20 @@ func (siw *ServerInterfaceWrapper) GetSnapshot(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSnapshot(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateStatefulSet operation middleware
+func (siw *ServerInterfaceWrapper) CreateStatefulSet(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateStatefulSet(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1834,6 +1919,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/snapshot", wrapper.GetSnapshot)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/deployments", wrapper.CreateDeployment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/deployments/{ns}/{name}", wrapper.DeleteDeployment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/workloads/statefulsets", wrapper.CreateStatefulSet)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/ingresses", wrapper.CreateIngress)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}", wrapper.DeleteWorkload)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/scale", wrapper.ScaleWorkload)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/mappos", wrapper.SetWorkloadMapPos)

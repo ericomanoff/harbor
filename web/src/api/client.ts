@@ -13,6 +13,10 @@ export type HelmRevision = components['schemas']['HelmRevision'];
 export type HelmInstallRequest = components['schemas']['HelmInstallRequest'];
 export type HelmUpgradeRequest = components['schemas']['HelmUpgradeRequest'];
 export type ContextList = components['schemas']['ContextList'];
+export type CreateStatefulSetRequest = components['schemas']['CreateStatefulSetRequest'];
+export type CreateIngressRequest = components['schemas']['CreateIngressRequest'];
+export type Workload = components['schemas']['Workload'];
+export type Ingress = components['schemas']['Ingress'];
 
 /** An error answer from the backend, with its HTTP status and message. */
 export class ApiError extends Error {
@@ -126,4 +130,12 @@ export const workloads = {
 
 export function deleteIngress(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {
   return request<void>('DELETE', `/api/ingresses/${enc(ns)}/${enc(name)}`, undefined, fetchFn);
+}
+
+export function createStatefulSet(req: CreateStatefulSetRequest, fetchFn: typeof fetch = fetch): Promise<Workload> {
+  return request<Workload>('POST', '/api/workloads/statefulsets', req, fetchFn);
+}
+
+export function createIngress(req: CreateIngressRequest, fetchFn: typeof fetch = fetch): Promise<Ingress> {
+  return request<Ingress>('POST', '/api/ingresses', req, fetchFn);
 }
