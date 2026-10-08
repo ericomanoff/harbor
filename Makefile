@@ -6,6 +6,7 @@
 #   make test      Go tests + frontend tests
 #   make test-kind integration test against the kind cluster
 #   make test-e2e  Playwright plays a round in the real game against kind
+#   make test-visual  screenshot regression of ?style and ?demo (baselines per machine)
 #   make dist      cross-compile binaries for macOS, Linux and Windows into dist/
 #   make kind-up   create the local kind cluster with a sample workload
 #   make kind-down delete it
@@ -15,7 +16,7 @@ VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev
 LDFLAGS  := -X github.com/ericomanoff/harbor/internal/api.Version=$(VERSION)
 KIND_CLUSTER := harbor
 
-.PHONY: all gen web build run dev test test-go test-web test-kind test-e2e kind-up kind-down clean deps dist
+.PHONY: all gen web build run dev test test-go test-web test-kind test-e2e test-visual test-visual-update kind-up kind-down clean deps dist
 
 all: build
 
@@ -60,7 +61,14 @@ test-kind:
 
 # End-to-end: Playwright drives the built game against the binary and kind.
 test-e2e: build
-	cd web && npx playwright test
+	cd web && npx playwright test game.spec.ts
+
+# Visual snapshots of the style page and the demo harbor (no cluster needed).
+# Baselines are per machine: run test-visual-update once where tests will run.
+test-visual: build
+	cd web && npx playwright test visual.spec.ts
+test-visual-update: build
+	cd web && npx playwright test visual.spec.ts --update-snapshots
 
 kind-up:
 	kind create cluster --name $(KIND_CLUSTER) --config deploy/kind/kind-config.yaml

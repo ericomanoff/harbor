@@ -70,7 +70,8 @@ websocat ws://127.0.0.1:8080/ws
 make gen       # after editing api/openapi.yaml
 make test      # go vet + go test + tsc + vitest
 make test-kind # integration test against the kind cluster (~5 s)
-make test-e2e  # Playwright plays a round in the real game against kind (~10 s)
+make test-e2e  # Playwright plays a round in the real game against kind (~20 s)
+make test-visual # screenshot regression of ?style and ?demo (baselines per machine)
 make dist      # single binaries for macOS, Linux and Windows in dist/
 make kind-down
 ```

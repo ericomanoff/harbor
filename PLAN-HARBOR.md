@@ -1,6 +1,6 @@
 # Harbor redesign: a naval scene for Kubernetes and Helm
 
-Status: V0-V3 done, 2026-10-08; V4 in progress. Supersedes `PLAN-VILLAGE.md` (removed)
+Status: V0-V4 done, 2026-10-08. The naval redesign is complete; remaining work is Phase 6 of PLAN.md (Ingress, exec, workload kinds) and bespoke art if ever wanted. Supersedes `PLAN-VILLAGE.md` (removed)
 and the Tiberian Dawn art direction in `PLAN.md` section 3. Everything else
 in `PLAN.md` (architecture, backend, phases 0-6, testing layers) stands.
 
@@ -154,9 +154,14 @@ all four test layers, demo mode, `make dist`.
   bell (done), bell twice (alert), hammering (build), foghorn (error).
 - Islands are narrower (12-24 tiles) so a three-node cluster fills the view.
 
-### V4: Polish (1 session)
-- Settings overlay, zoom rail, performance pass, visual snapshot tests of
-  `?demo` and `?style`.
+### V4: Polish — DONE 2026-10-08
+- Settings overlay (theater, fleets, chart libraries, sound, system fleets)
+  and the zoom rail shipped with V2.
+- Visual regression: `make test-visual` snapshots `?style` and the demo
+  harbor at home zoom (toasts masked, small drift allowed); baselines are
+  per machine (`make test-visual-update`), kept out of the live e2e target.
+- Performance: the only hot spot found was the island render texture (V1);
+  particles are capped per ship and stopped when idle.
 
 ## 6. Risks
 
