@@ -1,5 +1,9 @@
 # Harbor: a Command & Conquer style GUI for Kubernetes and Helm
 
+> 2026-10-08: the look is now a naval scene (`PLAN-HARBOR.md`) and the next
+> body of work is a learning campaign with a glossary (`PLAN-CAMPAIGN.md`).
+> The current harbor is frozen as the "Open Harbor" demo level.
+
 Status: Phases 0-5 complete; Phase 6 in progress (updated 2026-10-08).
 
 ## Progress
