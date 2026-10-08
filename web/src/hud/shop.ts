@@ -3,6 +3,7 @@ import { mode, store } from '../app';
 import { openOverlay } from '../ui/overlay';
 import { openTechTree } from '../ui/techTree';
 import { openGateForm } from '../ui/gateForm';
+import { openJobForm } from '../ui/jobForm';
 
 type Tab = 'all' | 'shipyards' | 'harbor' | 'charts';
 
@@ -38,6 +39,7 @@ export function openShop(): void {
     if (tab === 'all' || tab === 'shipyards') {
       out.push(card({ id: 'shipyard', icon: '⚓', title: 'Shipyard', sub: 'Deployment', button: 'Build', kind: 'primary', enabled: store.nodes.size > 0, onClick: () => { close(); mode.set('place', 'Deployment'); } }));
       out.push(card({ id: 'terminal', icon: '🛢️', title: 'Tanker terminal', sub: 'StatefulSet', button: 'Build', kind: 'primary', enabled: store.nodes.size > 0, onClick: () => { close(); mode.set('place', 'StatefulSet'); } }));
+      out.push(card({ id: 'fleet', icon: '🎣', title: 'Fishing fleet', sub: 'Job', button: 'Set sail', kind: 'primary', enabled: store.nodes.size > 0, onClick: () => { close(); openJobForm(); } }));
     }
     if (tab === 'all' || tab === 'harbor') {
       out.push(card({ id: 'gate', icon: '⛩', title: 'Gate', sub: 'Ingress', button: 'Open', kind: 'primary', enabled: store.services.size > 0, onClick: () => { close(); openGateForm(); } }));

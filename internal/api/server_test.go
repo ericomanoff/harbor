@@ -388,6 +388,34 @@ func TestCreateStatefulSetAndIngressRoutes(t *testing.T) {
 	}
 }
 
+func TestCreateJobRoute(t *testing.T) {
+	s := fakeServer(t)
+	if err := s.SelectContextByName(context.Background(), "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	do := func(body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/workloads/jobs", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		s.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	rec := do(`{"ns":"sandbox","name":"haul","image":"busybox","command":["sh","-c","echo"],"completions":2,"parallelism":2}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create job: %d %s", rec.Code, rec.Body.String())
+	}
+	var wl gen.Workload
+	if err := json.Unmarshal(rec.Body.Bytes(), &wl); err != nil || wl.Kind != gen.WorkloadKindJob || wl.Desired != 2 {
+		t.Errorf("created = %+v (%v)", wl, err)
+	}
+	if rec = do(`{"ns":"sandbox","name":"haul","image":"busybox"}`); rec.Code != http.StatusConflict {
+		t.Errorf("duplicate: %d, want 409", rec.Code)
+	}
+	if rec = do(`{"ns":"sandbox","name":"h2","image":"busybox","completions":0}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("zero completions: %d, want 400", rec.Code)
+	}
+}
+
 func TestDeleteIngress(t *testing.T) {
 	s := fakeServer(t)
 	ctx := context.Background()

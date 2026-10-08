@@ -281,7 +281,7 @@ export class Hud {
       ], [
         { label: 'Launch tanker', kind: 'primary', enabled: true, run: async () => { await workloadApi.scale('StatefulSet', w.ns, w.name, w.desired + 1); this.announce(`UNIT ORDERED: ${w.name}`); } },
         { label: 'Scrap one', kind: 'secondary', enabled: w.desired > 0, run: async () => { await workloadApi.scale('StatefulSet', w.ns, w.name, w.desired - 1); this.announce(`UNIT RETIRED: ${w.name}`); } },
-        { label: 'Sell terminal', kind: 'danger', confirm: 'Confirm: sell and lose its tankers?', enabled: true, run: async () => { await workloadApi.remove('StatefulSet', w.ns, w.name); this.announce(`STRUCTURE SOLD: ${w.name}`); selection.clear(); } },
+        { label: 'Sell terminal', kind: 'danger', confirm: 'Confirm: sell and lose its tankers?', enabled: true, run: async () => { await workloadApi.remove('StatefulSet', w.ns, w.name); selection.clear(); } },
       ], namespaceColor(w.ns));
       return;
     }
@@ -303,7 +303,7 @@ export class Hud {
       ], [
         { label: 'Launch ship', kind: 'primary', enabled: true, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas + 1); this.announce(`UNIT ORDERED: ${d.name}`); } },
         { label: 'Scrap one', kind: 'secondary', enabled: d.replicas > 0, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas - 1); this.announce(`UNIT RETIRED: ${d.name}`); } },
-        { label: 'Sell shipyard', kind: 'danger', confirm: 'Confirm: sell and lose its ships?', enabled: true, run: async () => { await deleteDeployment(d.ns, d.name); this.announce(`STRUCTURE SOLD: ${d.name}`); selection.clear(); } },
+        { label: 'Sell shipyard', kind: 'danger', confirm: 'Confirm: sell and lose its ships?', enabled: true, run: async () => { await deleteDeployment(d.ns, d.name); selection.clear(); } },
       ], namespaceColor(d.ns));
       return;
     }
@@ -332,7 +332,7 @@ export class Hud {
         ing.addresses.length ? `moored at ${ing.addresses.join(', ')}` : 'no address assigned yet',
         `${targets.length} lighthouse${targets.length === 1 ? '' : 's'} lit from this gate`,
       ], [
-        { label: 'Close the gate', kind: 'danger', confirm: 'Confirm: delete the Ingress?', enabled: true, run: async () => { await deleteIngress(ing.ns, ing.name); this.announce(`GATE CLOSED: ${ing.name}`); selection.clear(); } },
+        { label: 'Close the gate', kind: 'danger', confirm: 'Confirm: delete the Ingress?', enabled: true, run: async () => { await deleteIngress(ing.ns, ing.name); selection.clear(); } },
       ], namespaceColor(ing.ns));
       return;
     }
@@ -392,8 +392,8 @@ export class Hud {
         : 'no shipyard (static pod)';
       // Tankers retire by hull number, tugs and fishing boats are not scrapped one by one.
       const tail = variant === 'ship' ? actions : actions.filter((a) => !/scrap/i.test(a.label));
-      if (variant === 'tug' && owner) tail.push({ label: 'Disband tug company', kind: 'danger', confirm: 'Confirm: delete the DaemonSet?', enabled: true, run: async () => { await workloadApi.remove('DaemonSet', owner.ns, owner.name); this.announce(`STRUCTURE SOLD: ${owner.name}`); selection.clear(); } });
-      if (variant === 'boat' && owner) tail.push({ label: 'Recall fleet', kind: 'danger', confirm: 'Confirm: delete the Job?', enabled: true, run: async () => { await workloadApi.remove('Job', owner.ns, owner.name); this.announce(`FLEET RECALLED: ${owner.name}`); selection.clear(); } });
+      if (variant === 'tug' && owner) tail.push({ label: 'Disband tug company', kind: 'danger', confirm: 'Confirm: delete the DaemonSet?', enabled: true, run: async () => { await workloadApi.remove('DaemonSet', owner.ns, owner.name); selection.clear(); } });
+      if (variant === 'boat' && owner) tail.push({ label: 'Recall fleet', kind: 'danger', confirm: 'Confirm: delete the Job?', enabled: true, run: async () => { await workloadApi.remove('Job', owner.ns, owner.name); selection.clear(); } });
       tail.unshift({ label: "Ship's log", kind: 'primary', enabled: true, run: async () => openLogs(p) });
       this.setCard(title, [
         `${p.ns} · ${p.phase}${p.ready ? ' · ready' : ''} · ${p.restarts} restart${p.restarts === 1 ? '' : 's'}`,
@@ -410,14 +410,14 @@ export class Hud {
   private workloadCard(w: Workload): void {
     if (w.kind === 'DaemonSet') {
       this.setCard(`Tug company ${w.name}`, [`${w.ns} · ${w.image} · DaemonSet`, `${w.ready}/${w.desired} docks served (one tug per dock)`], [
-        { label: 'Disband', kind: 'danger', confirm: 'Confirm: delete the DaemonSet?', enabled: true, run: async () => { await workloadApi.remove('DaemonSet', w.ns, w.name); this.announce(`STRUCTURE SOLD: ${w.name}`); selection.clear(); } },
+        { label: 'Disband', kind: 'danger', confirm: 'Confirm: delete the DaemonSet?', enabled: true, run: async () => { await workloadApi.remove('DaemonSet', w.ns, w.name); selection.clear(); } },
       ], namespaceColor(w.ns));
     } else {
       this.setCard(`Fishing fleet ${w.name}`, [
         `${w.ns} · ${w.image} · Job${w.complete ? ' · home' : ' · at sea'}`,
         `${w.ready}/${w.desired} catches landed · ${w.active ?? 0} at sea · ${w.failed ?? 0} lost`,
       ], [
-        { label: 'Recall fleet', kind: 'danger', confirm: 'Confirm: delete the Job?', enabled: true, run: async () => { await workloadApi.remove('Job', w.ns, w.name); this.announce(`FLEET RECALLED: ${w.name}`); selection.clear(); } },
+        { label: 'Recall fleet', kind: 'danger', confirm: 'Confirm: delete the Job?', enabled: true, run: async () => { await workloadApi.remove('Job', w.ns, w.name); selection.clear(); } },
       ], namespaceColor(w.ns));
     }
   }

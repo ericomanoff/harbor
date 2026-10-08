@@ -123,6 +123,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workloads/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send out a fishing fleet (create a Job) */
+        post: operations["createJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ingresses": {
         parameters: {
             query?: never;
@@ -636,6 +653,26 @@ export interface components {
             mountPath?: string;
             storageClass?: string;
         };
+        CreateJobRequest: {
+            ns: string;
+            name: string;
+            image: string;
+            /** @description Container command (entrypoint); empty keeps the image's. */
+            command?: string[];
+            args?: string[];
+            /** @description Catches to land; defaults to 1. */
+            completions?: number;
+            /** @description Boats at sea at once; defaults to 1. */
+            parallelism?: number;
+            /** @description Retries before the catch is lost; defaults to 3. */
+            backoffLimit?: number;
+            /** @enum {string} */
+            restartPolicy?: "Never" | "OnFailure";
+            /** @description Scrap the fleet this long after it finishes; omit to keep it. */
+            ttlSeconds?: number;
+            cpuRequest?: string;
+            memRequest?: string;
+        };
         CreateIngressRequest: {
             ns: string;
             name: string;
@@ -890,6 +927,31 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CreateStatefulSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workload"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateJobRequest"];
             };
         };
         responses: {

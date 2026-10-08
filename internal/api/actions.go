@@ -286,3 +286,22 @@ func (s *Server) CreateIngress(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, kube.ConvertIngress(ing))
 }
+
+func (s *Server) CreateJob(w http.ResponseWriter, r *http.Request) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.CreateJobRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	job, err := kube.CreateJob(ctx, cur.Client(), req)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, kube.ConvertJob(job))
+}

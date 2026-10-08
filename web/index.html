@@ -138,6 +138,35 @@
         </div>
       </form>
     </div>
+    <div id="job-form" class="overlay" hidden>
+      <form class="panel" autocomplete="off">
+        <h2>SEND OUT A FLEET <span class="where">Job</span></h2>
+        <div class="row">
+          <label>NAMESPACE <select name="ns"></select></label>
+          <label>NAME <input name="name" required maxlength="63" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?" placeholder="lowercase, dashes" /></label>
+        </div>
+        <label>IMAGE <input name="image" required value="busybox:1.36" /></label>
+        <label>COMMAND <input name="command" placeholder='optional, e.g. sh -c "sleep 5; echo done"' /></label>
+        <div class="row">
+          <label>CATCHES (completions) <input name="completions" type="number" min="1" value="1" /></label>
+          <label>BOATS AT SEA (parallelism) <input name="parallelism" type="number" min="1" value="1" /></label>
+        </div>
+        <div class="row">
+          <label>RETRIES <input name="backoff" type="number" min="0" value="3" /></label>
+          <label>ON FAILURE <select name="restart"><option value="Never">new boat (Never)</option><option value="OnFailure">same boat (OnFailure)</option></select></label>
+          <label>SCRAP AFTER (s) <input name="ttl" type="number" min="0" placeholder="keep" /></label>
+        </div>
+        <div class="row">
+          <label>CPU/BOAT <input name="cpu" value="50m" /></label>
+          <label>MEM/BOAT <input name="mem" value="64Mi" /></label>
+        </div>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="submit">SET SAIL</button>
+          <button type="button" data-cancel>CANCEL</button>
+        </div>
+      </form>
+    </div>
     <div id="gate-form" class="overlay" hidden>
       <form class="panel" autocomplete="off">
         <h2>OPEN A GATE <span class="where">Ingress at the harbor mouth</span></h2>

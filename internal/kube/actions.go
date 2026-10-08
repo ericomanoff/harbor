@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -411,4 +412,100 @@ func CreateIngress(ctx context.Context, client kubernetes.Interface, req gen.Cre
 		return nil, err
 	}
 	return client.NetworkingV1().Ingresses(req.Ns).Create(ctx, ing, metav1.CreateOptions{})
+}
+
+// BuildJob turns a create request into a Job manifest.
+func BuildJob(req gen.CreateJobRequest) (*batchv1.Job, error) {
+	if errs := validation.IsDNS1123Label(req.Name); len(errs) > 0 {
+		return nil, invalid("name %q: %s", req.Name, strings.Join(errs, "; "))
+	}
+	if errs := validation.IsDNS1123Label(req.Ns); len(errs) > 0 {
+		return nil, invalid("namespace %q: %s", req.Ns, strings.Join(errs, "; "))
+	}
+	if strings.TrimSpace(req.Image) == "" {
+		return nil, invalid("image is required")
+	}
+	cpu, mem := defaultCPURequest, defaultMemRequest
+	if req.CpuRequest != nil && *req.CpuRequest != "" {
+		cpu = *req.CpuRequest
+	}
+	if req.MemRequest != nil && *req.MemRequest != "" {
+		mem = *req.MemRequest
+	}
+	cpuQ, err := resource.ParseQuantity(cpu)
+	if err != nil {
+		return nil, invalid("cpuRequest %q: %v", cpu, err)
+	}
+	memQ, err := resource.ParseQuantity(mem)
+	if err != nil {
+		return nil, invalid("memRequest %q: %v", mem, err)
+	}
+	completions := int32(1)
+	if req.Completions != nil {
+		if *req.Completions < 1 {
+			return nil, invalid("completions must be >= 1")
+		}
+		completions = int32(*req.Completions)
+	}
+	parallelism := int32(1)
+	if req.Parallelism != nil {
+		if *req.Parallelism < 1 {
+			return nil, invalid("parallelism must be >= 1")
+		}
+		parallelism = int32(*req.Parallelism)
+	}
+	backoff := int32(3)
+	if req.BackoffLimit != nil {
+		if *req.BackoffLimit < 0 {
+			return nil, invalid("backoffLimit must be >= 0")
+		}
+		backoff = int32(*req.BackoffLimit)
+	}
+	policy := corev1.RestartPolicyNever
+	if req.RestartPolicy != nil && *req.RestartPolicy == gen.OnFailure {
+		policy = corev1.RestartPolicyOnFailure
+	}
+	container := corev1.Container{
+		Name:  req.Name,
+		Image: strings.TrimSpace(req.Image),
+		Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    cpuQ,
+			corev1.ResourceMemory: memQ,
+		}},
+	}
+	if req.Command != nil && len(*req.Command) > 0 {
+		container.Command = *req.Command
+	}
+	if req.Args != nil && len(*req.Args) > 0 {
+		container.Args = *req.Args
+	}
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: req.Name, Namespace: req.Ns, Labels: map[string]string{"app": req.Name, ManagedByLabel: managedByValue}},
+		Spec: batchv1.JobSpec{
+			Completions:  &completions,
+			Parallelism:  &parallelism,
+			BackoffLimit: &backoff,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": req.Name}},
+				Spec:       corev1.PodSpec{RestartPolicy: policy, Containers: []corev1.Container{container}},
+			},
+		},
+	}
+	if req.TtlSeconds != nil {
+		if *req.TtlSeconds < 0 {
+			return nil, invalid("ttlSeconds must be >= 0")
+		}
+		ttl := int32(*req.TtlSeconds)
+		job.Spec.TTLSecondsAfterFinished = &ttl
+	}
+	return job, nil
+}
+
+// CreateJob sends a fishing fleet out.
+func CreateJob(ctx context.Context, client kubernetes.Interface, req gen.CreateJobRequest) (*batchv1.Job, error) {
+	job, err := BuildJob(req)
+	if err != nil {
+		return nil, err
+	}
+	return client.BatchV1().Jobs(req.Ns).Create(ctx, job, metav1.CreateOptions{})
 }

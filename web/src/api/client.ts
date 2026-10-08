@@ -15,6 +15,7 @@ export type HelmUpgradeRequest = components['schemas']['HelmUpgradeRequest'];
 export type ContextList = components['schemas']['ContextList'];
 export type CreateStatefulSetRequest = components['schemas']['CreateStatefulSetRequest'];
 export type CreateIngressRequest = components['schemas']['CreateIngressRequest'];
+export type CreateJobRequest = components['schemas']['CreateJobRequest'];
 export type Workload = components['schemas']['Workload'];
 export type Ingress = components['schemas']['Ingress'];
 
@@ -138,4 +139,8 @@ export function createStatefulSet(req: CreateStatefulSetRequest, fetchFn: typeof
 
 export function createIngress(req: CreateIngressRequest, fetchFn: typeof fetch = fetch): Promise<Ingress> {
   return request<Ingress>('POST', '/api/ingresses', req, fetchFn);
+}
+
+export function createJob(req: CreateJobRequest, fetchFn: typeof fetch = fetch): Promise<Workload> {
+  return request<Workload>('POST', '/api/workloads/jobs', req, fetchFn);
 }

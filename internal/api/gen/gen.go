@@ -15,6 +15,24 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for CreateJobRequestRestartPolicy.
+const (
+	Never     CreateJobRequestRestartPolicy = "Never"
+	OnFailure CreateJobRequestRestartPolicy = "OnFailure"
+)
+
+// Valid indicates whether the value is a known member of the CreateJobRequestRestartPolicy enum.
+func (e CreateJobRequestRestartPolicy) Valid() bool {
+	switch e {
+	case Never:
+		return true
+	case OnFailure:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatus.
 const (
 	Ok HealthStatus = "ok"
@@ -259,6 +277,35 @@ type CreateIngressRequest struct {
 	// TlsSecret TLS secret name, optional even when tls is true.
 	TlsSecret *string `json:"tlsSecret,omitempty"`
 }
+
+// CreateJobRequest defines model for CreateJobRequest.
+type CreateJobRequest struct {
+	Args *[]string `json:"args,omitempty"`
+
+	// BackoffLimit Retries before the catch is lost; defaults to 3.
+	BackoffLimit *int `json:"backoffLimit,omitempty"`
+
+	// Command Container command (entrypoint); empty keeps the image's.
+	Command *[]string `json:"command,omitempty"`
+
+	// Completions Catches to land; defaults to 1.
+	Completions *int    `json:"completions,omitempty"`
+	CpuRequest  *string `json:"cpuRequest,omitempty"`
+	Image       string  `json:"image"`
+	MemRequest  *string `json:"memRequest,omitempty"`
+	Name        string  `json:"name"`
+	Ns          string  `json:"ns"`
+
+	// Parallelism Boats at sea at once; defaults to 1.
+	Parallelism   *int                           `json:"parallelism,omitempty"`
+	RestartPolicy *CreateJobRequestRestartPolicy `json:"restartPolicy,omitempty"`
+
+	// TtlSeconds Scrap the fleet this long after it finishes; omit to keep it.
+	TtlSeconds *int `json:"ttlSeconds,omitempty"`
+}
+
+// CreateJobRequestRestartPolicy defines model for CreateJobRequest.RestartPolicy.
+type CreateJobRequestRestartPolicy string
 
 // CreateStatefulSetRequest defines model for CreateStatefulSetRequest.
 type CreateStatefulSetRequest struct {
@@ -650,6 +697,9 @@ type AddHelmRepoJSONRequestBody = HelmRepo
 // CreateIngressJSONRequestBody defines body for CreateIngress for application/json ContentType.
 type CreateIngressJSONRequestBody = CreateIngressRequest
 
+// CreateJobJSONRequestBody defines body for CreateJob for application/json ContentType.
+type CreateJobJSONRequestBody = CreateJobRequest
+
 // CreateStatefulSetJSONRequestBody defines body for CreateStatefulSet for application/json ContentType.
 type CreateStatefulSetJSONRequestBody = CreateStatefulSetRequest
 
@@ -1000,6 +1050,9 @@ type ServerInterface interface {
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
+	// CreateJob Send out a fishing fleet (create a Job)
+	// (POST /api/workloads/jobs)
+	CreateJob(w http.ResponseWriter, r *http.Request)
 	// CreateStatefulSet Build a tanker terminal (StatefulSet plus its headless Service)
 	// (POST /api/workloads/statefulsets)
 	CreateStatefulSet(w http.ResponseWriter, r *http.Request)
@@ -1647,6 +1700,20 @@ func (siw *ServerInterfaceWrapper) GetSnapshot(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// CreateJob operation middleware
+func (siw *ServerInterfaceWrapper) CreateJob(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateJob(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateStatefulSet operation middleware
 func (siw *ServerInterfaceWrapper) CreateStatefulSet(w http.ResponseWriter, r *http.Request) {
 
@@ -1920,6 +1987,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/deployments", wrapper.CreateDeployment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/deployments/{ns}/{name}", wrapper.DeleteDeployment)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/workloads/statefulsets", wrapper.CreateStatefulSet)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/workloads/jobs", wrapper.CreateJob)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/ingresses", wrapper.CreateIngress)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}", wrapper.DeleteWorkload)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/scale", wrapper.ScaleWorkload)

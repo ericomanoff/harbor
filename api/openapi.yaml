@@ -116,6 +116,26 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/workloads/jobs:
+    post:
+      operationId: createJob
+      summary: Send out a fishing fleet (create a Job)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workload"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/ingresses:
     post:
       operationId: createIngress
@@ -922,6 +942,49 @@ components:
           type: string
           description: Where the volume mounts; defaults to /data.
         storageClass:
+          type: string
+
+    CreateJobRequest:
+      type: object
+      required: [ns, name, image]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        image:
+          type: string
+        command:
+          type: array
+          items:
+            type: string
+          description: Container command (entrypoint); empty keeps the image's.
+        args:
+          type: array
+          items:
+            type: string
+        completions:
+          type: integer
+          minimum: 1
+          description: Catches to land; defaults to 1.
+        parallelism:
+          type: integer
+          minimum: 1
+          description: Boats at sea at once; defaults to 1.
+        backoffLimit:
+          type: integer
+          minimum: 0
+          description: Retries before the catch is lost; defaults to 3.
+        restartPolicy:
+          type: string
+          enum: [Never, OnFailure]
+        ttlSeconds:
+          type: integer
+          minimum: 0
+          description: Scrap the fleet this long after it finishes; omit to keep it.
+        cpuRequest:
+          type: string
+        memRequest:
           type: string
 
     CreateIngressRequest:

@@ -233,3 +233,39 @@ func TestBuildIngress(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildJob(t *testing.T) {
+	cmd := []string{"sh", "-c", "echo hi"}
+	job, err := BuildJob(gen.CreateJobRequest{Ns: "a", Name: "haul", Image: "busybox", Command: &cmd, Completions: ptr(3), Parallelism: ptr(2), BackoffLimit: ptr(1), RestartPolicy: ptr(gen.OnFailure), TtlSeconds: ptr(60)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *job.Spec.Completions != 3 || *job.Spec.Parallelism != 2 || *job.Spec.BackoffLimit != 1 || *job.Spec.TTLSecondsAfterFinished != 60 {
+		t.Errorf("spec = %+v", job.Spec)
+	}
+	ps := job.Spec.Template.Spec
+	if ps.RestartPolicy != corev1.RestartPolicyOnFailure || len(ps.Containers[0].Command) != 3 || job.Labels[ManagedByLabel] != "harbor" {
+		t.Errorf("template = %+v", ps)
+	}
+	plain, err := BuildJob(gen.CreateJobRequest{Ns: "a", Name: "haul", Image: "busybox"})
+	if err != nil || *plain.Spec.Completions != 1 || *plain.Spec.Parallelism != 1 || *plain.Spec.BackoffLimit != 3 || plain.Spec.TTLSecondsAfterFinished != nil || plain.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever || plain.Spec.Template.Spec.Containers[0].Command != nil {
+		t.Errorf("defaults = %+v (%v)", plain.Spec, err)
+	}
+	for name, req := range map[string]gen.CreateJobRequest{
+		"no image":  {Ns: "a", Name: "haul"},
+		"zero runs": {Ns: "a", Name: "haul", Image: "x", Completions: ptr(0)},
+		"neg retry": {Ns: "a", Name: "haul", Image: "x", BackoffLimit: ptr(-1)},
+		"bad name":  {Ns: "a", Name: "Haul", Image: "x"},
+	} {
+		if _, err := BuildJob(req); err == nil {
+			t.Errorf("%s: expected a validation error", name)
+		}
+	}
+	client := fake.NewClientset()
+	if _, err := CreateJob(context.Background(), client, gen.CreateJobRequest{Ns: "a", Name: "haul", Image: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CreateJob(context.Background(), client, gen.CreateJobRequest{Ns: "a", Name: "haul", Image: "x"}); err == nil {
+		t.Error("duplicate job should fail")
+	}
+}

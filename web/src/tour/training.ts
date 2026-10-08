@@ -86,6 +86,37 @@ export function simulate(method: string, path: string, body: unknown): unknown {
     }
     return wl;
   }
+  if (method === 'POST' && path === '/api/workloads/jobs') {
+    const req = b as { ns: string; name: string; image: string; completions?: number; parallelism?: number };
+    const total = req.completions ?? 1;
+    const wl: Workload = { kind: 'Job', ns: req.ns, name: req.name, image: req.image, desired: total, ready: 0, active: Math.min(total, req.parallelism ?? 1), failed: 0, complete: false, conditions: [] };
+    store.apply({ type: 'modified', kind: 'Workload', obj: wl });
+    for (let i = 0; i < total; i++) {
+      const name = `${req.name}-${(++seq).toString(36)}`;
+      const boat = (phase: 'Pending' | 'Running' | 'Succeeded', node: string): Pod => ({ ...podOf(req.ns, name, '', node, phase === 'Succeeded' ? 'Running' : phase), phase, ready: phase === 'Running', ownerKind: 'Job', ownerName: req.name, labels: { app: req.name }, containers: [req.name] });
+      store.apply({ type: 'modified', kind: 'Pod', obj: boat('Pending', '') });
+      const ns = nodes();
+      const node = ns[i % Math.max(1, ns.length)] ?? '';
+      later(900 + i * 700, () => store.apply({ type: 'modified', kind: 'Pod', obj: boat('Running', node) }));
+      later(3500 + i * 700, () => {
+        store.apply({ type: 'modified', kind: 'Pod', obj: boat('Succeeded', node) });
+        const cur = store.workloads.get(`Job:${nsKey(req.ns, req.name)}`);
+        if (cur) {
+          const ready = Math.min(cur.desired, cur.ready + 1);
+          store.apply({ type: 'modified', kind: 'Workload', obj: { ...cur, ready, active: Math.max(0, (cur.active ?? 0) - 1), complete: ready >= cur.desired } });
+        }
+      });
+    }
+    return wl;
+  }
+  if ((m = /^\/api\/workloads\/Job\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'DELETE') {
+    const key = `Job:${nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!))}`;
+    const wl = store.workloads.get(key);
+    if (!wl) throw new Error('no such fleet');
+    for (const p of [...store.pods.values()].filter((p) => p.ns === wl.ns && p.ownerKind === 'Job' && p.ownerName === wl.name)) store.apply({ type: 'deleted', kind: 'Pod', obj: p });
+    store.apply({ type: 'deleted', kind: 'Workload', obj: wl });
+    return undefined;
+  }
   if (method === 'POST' && path === '/api/ingresses') {
     const req = b as { ns: string; name: string; host?: string; path?: string; service: string; port: string; tls?: boolean; class?: string };
     const ing = { ns: req.ns, name: req.name, hosts: req.host ? [req.host] : [], tls: !!req.tls, addresses: [], rules: [{ host: req.host ?? '', path: req.path ?? '/', service: req.service, port: req.port }], ...(req.class ? { class: req.class } : {}) };

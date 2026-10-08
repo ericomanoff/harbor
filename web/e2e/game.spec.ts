@@ -80,6 +80,7 @@ test.afterEach(() => {
     kubectl('delete', 'statefulset', `${NAME}-db`, '-n', NS, '--ignore-not-found');
     kubectl('delete', 'service', `${NAME}-db`, '-n', NS, '--ignore-not-found');
     kubectl('delete', 'ingress', `${NAME}-gate`, '-n', NS, '--ignore-not-found');
+    kubectl('delete', 'job', `${NAME}-haul`, '-n', NS, '--ignore-not-found');
   } catch {
     /* cluster gone; nothing to clean */
   }
@@ -317,4 +318,45 @@ test('build a tanker terminal and open a gate from the shop', async ({ page }) =
   await page.locator(action(2)).click();
   await page.waitForFunction((key) => !(window.harbor.store as unknown as { workloads: Map<string, unknown> }).workloads.has(key), `StatefulSet:${NS}/${NAME}-db`, { timeout: 60_000 });
   expect(() => kubectl('get', 'service', `${NAME}-db`, '-n', NS)).toThrow();
+});
+
+test('send out a fishing fleet and watch the catch come home', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => window.harbor?.store.context === 'kind-harbor', null, { timeout: 30_000 })
+    .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
+  await page.waitForFunction(() => !document.getElementById('hud')?.hidden && document.getElementById('splash')?.hidden);
+
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=fleet] button').click();
+  const form = page.locator('#job-form');
+  await expect(form).toBeVisible();
+  await form.locator('select[name=ns]').selectOption(NS);
+  await form.locator('input[name=name]').fill(`${NAME}-haul`);
+  await form.locator('input[name=command]').fill('sh -c "sleep 3; echo catch"');
+  await form.locator('input[name=completions]').fill('2');
+  await form.locator('input[name=parallelism]').fill('2');
+  await form.locator('button[type=submit]').click();
+  await expect(form).toBeHidden();
+
+  const key = `Job:${NS}/${NAME}-haul`;
+  await page.waitForFunction((k) => {
+    const w = (window.harbor.store as unknown as { workloads: Map<string, { ready: number; complete?: boolean }> }).workloads.get(k);
+    return w?.ready === 2 && w.complete === true;
+  }, key, { timeout: 180_000 });
+  expect(kubectl('get', 'job', `${NAME}-haul`, '-n', NS, '-o', 'jsonpath={.status.succeeded}')).toBe('2');
+
+  // Both boats are home: grey, phase Succeeded, still on the map.
+  const boats = await page.evaluate((name) => [...window.harbor.store.pods.values()].filter((p) => (p as { ownerName?: string }).ownerName === name) as { phase?: string }[], `${NAME}-haul`);
+  expect(boats.map((b) => (b as { phase?: string }).phase)).toEqual(['Succeeded', 'Succeeded']);
+
+  // Recall the fleet from a boat's card.
+  const boatName = (await page.evaluate((name) => [...window.harbor.store.pods.values()].find((p) => (p as { ownerName?: string }).ownerName === name)!.name, `${NAME}-haul`)) as string;
+  const pos = await unitCentre(page, `${NS}/${boatName}`);
+  const at = await focus(page, pos.x, pos.y);
+  await page.mouse.click(at.x, at.y);
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([`u:${NS}/${boatName}`]);
+  await page.locator('#hud .selection button', { hasText: 'Recall fleet' }).click();
+  await page.locator('#hud .selection button', { hasText: 'Confirm' }).click(); // the armed label
+  await page.waitForFunction((k) => !(window.harbor.store as unknown as { workloads: Map<string, unknown> }).workloads.has(k), key, { timeout: 60_000 });
+  expect(() => kubectl('get', 'job', `${NAME}-haul`, '-n', NS)).toThrow();
 });
