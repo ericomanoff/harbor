@@ -159,6 +159,64 @@ func ConvertService(svc *corev1.Service) gen.Service {
 	}
 }
 
+// resourceSummary: "cpu 50m · mem 64Mi" (only what is set).
+func resourceSummary(rl corev1.ResourceList) string {
+	parts := []string{}
+	if q, ok := rl[corev1.ResourceCPU]; ok {
+		parts = append(parts, "cpu "+q.String())
+	}
+	if q, ok := rl[corev1.ResourceMemory]; ok {
+		parts = append(parts, "mem "+q.String())
+	}
+	return strings.Join(parts, " · ")
+}
+
+// ordersOf lists the ConfigMaps and Secrets a pod template reads, as "Kind/name".
+func ordersOf(spec *corev1.PodSpec) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(kind, name string) {
+		if name == "" {
+			return
+		}
+		k := kind + "/" + name
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	for _, c := range spec.Containers {
+		for _, e := range c.EnvFrom {
+			if e.ConfigMapRef != nil {
+				add("ConfigMap", e.ConfigMapRef.Name)
+			}
+			if e.SecretRef != nil {
+				add("Secret", e.SecretRef.Name)
+			}
+		}
+		for _, e := range c.Env {
+			if e.ValueFrom == nil {
+				continue
+			}
+			if e.ValueFrom.ConfigMapKeyRef != nil {
+				add("ConfigMap", e.ValueFrom.ConfigMapKeyRef.Name)
+			}
+			if e.ValueFrom.SecretKeyRef != nil {
+				add("Secret", e.ValueFrom.SecretKeyRef.Name)
+			}
+		}
+	}
+	for _, v := range spec.Volumes {
+		if v.ConfigMap != nil {
+			add("ConfigMap", v.ConfigMap.Name)
+		}
+		if v.Secret != nil {
+			add("Secret", v.Secret.SecretName)
+		}
+	}
+	return out
+}
+
 // probeSummary describes a probe in a few words: "http /healthz", "tcp 5432", "exec".
 func probeSummary(p *corev1.Probe) string {
 	switch {
@@ -263,6 +321,11 @@ func ConvertDeployment(d *appsv1.Deployment) gen.Deployment {
 	if cs := d.Spec.Template.Spec.Containers; len(cs) > 0 {
 		out.Readiness = optString(probeSummary(cs[0].ReadinessProbe))
 		out.Liveness = optString(probeSummary(cs[0].LivenessProbe))
+		out.Requests = optString(resourceSummary(cs[0].Resources.Requests))
+		out.Limits = optString(resourceSummary(cs[0].Resources.Limits))
+	}
+	if o := ordersOf(&d.Spec.Template.Spec); len(o) > 0 {
+		out.Orders = &o
 	}
 	return out
 }

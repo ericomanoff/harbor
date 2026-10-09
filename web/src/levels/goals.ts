@@ -43,3 +43,25 @@ export function lighthouseFor(store: Pick<ClusterStore, 'services' | 'pods'>, ns
   }
   return undefined;
 }
+
+/** A gate in the namespace with a rule to the lighthouse. */
+export function gateFor(store: Pick<ClusterStore, 'ingresses'>, ns: string, service: string): string | undefined {
+  for (const i of store.ingresses.values()) if (i.ns === ns && i.rules.some((r) => r.service === service)) return i.name;
+  return undefined;
+}
+
+/** A shipyard in the namespace reading the given orders ("Kind/name") with at least one ready ship. */
+export function ordersShipyard(store: Pick<ClusterStore, 'deployments' | 'pods'>, ns: string, orders: string): string | undefined {
+  for (const d of store.deployments.values()) {
+    if (d.ns === ns && d.orders?.includes(orders) && readyShips(store, ns, d.name) >= 1) return d.name;
+  }
+  return undefined;
+}
+
+/** A shipyard in the namespace with both requests and limits set and at least one ready ship. */
+export function cappedShipyard(store: Pick<ClusterStore, 'deployments' | 'pods'>, ns: string): string | undefined {
+  for (const d of store.deployments.values()) {
+    if (d.ns === ns && d.requests && d.limits && /cpu/.test(d.limits) && /mem/.test(d.limits) && readyShips(store, ns, d.name) >= 1) return d.name;
+  }
+  return undefined;
+}

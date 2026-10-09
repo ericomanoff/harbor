@@ -509,3 +509,42 @@ func TestServiceRoutes(t *testing.T) {
 		t.Errorf("delete twice: %d, want 404", rec.Code)
 	}
 }
+
+func TestOrdersRoutes(t *testing.T) {
+	s := fakeServer(t)
+	if err := s.SelectContextByName(context.Background(), "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := do(http.MethodPost, "/api/orders", `{"ns":"sandbox","name":"courier-keys","kind":"Secret","data":{"API_KEY":"hush"}}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "hush") {
+		t.Error("secret value leaked in the response")
+	}
+	if rec = do(http.MethodPost, "/api/orders", `{"ns":"sandbox","name":"courier-keys","kind":"Secret","data":{"A":"b"}}`); rec.Code != http.StatusConflict {
+		t.Errorf("duplicate: %d, want 409", rec.Code)
+	}
+	if rec = do(http.MethodPost, "/api/orders", `{"ns":"sandbox","name":"x","kind":"Scroll","data":{"A":"b"}}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad kind: %d, want 400", rec.Code)
+	}
+	rec = do(http.MethodGet, "/api/orders?ns=sandbox", "")
+	var list []gen.Orders
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil || len(list) != 1 || list[0].Keys[0] != "API_KEY" {
+		t.Errorf("list: %d %s (%v)", rec.Code, rec.Body.String(), err)
+	}
+	if rec = do(http.MethodDelete, "/api/orders/Secret/sandbox/courier-keys", ""); rec.Code != http.StatusNoContent {
+		t.Errorf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = do(http.MethodDelete, "/api/orders/Scroll/sandbox/courier-keys", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad kind param: %d, want 400", rec.Code)
+	}
+}

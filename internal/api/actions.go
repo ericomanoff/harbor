@@ -249,6 +249,54 @@ func (s *Server) DeleteIngress(w http.ResponseWriter, r *http.Request, ns gen.Na
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) ListOrders(w http.ResponseWriter, r *http.Request, params gen.ListOrdersParams) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	out, err := kube.ListOrders(ctx, cur.Client(), params.Ns)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) CreateOrders(w http.ResponseWriter, r *http.Request) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.CreateOrdersRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	out, err := kube.CreateOrders(ctx, cur.Client(), req)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+func (s *Server) DeleteOrders(w http.ResponseWriter, r *http.Request, kind gen.DeleteOrdersParamsKind, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.DeleteOrders(ctx, cur.Client(), gen.OrdersKind(kind), ns, name); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 	cur, ok := s.clientOr409(w)
 	if !ok {

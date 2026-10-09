@@ -1,4 +1,4 @@
-import type { CreateDeploymentRequest, CreateStatefulSetRequest, MapPos } from '../api/client';
+import { orders as ordersApi, type CreateDeploymentRequest, type CreateStatefulSetRequest, type MapPos, type OrdersRef } from '../api/client';
 import { modal } from '../app';
 import { deploymentYaml } from '../levels/manifest';
 
@@ -36,6 +36,28 @@ export function openBuildForm(opts: BuildFormOptions): void {
   heading.textContent = opts.kind === 'StatefulSet' ? 'TANKER TERMINAL' : 'SHIPYARD';
   storageRow.hidden = opts.kind !== 'StatefulSet';
   $<HTMLDivElement>(form, '.lookouts').hidden = opts.kind !== 'Deployment';
+  $<HTMLDivElement>(form, '.caps').hidden = opts.kind !== 'Deployment';
+  const ordersLabel = $<HTMLLabelElement>(form, 'label.orders');
+  const ordersSel = $<HTMLSelectElement>(form, 'select[name=orders]');
+  ordersLabel.hidden = opts.kind !== 'Deployment';
+  // Sealed orders of the chosen namespace, "Kind/name" each; a Secret never shows its values.
+  const fillOrders = async (): Promise<void> => {
+    if (opts.kind !== 'Deployment') return;
+    const ns = nsSel.value;
+    let list: { kind: string; name: string }[] = [];
+    try {
+      list = await ordersApi.list(ns);
+    } catch {
+      list = [];
+    }
+    if (nsSel.value !== ns) return;
+    ordersSel.replaceChildren(...list.map((o) => Object.assign(document.createElement('option'), { value: `${o.kind}/${o.name}`, textContent: `${o.name} (${o.kind === 'Secret' ? 'sealed envelope' : 'chart locker'})` })));
+    ordersSel.disabled = list.length === 0;
+    if (list.length === 0) ordersSel.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: 'none in this fleet yet', disabled: true }));
+  };
+  const chosenOrders = (): OrdersRef[] => Array.from(ordersSel.selectedOptions).filter((o) => o.value).map((o) => ({ kind: o.value.split('/')[0] as OrdersRef['kind'], name: o.value.split('/').slice(1).join('/') }));
+  nsSel.onchange = () => void fillOrders();
+  void fillOrders();
   err.hidden = true;
   form.reset();
   if (opts.defaultNamespace) nsSel.value = opts.defaultNamespace;
@@ -52,6 +74,10 @@ export function openBuildForm(opts: BuildFormOptions): void {
     if (str('mem')) req.memRequest = str('mem');
     if (str('readiness')) req.readinessPath = str('readiness');
     if (str('liveness')) req.livenessPath = str('liveness');
+    if (str('cpuLimit')) req.cpuLimit = str('cpuLimit');
+    if (str('memLimit')) req.memLimit = str('memLimit');
+    const chosen = chosenOrders();
+    if (chosen.length) req.orders = chosen;
     $<HTMLPreElement>(manifest, 'pre').textContent = deploymentYaml(req);
   };
   form.oninput = renderManifest;
@@ -83,6 +109,10 @@ export function openBuildForm(opts: BuildFormOptions): void {
       const dep = req as CreateDeploymentRequest;
       if (str('readiness')) dep.readinessPath = str('readiness');
       if (str('liveness')) dep.livenessPath = str('liveness');
+      if (str('cpuLimit')) dep.cpuLimit = str('cpuLimit');
+      if (str('memLimit')) dep.memLimit = str('memLimit');
+      const chosen = chosenOrders();
+      if (chosen.length) dep.orders = chosen;
     }
     if (opts.kind === 'StatefulSet') {
       const sts = req as CreateStatefulSetRequest;

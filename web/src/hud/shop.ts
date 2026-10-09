@@ -4,6 +4,7 @@ import { openOverlay } from '../ui/overlay';
 import { openTechTree } from '../ui/techTree';
 import { openGateForm } from '../ui/gateForm';
 import { openLighthouseForm } from '../ui/lighthouseForm';
+import { openOrdersForm } from '../ui/ordersForm';
 import { openJobForm } from '../ui/jobForm';
 
 type Tab = 'all' | 'shipyards' | 'harbor' | 'charts';
@@ -45,6 +46,7 @@ export function openShop(): void {
     if (tab === 'all' || tab === 'harbor') {
       out.push(card({ id: 'gate', icon: '⛩', title: 'Gate', sub: 'Ingress', button: 'Open', kind: 'primary', enabled: store.services.size > 0, onClick: () => { close(); openGateForm(); } }));
       out.push(card({ id: 'lighthouse', icon: '🗼', title: 'Lighthouse', sub: 'Service', button: 'Light', kind: 'primary', enabled: store.namespaces.size > 0, onClick: () => { close(); openLighthouseForm(); } }));
+      out.push(card({ id: 'orders', icon: '📜', title: 'Sealed orders', sub: 'ConfigMap · Secret', button: 'Seal', kind: 'primary', enabled: store.namespaces.size > 0, onClick: () => { close(); openOrdersForm(); } }));
     }
     if (tab === 'all' || tab === 'charts') {
       if (!charts) {

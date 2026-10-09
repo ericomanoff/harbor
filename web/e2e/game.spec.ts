@@ -82,6 +82,7 @@ test.afterEach(() => {
     kubectl('delete', 'ingress', `${NAME}-gate`, '-n', NS, '--ignore-not-found');
     kubectl('delete', 'job', `${NAME}-haul`, '-n', NS, '--ignore-not-found');
     kubectl('delete', 'service', `${NAME}-light`, '-n', NS, '--ignore-not-found');
+    kubectl('delete', 'configmap', `${NAME}-orders`, '-n', NS, '--ignore-not-found');
   } catch {
     /* cluster gone; nothing to clean */
   }
@@ -400,4 +401,58 @@ test('light a lighthouse from the shop and put it out from its card', async ({ p
   await page.locator(action(0)).click();
   await page.waitForFunction((k) => !(window.harbor.store as unknown as { services: Map<string, unknown> }).services.has(k), `${NS}/${NAME}-light`, { timeout: 60_000 });
   expect(() => kubectl('get', 'service', `${NAME}-light`, '-n', NS)).toThrow();
+});
+
+test('seal orders from the shop and read them from a shipyard', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => window.harbor?.store.context === 'kind-harbor', null, { timeout: 30_000 })
+    .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
+  await page.waitForFunction(() => !document.getElementById('hud')?.hidden && document.getElementById('splash')?.hidden);
+
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=orders] button').click();
+  const form = page.locator('#orders-form');
+  await expect(form).toBeVisible();
+  await form.locator('select[name=kind]').selectOption('ConfigMap');
+  await form.locator('select[name=ns]').selectOption(NS);
+  await form.locator('input[name=name]').fill(`${NAME}-orders`);
+  await form.locator('textarea[name=data]').fill('PORT=8443\nREGION=north');
+  await form.locator('button[type=submit]').click();
+  await expect(form).toBeHidden();
+  expect(kubectl('get', 'configmap', `${NAME}-orders`, '-n', NS, '-o', 'jsonpath={.data.PORT}')).toBe('8443');
+
+  // A shipyard that reads the orders, with a cargo cap; the backend reports both.
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=shipyard] button').click();
+  await expect.poll(() => page.evaluate(() => window.harbor.mode.current)).toBe('place');
+  const cell = await page.evaluate(() => {
+    const m = window.harbor.game.scene.keys.Map as { layout: { plateaus: { x: number; y: number; w: number }[]; buildings: Map<string, { x: number; y: number; kind: string }> } };
+    const taken = new Set([...m.layout.buildings.values()].filter((b) => b.kind === 'plateau').map((b) => `${b.x},${b.y}`));
+    for (const p of m.layout.plateaus) {
+      const cols = Math.floor((p.w - 2) / 3);
+      for (let r = 0; r < 2; r++) for (let c = 0; c < cols; c++) {
+        const x = p.x + 1 + c * 3;
+        const y = p.y + 1 + r * 3;
+        if (!taken.has(`${x},${y}`)) return { x, y };
+      }
+    }
+    throw new Error('no free cell');
+  });
+  const at = await focus(page, cell.x * TILE + TILE * 1.5, cell.y * TILE + TILE * 1.5);
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.click(at.x, at.y);
+  const bf = page.locator('#build-form form');
+  await expect(bf).toBeVisible();
+  await bf.locator('select[name=ns]').selectOption(NS);
+  await bf.locator('select[name=orders]').selectOption(`ConfigMap/${NAME}-orders`);
+  await bf.locator('input[name=name]').fill(NAME);
+  await bf.locator('input[name=cpuLimit]').fill('200m');
+  await bf.locator('input[name=memLimit]').fill('128Mi');
+  await bf.locator('button[type=submit]').click();
+  await expect(bf).toBeHidden();
+  await page.waitForFunction((key) => {
+    const d = window.harbor.store.deployments.get(key) as { orders?: string[]; limits?: string } | undefined;
+    return d?.orders?.[0] === `ConfigMap/${key.split('/')[1]}-orders` && d.limits === 'cpu 200m · mem 128Mi';
+  }, `${NS}/${NAME}`, { timeout: 60_000 });
+  expect(kubectl('get', 'deployment', NAME, '-n', NS, '-o', 'jsonpath={.spec.template.spec.containers[0].envFrom[0].configMapRef.name}')).toBe(`${NAME}-orders`);
 });

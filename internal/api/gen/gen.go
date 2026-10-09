@@ -48,6 +48,24 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for OrdersKind.
+const (
+	OrdersKindConfigMap OrdersKind = "ConfigMap"
+	OrdersKindSecret    OrdersKind = "Secret"
+)
+
+// Valid indicates whether the value is a known member of the OrdersKind enum.
+func (e OrdersKind) Valid() bool {
+	switch e {
+	case OrdersKindConfigMap:
+		return true
+	case OrdersKindSecret:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkloadKind.
 const (
 	WorkloadKindDaemonSet   WorkloadKind = "DaemonSet"
@@ -135,6 +153,24 @@ func (e WsMessageType) Valid() bool {
 	}
 }
 
+// Defines values for OrdersKindParam.
+const (
+	OrdersKindParamConfigMap OrdersKindParam = "ConfigMap"
+	OrdersKindParamSecret    OrdersKindParam = "Secret"
+)
+
+// Valid indicates whether the value is a known member of the OrdersKindParam enum.
+func (e OrdersKindParam) Valid() bool {
+	switch e {
+	case OrdersKindParamConfigMap:
+		return true
+	case OrdersKindParamSecret:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkloadKindParam.
 const (
 	WorkloadKindParamDaemonSet   WorkloadKindParam = "DaemonSet"
@@ -150,6 +186,24 @@ func (e WorkloadKindParam) Valid() bool {
 	case WorkloadKindParamJob:
 		return true
 	case WorkloadKindParamStatefulSet:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeleteOrdersParamsKind.
+const (
+	DeleteOrdersParamsKindConfigMap DeleteOrdersParamsKind = "ConfigMap"
+	DeleteOrdersParamsKindSecret    DeleteOrdersParamsKind = "Secret"
+)
+
+// Valid indicates whether the value is a known member of the DeleteOrdersParamsKind enum.
+func (e DeleteOrdersParamsKind) Valid() bool {
+	switch e {
+	case DeleteOrdersParamsKindConfigMap:
+		return true
+	case DeleteOrdersParamsKindSecret:
 		return true
 	default:
 		return false
@@ -237,6 +291,9 @@ type ContextList struct {
 
 // CreateDeploymentRequest defines model for CreateDeploymentRequest.
 type CreateDeploymentRequest struct {
+	// CpuLimit CPU limit per pod (e.g. "200m"); empty for none.
+	CpuLimit *string `json:"cpuLimit,omitempty"`
+
 	// CpuRequest CPU request per pod (e.g. "50m"). Defaults to 50m; this is the unit's power drain.
 	CpuRequest *string `json:"cpuRequest,omitempty"`
 	Image      string  `json:"image"`
@@ -247,10 +304,16 @@ type CreateDeploymentRequest struct {
 	// MapPos Tile coordinates on the map grid.
 	MapPos *MapPos `json:"mapPos,omitempty"`
 
+	// MemLimit Memory limit per pod (e.g. "128Mi"); empty for none.
+	MemLimit *string `json:"memLimit,omitempty"`
+
 	// MemRequest Memory request per pod (e.g. "64Mi"). Defaults to 64Mi.
 	MemRequest *string `json:"memRequest,omitempty"`
 	Name       string  `json:"name"`
 	Ns         string  `json:"ns"`
+
+	// Orders ConfigMaps and Secrets injected as environment (envFrom).
+	Orders *[]OrdersRef `json:"orders,omitempty"`
 
 	// Port Container port to expose, optional.
 	Port *int `json:"port,omitempty"`
@@ -313,6 +376,14 @@ type CreateJobRequest struct {
 // CreateJobRequestRestartPolicy defines model for CreateJobRequest.RestartPolicy.
 type CreateJobRequestRestartPolicy string
 
+// CreateOrdersRequest defines model for CreateOrdersRequest.
+type CreateOrdersRequest struct {
+	Data map[string]string `json:"data"`
+	Kind OrdersKind        `json:"kind"`
+	Name string            `json:"name"`
+	Ns   string            `json:"ns"`
+}
+
 // CreateServiceRequest defines model for CreateServiceRequest.
 type CreateServiceRequest struct {
 	Name string `json:"name"`
@@ -363,6 +434,9 @@ type Deployment struct {
 	// Image Image of the first container.
 	Image string `json:"image"`
 
+	// Limits Resource limits of the first container, summarised, if any.
+	Limits *string `json:"limits,omitempty"`
+
 	// Liveness Liveness probe of the first container, summarised, if any.
 	Liveness *string `json:"liveness,omitempty"`
 
@@ -371,12 +445,18 @@ type Deployment struct {
 	Name   string  `json:"name"`
 	Ns     string  `json:"ns"`
 
+	// Orders ConfigMaps and Secrets the pod template reads (envFrom, env valueFrom, volumes), as "Kind/name".
+	Orders *[]string `json:"orders,omitempty"`
+
 	// Readiness Readiness probe of the first container, summarised (e.g. "http /healthz"), if any.
 	Readiness *string `json:"readiness,omitempty"`
 
 	// Release Helm release that owns this Deployment (meta.helm.sh/release-name), if any.
 	Release  *string `json:"release,omitempty"`
 	Replicas int     `json:"replicas"`
+
+	// Requests Resource requests of the first container, summarised (e.g. "cpu 50m · mem 64Mi"), if any.
+	Requests *string `json:"requests,omitempty"`
 	Updated  int     `json:"updated"`
 }
 
@@ -553,6 +633,23 @@ type Node struct {
 	Ready  bool   `json:"ready"`
 }
 
+// Orders A ConfigMap or Secret, keys only (Secret values never leave the backend).
+type Orders struct {
+	Keys []string   `json:"keys"`
+	Kind OrdersKind `json:"kind"`
+	Name string     `json:"name"`
+	Ns   string     `json:"ns"`
+}
+
+// OrdersKind defines model for OrdersKind.
+type OrdersKind string
+
+// OrdersRef defines model for OrdersRef.
+type OrdersRef struct {
+	Kind OrdersKind `json:"kind"`
+	Name string     `json:"name"`
+}
+
 // Pod defines model for Pod.
 type Pod struct {
 	Containers []string  `json:"containers"`
@@ -684,6 +781,9 @@ type NameParam = string
 // NamespaceParam defines model for NamespaceParam.
 type NamespaceParam = string
 
+// OrdersKindParam defines model for OrdersKindParam.
+type OrdersKindParam string
+
 // WorkloadKindParam defines model for WorkloadKindParam.
 type WorkloadKindParam string
 
@@ -698,6 +798,14 @@ type GetHelmChartValuesParams struct {
 	Chart   string  `form:"chart" json:"chart"`
 	Version *string `form:"version,omitempty" json:"version,omitempty"`
 }
+
+// ListOrdersParams defines parameters for ListOrders.
+type ListOrdersParams struct {
+	Ns string `form:"ns" json:"ns"`
+}
+
+// DeleteOrdersParamsKind defines parameters for DeleteOrders.
+type DeleteOrdersParamsKind string
 
 // GetPodLogsParams defines parameters for GetPodLogs.
 type GetPodLogsParams struct {
@@ -739,6 +847,9 @@ type AddHelmRepoJSONRequestBody = HelmRepo
 
 // CreateIngressJSONRequestBody defines body for CreateIngress for application/json ContentType.
 type CreateIngressJSONRequestBody = CreateIngressRequest
+
+// CreateOrdersJSONRequestBody defines body for CreateOrders for application/json ContentType.
+type CreateOrdersJSONRequestBody = CreateOrdersRequest
 
 // PutLevelProgressJSONRequestBody defines body for PutLevelProgress for application/json ContentType.
 type PutLevelProgressJSONRequestBody = LevelProgress
@@ -1090,6 +1201,15 @@ type ServerInterface interface {
 	// DeleteIngress Close a gate (delete the Ingress)
 	// (DELETE /api/ingresses/{ns}/{name})
 	DeleteIngress(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// ListOrders Sealed orders (ConfigMaps and Secrets) in a namespace, keys only
+	// (GET /api/orders)
+	ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams)
+	// CreateOrders Write sealed orders (create a ConfigMap or Secret)
+	// (POST /api/orders)
+	CreateOrders(w http.ResponseWriter, r *http.Request)
+	// DeleteOrders Burn sealed orders (delete the ConfigMap or Secret)
+	// (DELETE /api/orders/{kind}/{ns}/{name})
+	DeleteOrders(w http.ResponseWriter, r *http.Request, kind DeleteOrdersParamsKind, ns NamespaceParam, name NameParam)
 	// DeletePod Repair a unit (delete the pod so its ReplicaSet replaces it)
 	// (DELETE /api/pods/{ns}/{name})
 	DeletePod(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
@@ -1648,6 +1768,97 @@ func (siw *ServerInterfaceWrapper) DeleteIngress(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListOrders operation middleware
+func (siw *ServerInterfaceWrapper) ListOrders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrdersParams
+
+	// ------------- Required query parameter "ns" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "ns", r.URL.Query(), &params.Ns, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ns"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrders(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateOrders operation middleware
+func (siw *ServerInterfaceWrapper) CreateOrders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateOrders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteOrders operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOrders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "kind" -------------
+	var kind DeleteOrdersParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOrders(w, r, kind, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeletePod operation middleware
 func (siw *ServerInterfaceWrapper) DeletePod(w http.ResponseWriter, r *http.Request) {
 
@@ -2149,6 +2360,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/pods/{ns}/{name}", wrapper.DeletePod)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/scale", wrapper.ScaleDeployment)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/mappos", wrapper.SetDeploymentMapPos)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/orders", wrapper.ListOrders)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/orders", wrapper.CreateOrders)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/orders/{kind}/{ns}/{name}", wrapper.DeleteOrders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/progress", wrapper.GetProgress)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/progress/{level}", wrapper.PutLevelProgress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/helm/repos", wrapper.ListHelmRepos)

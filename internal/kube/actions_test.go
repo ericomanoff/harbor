@@ -325,3 +325,82 @@ func TestBuildService(t *testing.T) {
 		t.Error("service should be gone")
 	}
 }
+
+func TestBuildDeploymentLimitsAndOrders(t *testing.T) {
+	d, err := BuildDeployment(gen.CreateDeploymentRequest{
+		Ns: "harbor", Name: "hog", Image: "x", Replicas: 1, CpuRequest: ptr("100m"), MemRequest: ptr("64Mi"), CpuLimit: ptr("200m"), MemLimit: ptr("128Mi"),
+		Orders: &[]gen.OrdersRef{{Kind: gen.OrdersKindConfigMap, Name: "hog-orders"}, {Kind: gen.OrdersKindSecret, Name: "hog-keys"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := d.Spec.Template.Spec.Containers[0]
+	if c.Resources.Limits.Cpu().MilliValue() != 200 || c.Resources.Limits.Memory().String() != "128Mi" {
+		t.Errorf("limits: %v", c.Resources.Limits)
+	}
+	if len(c.EnvFrom) != 2 || c.EnvFrom[0].ConfigMapRef.Name != "hog-orders" || c.EnvFrom[1].SecretRef.Name != "hog-keys" {
+		t.Errorf("envFrom: %+v", c.EnvFrom)
+	}
+	out := ConvertDeployment(d)
+	if out.Limits == nil || *out.Limits != "cpu 200m · mem 128Mi" || out.Requests == nil || *out.Requests != "cpu 100m · mem 64Mi" {
+		t.Errorf("summaries: %v %v", out.Requests, out.Limits)
+	}
+	if out.Orders == nil || len(*out.Orders) != 2 || (*out.Orders)[0] != "ConfigMap/hog-orders" {
+		t.Errorf("orders: %v", out.Orders)
+	}
+	if _, err := BuildDeployment(gen.CreateDeploymentRequest{Ns: "harbor", Name: "hog", Image: "x", Replicas: 1, CpuRequest: ptr("500m"), CpuLimit: ptr("200m")}); err == nil {
+		t.Error("limit below request should be invalid")
+	}
+	if _, err := BuildDeployment(gen.CreateDeploymentRequest{Ns: "harbor", Name: "hog", Image: "x", Replicas: 1, MemLimit: ptr("lots")}); err == nil {
+		t.Error("bad memLimit should be invalid")
+	}
+}
+
+func TestOrders(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewClientset()
+	cm, err := CreateOrders(ctx, client, gen.CreateOrdersRequest{Ns: "harbor", Name: "courier-orders", Kind: gen.OrdersKindConfigMap, Data: map[string]string{"PORT": "80", "GREETING": "ahoy"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cm.Kind != gen.OrdersKindConfigMap || len(cm.Keys) != 2 || cm.Keys[0] != "GREETING" {
+		t.Errorf("configmap orders: %+v", cm)
+	}
+	sec, err := CreateOrders(ctx, client, gen.CreateOrdersRequest{Ns: "harbor", Name: "courier-keys", Kind: gen.OrdersKindSecret, Data: map[string]string{"API_KEY": "hush"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sec.Kind != gen.OrdersKindSecret || len(sec.Keys) != 1 || sec.Keys[0] != "API_KEY" {
+		t.Errorf("secret orders: %+v", sec)
+	}
+	// Plumbing is not listed.
+	if _, err := client.CoreV1().ConfigMaps("harbor").Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "kube-root-ca.crt", Namespace: "harbor"}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CoreV1().Secrets("harbor").Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "sh.helm.release.v1.x", Namespace: "harbor"}, Type: "helm.sh/release.v1"}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := ListOrders(ctx, client, "harbor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Errorf("list = %+v, want the two orders only", list)
+	}
+	for name, req := range map[string]gen.CreateOrdersRequest{
+		"no data": {Ns: "harbor", Name: "a", Kind: gen.OrdersKindConfigMap, Data: map[string]string{}},
+		"bad key": {Ns: "harbor", Name: "a", Kind: gen.OrdersKindConfigMap, Data: map[string]string{"bad key!": "x"}},
+		"bad ns":  {Ns: "Harbor", Name: "a", Kind: gen.OrdersKindSecret, Data: map[string]string{"k": "x"}},
+	} {
+		var ve *ValidationError
+		if _, err := CreateOrders(ctx, client, req); !errors.As(err, &ve) {
+			t.Errorf("%s: err = %v, want ValidationError", name, err)
+		}
+	}
+	if err := DeleteOrders(ctx, client, gen.OrdersKindSecret, "harbor", "courier-keys"); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ = ListOrders(ctx, client, "harbor"); len(list) != 1 {
+		t.Errorf("after delete: %+v", list)
+	}
+}

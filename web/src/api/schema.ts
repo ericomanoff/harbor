@@ -327,6 +327,41 @@ export interface paths {
         patch: operations["setDeploymentMapPos"];
         trace?: never;
     };
+    "/api/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sealed orders (ConfigMaps and Secrets) in a namespace, keys only */
+        get: operations["listOrders"];
+        put?: never;
+        /** Write sealed orders (create a ConfigMap or Secret) */
+        post: operations["createOrders"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orders/{kind}/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Burn sealed orders (delete the ConfigMap or Secret) */
+        delete: operations["deleteOrders"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/progress": {
         parameters: {
             query?: never;
@@ -588,6 +623,12 @@ export interface components {
             currentRS?: string;
             /** @description Helm release that owns this Deployment (meta.helm.sh/release-name), if any. */
             release?: string;
+            /** @description Resource requests of the first container, summarised (e.g. "cpu 50m · mem 64Mi"), if any. */
+            requests?: string;
+            /** @description Resource limits of the first container, summarised, if any. */
+            limits?: string;
+            /** @description ConfigMaps and Secrets the pod template reads (envFrom, env valueFrom, volumes), as "Kind/name". */
+            orders?: string[];
             /** @description Readiness probe of the first container, summarised (e.g. "http /healthz"), if any. */
             readiness?: string;
             /** @description Liveness probe of the first container, summarised, if any. */
@@ -709,10 +750,37 @@ export interface components {
             cpuRequest?: string;
             /** @description Memory request per pod (e.g. "64Mi"). Defaults to 64Mi. */
             memRequest?: string;
+            /** @description CPU limit per pod (e.g. "200m"); empty for none. */
+            cpuLimit?: string;
+            /** @description Memory limit per pod (e.g. "128Mi"); empty for none. */
+            memLimit?: string;
+            /** @description ConfigMaps and Secrets injected as environment (envFrom). */
+            orders?: components["schemas"]["OrdersRef"][];
             /** @description HTTP GET readiness probe path on the container port (a lookout); empty for none. */
             readinessPath?: string;
             /** @description HTTP GET liveness probe path on the container port (a lookout); empty for none. */
             livenessPath?: string;
+        };
+        /** @enum {string} */
+        OrdersKind: "ConfigMap" | "Secret";
+        OrdersRef: {
+            kind: components["schemas"]["OrdersKind"];
+            name: string;
+        };
+        /** @description A ConfigMap or Secret, keys only (Secret values never leave the backend). */
+        Orders: {
+            ns: string;
+            name: string;
+            kind: components["schemas"]["OrdersKind"];
+            keys: string[];
+        };
+        CreateOrdersRequest: {
+            ns: string;
+            name: string;
+            kind: components["schemas"]["OrdersKind"];
+            data: {
+                [key: string]: string;
+            };
         };
         CreateServiceRequest: {
             ns: string;
@@ -880,6 +948,7 @@ export interface components {
     };
     parameters: {
         WorkloadKindParam: "StatefulSet" | "DaemonSet" | "Job";
+        OrdersKindParam: "ConfigMap" | "Secret";
         ContextNameParam: string;
         NamespaceParam: string;
         NameParam: string;
@@ -1334,6 +1403,77 @@ export interface operations {
         };
         responses: {
             /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listOrders: {
+        parameters: {
+            query: {
+                ns: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Orders"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrdersRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Orders"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: components["parameters"]["OrdersKindParam"];
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
             204: {
                 headers: {
                     [name: string]: unknown;

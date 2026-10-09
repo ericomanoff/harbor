@@ -319,6 +319,8 @@ export class Hud {
         `${d.ns} · ${d.image}`,
         `${d.available}/${d.replicas} ships moored${rolling ? ` · refit ${d.updated}/${d.replicas}` : ''}`,
         d.readiness || d.liveness ? `lookouts: readiness ${d.readiness ?? 'none'} · liveness ${d.liveness ?? 'none'}` : 'no lookouts (no probes)',
+        `berth: requests ${d.requests ?? 'none (greedy ship)'} · limits ${d.limits ?? 'none'}`,
+        d.orders?.length ? `sealed orders: ${d.orders.join(', ')}` : '',
         d.mapPos ? `berth ${d.mapPos.x},${d.mapPos.y}` : 'auto-berthed (drag to choose a site)',
       ], [
         { label: 'Launch ship', kind: 'primary', enabled: true, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas + 1); this.announce(`UNIT ORDERED: ${d.name}`); } },

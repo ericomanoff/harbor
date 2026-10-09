@@ -142,6 +142,11 @@
           <label>CPU/UNIT <input name="cpu" value="50m" /></label>
           <label>MEM/UNIT <input name="mem" value="64Mi" /></label>
         </div>
+        <div class="row caps">
+          <label><span>CPU LIMIT</span> <input name="cpuLimit" placeholder="none, e.g. 200m" /></label>
+          <label><span>MEM LIMIT</span> <input name="memLimit" placeholder="none, e.g. 128Mi" /></label>
+        </div>
+        <label class="orders"><span>SEALED ORDERS (env from)</span> <select name="orders" multiple size="3"></select></label>
         <div class="row lookouts">
           <label><span>READINESS LOOKOUT</span> <input name="readiness" placeholder="none, or e.g. /ready" /></label>
           <label><span>LIVENESS LOOKOUT</span> <input name="liveness" placeholder="none, or e.g. /healthz" /></label>
@@ -187,6 +192,26 @@
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">SET SAIL</button>
+          <button type="button" data-cancel>CANCEL</button>
+        </div>
+      </form>
+    </div>
+    <div id="orders-form" class="overlay" hidden>
+      <form class="panel" autocomplete="off">
+        <h2>SEALED ORDERS <span class="where">ConfigMap or Secret</span></h2>
+        <div class="row">
+          <label>KIND <select name="kind"><option value="ConfigMap">Chart locker (ConfigMap)</option><option value="Secret">Sealed envelope (Secret)</option></select></label>
+          <label>NAMESPACE <select name="ns"></select></label>
+        </div>
+        <label>NAME <input name="name" required maxlength="253" pattern="[a-z0-9]([-a-z0-9.]*[a-z0-9])?" placeholder="lowercase, dashes" /></label>
+        <label><span>ORDERS (one KEY=value per line)</span> <textarea name="data" rows="5" spellcheck="false" placeholder="PORT=8443&#10;REGION=north"></textarea></label>
+        <details class="manifest" data-no-terms>
+          <summary>Ship's manifest <span class="sub">the YAML these fields become</span></summary>
+          <pre class="yaml"></pre>
+        </details>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="submit">SEAL</button>
           <button type="button" data-cancel>CANCEL</button>
         </div>
       </form>

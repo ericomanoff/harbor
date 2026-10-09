@@ -4,9 +4,12 @@ import { level2 } from './level2';
 import { level3 } from './level3';
 import { level4 } from './level4';
 import { level5 } from './level5';
+import { level6 } from './level6';
+import { level7 } from './level7';
+import { level8 } from './level8';
 
 /** The beginner campaign, in order. */
-export const ACADEMY: Level[] = [level1, level2, level3, level4, level5];
+export const ACADEMY: Level[] = [level1, level2, level3, level4, level5, level6, level7, level8];
 
 export const levelById = (id: string): Level | undefined => ACADEMY.find((l) => l.id === id);
 export const nextLevel = (id: string): Level | undefined => ACADEMY[ACADEMY.findIndex((l) => l.id === id) + 1];

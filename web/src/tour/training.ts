@@ -11,6 +11,9 @@ import { nsKey, type Deployment, type Pod, type Snapshot, type Workload } from '
  */
 export const training = { active: false };
 
+/** Sealed orders the training harbor holds, by "ns/name"; keys only, like the backend. */
+export const trainingOrders = new Map<string, { ns: string; name: string; kind: 'ConfigMap' | 'Secret'; keys: string[] }>();
+
 let liveWasDemo = false;
 
 /**
@@ -26,6 +29,7 @@ export function enterTraining(snapshot: Snapshot = demoSnapshot()): void {
   }
   for (const t of timers) clearTimeout(t);
   timers.length = 0;
+  trainingOrders.clear();
   store.replace(snapshot);
   link.set('demo');
 }
@@ -130,6 +134,22 @@ export function simulate(method: string, path: string, body: unknown): unknown {
     store.apply({ type: 'modified', kind: 'Ingress', obj: ing });
     return ing;
   }
+  if ((m = /^\/api\/orders\?ns=([^&]+)$/.exec(path)) && method === 'GET') {
+    const ns = decodeURIComponent(m[1]!);
+    return [...trainingOrders.values()].filter((o) => o.ns === ns);
+  }
+  if (method === 'POST' && path === '/api/orders') {
+    const req = b as { ns: string; name: string; kind: 'ConfigMap' | 'Secret'; data: Record<string, string> };
+    if (!Object.keys(req.data ?? {}).length) throw new Error('orders need at least one key');
+    if (trainingOrders.has(nsKey(req.ns, req.name))) throw new Error('orders of that name are already sealed');
+    const o = { ns: req.ns, name: req.name, kind: req.kind, keys: Object.keys(req.data).sort() };
+    trainingOrders.set(nsKey(req.ns, req.name), o);
+    return o;
+  }
+  if ((m = /^\/api\/orders\/(ConfigMap|Secret)\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'DELETE') {
+    if (!trainingOrders.delete(nsKey(decodeURIComponent(m[2]!), decodeURIComponent(m[3]!)))) throw new Error('no such orders');
+    return undefined;
+  }
   if (method === 'POST' && path === '/api/services') {
     const req = b as { ns: string; name: string; selector: Record<string, string>; port: number; targetPort?: number; type?: string };
     if (!Object.keys(req.selector ?? {}).length) throw new Error('selector needs at least one label');
@@ -145,10 +165,14 @@ export function simulate(method: string, path: string, body: unknown): unknown {
     return undefined;
   }
   if (method === 'POST' && path === '/api/deployments') {
-    const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number }; readinessPath?: string; livenessPath?: string };
+    const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number }; readinessPath?: string; livenessPath?: string; cpuRequest?: string; memRequest?: string; cpuLimit?: string; memLimit?: string; orders?: { kind: string; name: string }[] };
     if (store.deployments.has(nsKey(req.ns, req.name))) throw new Error('a shipyard of that name already stands');
+    const limits = [req.cpuLimit ? `cpu ${req.cpuLimit}` : '', req.memLimit ? `mem ${req.memLimit}` : ''].filter(Boolean).join(' · ');
     const dep: Deployment = {
       ns: req.ns, name: req.name, image: req.image, replicas: req.replicas, available: 0, updated: 0, conditions: [],
+      requests: `cpu ${req.cpuRequest || '50m'} · mem ${req.memRequest || '64Mi'}`,
+      ...(limits ? { limits } : {}),
+      ...(req.orders?.length ? { orders: req.orders.map((o) => `${o.kind}/${o.name}`) } : {}),
       ...(req.mapPos ? { mapPos: req.mapPos } : {}),
       ...(req.readinessPath ? { readiness: `http ${req.readinessPath}` } : {}),
       ...(req.livenessPath ? { liveness: `http ${req.livenessPath}` } : {}),

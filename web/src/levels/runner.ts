@@ -32,6 +32,8 @@ export function startLevel(level: Level, map: MapApi, hooks: RunnerHooks): void 
   enterTraining(level.fixture());
   selection.clear();
   map.home();
+  // The map rebuilds its layout on the next frame; home again once it has.
+  requestAnimationFrame(() => requestAnimationFrame(() => map.home()));
   const ctx = {
     store,
     play: (script: Parameters<typeof playScript>[1]) => {

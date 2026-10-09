@@ -337,6 +337,60 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/orders:
+    get:
+      operationId: listOrders
+      summary: Sealed orders (ConfigMaps and Secrets) in a namespace, keys only
+      parameters:
+        - name: ns
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Orders"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      operationId: createOrders
+      summary: Write sealed orders (create a ConfigMap or Secret)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrdersRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Orders"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/orders/{kind}/{ns}/{name}:
+    delete:
+      operationId: deleteOrders
+      summary: Burn sealed orders (delete the ConfigMap or Secret)
+      parameters:
+        - $ref: "#/components/parameters/OrdersKindParam"
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "204":
+          description: Deleted
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/progress:
     get:
       operationId: getProgress
@@ -582,6 +636,13 @@ components:
       schema:
         type: string
         enum: [StatefulSet, DaemonSet, Job]
+    OrdersKindParam:
+      name: kind
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [ConfigMap, Secret]
     ContextNameParam:
       name: name
       in: path
@@ -738,6 +799,17 @@ components:
         release:
           type: string
           description: Helm release that owns this Deployment (meta.helm.sh/release-name), if any.
+        requests:
+          type: string
+          description: Resource requests of the first container, summarised (e.g. "cpu 50m · mem 64Mi"), if any.
+        limits:
+          type: string
+          description: Resource limits of the first container, summarised, if any.
+        orders:
+          type: array
+          description: ConfigMaps and Secrets the pod template reads (envFrom, env valueFrom, volumes), as "Kind/name".
+          items:
+            type: string
         readiness:
           type: string
           description: Readiness probe of the first container, summarised (e.g. "http /healthz"), if any.
@@ -992,12 +1064,67 @@ components:
         memRequest:
           type: string
           description: Memory request per pod (e.g. "64Mi"). Defaults to 64Mi.
+        cpuLimit:
+          type: string
+          description: CPU limit per pod (e.g. "200m"); empty for none.
+        memLimit:
+          type: string
+          description: Memory limit per pod (e.g. "128Mi"); empty for none.
+        orders:
+          type: array
+          description: ConfigMaps and Secrets injected as environment (envFrom).
+          items:
+            $ref: "#/components/schemas/OrdersRef"
         readinessPath:
           type: string
           description: HTTP GET readiness probe path on the container port (a lookout); empty for none.
         livenessPath:
           type: string
           description: HTTP GET liveness probe path on the container port (a lookout); empty for none.
+
+    OrdersKind:
+      type: string
+      enum: [ConfigMap, Secret]
+
+    OrdersRef:
+      type: object
+      required: [kind, name]
+      properties:
+        kind:
+          $ref: "#/components/schemas/OrdersKind"
+        name:
+          type: string
+
+    Orders:
+      type: object
+      description: A ConfigMap or Secret, keys only (Secret values never leave the backend).
+      required: [ns, name, kind, keys]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/OrdersKind"
+        keys:
+          type: array
+          items:
+            type: string
+
+    CreateOrdersRequest:
+      type: object
+      required: [ns, name, kind, data]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/OrdersKind"
+        data:
+          type: object
+          additionalProperties:
+            type: string
 
     CreateServiceRequest:
       type: object

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Deployment, Pod } from '../store/cluster';
-import { lighthouseFor, lookoutsShipyard, podGone, readyShips, relaunched, shipyardAfloat } from './goals';
+import { cappedShipyard, gateFor, lighthouseFor, lookoutsShipyard, ordersShipyard, podGone, readyShips, relaunched, shipyardAfloat } from './goals';
 
 const dep = (ns: string, name: string, replicas: number, available: number): Deployment => ({ ns, name, replicas, available, updated: replicas, image: 'x', conditions: [] });
 const pod = (ns: string, name: string, deployment: string | undefined, ready: boolean): Pod => ({ ns, name, node: 'n', phase: 'Running', ready, restarts: 0, created: 'x', labels: {}, containers: ['c'], ...(deployment ? { deployment } : {}) });
@@ -40,5 +40,21 @@ describe('C1 goals', () => {
     expect(lighthouseFor({ services: new Map([['harbor/beam', svc({ app: 'other' })]]), pods }, 'harbor', 'c')).toBeUndefined();
     expect(lighthouseFor({ services: new Map([['harbor/beam', svc({}, 1)]]), pods }, 'harbor', 'c')).toBeUndefined();
     expect(lighthouseFor({ services: new Map([['harbor/beam', svc({ app: 'c' }, 0)]]), pods }, 'harbor', 'c')).toBeUndefined();
+  });
+});
+
+describe('C2 goals', () => {
+  const pods = new Map([['harbor/c-1', pod('harbor', 'c-1', 'c', true)]]);
+  it('gateFor finds a gate with a rule to the lighthouse', () => {
+    const ingresses = new Map([['harbor/shop', { ns: 'harbor', name: 'shop', hosts: ['shop.example'], tls: true, addresses: [], rules: [{ host: 'shop.example', path: '/', service: 'courier', port: '80' }] }]]);
+    expect(gateFor({ ingresses }, 'harbor', 'courier')).toBe('shop');
+    expect(gateFor({ ingresses }, 'harbor', 'other')).toBeUndefined();
+  });
+  it('ordersShipyard and cappedShipyard read the wire summaries', () => {
+    const deployments = new Map([['harbor/c', { ...dep('harbor', 'c', 1, 1), orders: ['ConfigMap/c-orders'], requests: 'cpu 100m · mem 64Mi', limits: 'cpu 200m · mem 128Mi' }]]);
+    expect(ordersShipyard({ deployments, pods }, 'harbor', 'ConfigMap/c-orders')).toBe('c');
+    expect(ordersShipyard({ deployments, pods }, 'harbor', 'Secret/c-orders')).toBeUndefined();
+    expect(cappedShipyard({ deployments, pods }, 'harbor')).toBe('c');
+    expect(cappedShipyard({ deployments: new Map([['harbor/c', { ...dep('harbor', 'c', 1, 1), requests: 'cpu 100m', limits: 'cpu 200m' }]]), pods }, 'harbor')).toBeUndefined();
   });
 });

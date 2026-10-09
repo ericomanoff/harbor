@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"sort"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -88,6 +89,46 @@ func BuildDeployment(req gen.CreateDeploymentRequest) (*appsv1.Deployment, error
 			corev1.ResourceMemory: memQ,
 		}},
 	}
+	// Cargo limits: optional caps enforced at runtime.
+	if l := derefStr(req.CpuLimit); l != "" {
+		q, err := resource.ParseQuantity(l)
+		if err != nil {
+			return nil, invalid("cpuLimit %q: %v", l, err)
+		}
+		if q.Cmp(cpuQ) < 0 {
+			return nil, invalid("cpuLimit %s is below the request %s", l, cpu)
+		}
+		container.Resources.Limits = corev1.ResourceList{corev1.ResourceCPU: q}
+	}
+	if l := derefStr(req.MemLimit); l != "" {
+		q, err := resource.ParseQuantity(l)
+		if err != nil {
+			return nil, invalid("memLimit %q: %v", l, err)
+		}
+		if q.Cmp(memQ) < 0 {
+			return nil, invalid("memLimit %s is below the request %s", l, mem)
+		}
+		if container.Resources.Limits == nil {
+			container.Resources.Limits = corev1.ResourceList{}
+		}
+		container.Resources.Limits[corev1.ResourceMemory] = q
+	}
+	// Sealed orders: ConfigMaps and Secrets injected as environment.
+	if req.Orders != nil {
+		for _, o := range *req.Orders {
+			if errs := validation.IsDNS1123Subdomain(o.Name); len(errs) > 0 {
+				return nil, invalid("orders %q: %s", o.Name, strings.Join(errs, "; "))
+			}
+			switch o.Kind {
+			case gen.OrdersKindConfigMap:
+				container.EnvFrom = append(container.EnvFrom, corev1.EnvFromSource{ConfigMapRef: &corev1.ConfigMapEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: o.Name}}})
+			case gen.OrdersKindSecret:
+				container.EnvFrom = append(container.EnvFrom, corev1.EnvFromSource{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: o.Name}}})
+			default:
+				return nil, invalid("orders kind %q: ConfigMap or Secret", o.Kind)
+			}
+		}
+	}
 	if req.Port != nil {
 		if *req.Port < 1 || *req.Port > 65535 {
 			return nil, invalid("port must be 1-65535")
@@ -173,6 +214,113 @@ func BuildService(req gen.CreateServiceRequest) (*corev1.Service, error) {
 			Ports:    []corev1.ServicePort{{Name: "http", Port: int32(req.Port), TargetPort: intstr.FromInt(target), Protocol: corev1.ProtocolTCP}},
 		},
 	}, nil
+}
+
+// BuildOrders turns a create request into a ConfigMap or a Secret.
+func BuildOrders(req gen.CreateOrdersRequest) (*corev1.ConfigMap, *corev1.Secret, error) {
+	if errs := validation.IsDNS1123Subdomain(req.Name); len(errs) > 0 {
+		return nil, nil, invalid("name %q: %s", req.Name, strings.Join(errs, "; "))
+	}
+	if errs := validation.IsDNS1123Label(req.Ns); len(errs) > 0 {
+		return nil, nil, invalid("namespace %q: %s", req.Ns, strings.Join(errs, "; "))
+	}
+	if len(req.Data) == 0 {
+		return nil, nil, invalid("orders need at least one key")
+	}
+	for k := range req.Data {
+		if errs := validation.IsConfigMapKey(k); len(errs) > 0 {
+			return nil, nil, invalid("key %q: %s", k, strings.Join(errs, "; "))
+		}
+	}
+	meta := metav1.ObjectMeta{Name: req.Name, Namespace: req.Ns, Labels: map[string]string{ManagedByLabel: managedByValue}}
+	switch req.Kind {
+	case gen.OrdersKindConfigMap:
+		return &corev1.ConfigMap{ObjectMeta: meta, Data: req.Data}, nil, nil
+	case gen.OrdersKindSecret:
+		return nil, &corev1.Secret{ObjectMeta: meta, Type: corev1.SecretTypeOpaque, StringData: req.Data}, nil
+	}
+	return nil, nil, invalid("kind %q: ConfigMap or Secret", req.Kind)
+}
+
+// CreateOrders writes a ConfigMap or Secret and answers with its keys only.
+func CreateOrders(ctx context.Context, client kubernetes.Interface, req gen.CreateOrdersRequest) (gen.Orders, error) {
+	cm, sec, err := BuildOrders(req)
+	if err != nil {
+		return gen.Orders{}, err
+	}
+	if cm != nil {
+		out, err := client.CoreV1().ConfigMaps(req.Ns).Create(ctx, cm, metav1.CreateOptions{})
+		if err != nil {
+			return gen.Orders{}, err
+		}
+		return ordersOfConfigMap(out), nil
+	}
+	out, err := client.CoreV1().Secrets(req.Ns).Create(ctx, sec, metav1.CreateOptions{})
+	if err != nil {
+		return gen.Orders{}, err
+	}
+	return ordersOfSecret(out), nil
+}
+
+// ListOrders lists the ConfigMaps and Secrets of a namespace, keys only.
+// Service-account tokens and Helm release records are plumbing, not orders.
+func ListOrders(ctx context.Context, client kubernetes.Interface, ns string) ([]gen.Orders, error) {
+	out := []gen.Orders{}
+	cms, err := client.CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for i := range cms.Items {
+		if cms.Items[i].Name == "kube-root-ca.crt" {
+			continue
+		}
+		out = append(out, ordersOfConfigMap(&cms.Items[i]))
+	}
+	secs, err := client.CoreV1().Secrets(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for i := range secs.Items {
+		if secs.Items[i].Type != corev1.SecretTypeOpaque {
+			continue
+		}
+		out = append(out, ordersOfSecret(&secs.Items[i]))
+	}
+	return out, nil
+}
+
+// DeleteOrders removes a ConfigMap or Secret.
+func DeleteOrders(ctx context.Context, client kubernetes.Interface, kind gen.OrdersKind, ns, name string) error {
+	switch kind {
+	case gen.OrdersKindConfigMap:
+		return client.CoreV1().ConfigMaps(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	case gen.OrdersKindSecret:
+		return client.CoreV1().Secrets(ns).Delete(ctx, name, metav1.DeleteOptions{})
+	}
+	return invalid("kind %q: ConfigMap or Secret", kind)
+}
+
+func ordersOfConfigMap(cm *corev1.ConfigMap) gen.Orders {
+	keys := make([]string, 0, len(cm.Data))
+	for k := range cm.Data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return gen.Orders{Ns: cm.Namespace, Name: cm.Name, Kind: gen.OrdersKindConfigMap, Keys: keys}
+}
+
+func ordersOfSecret(sec *corev1.Secret) gen.Orders {
+	keys := make([]string, 0, len(sec.Data)+len(sec.StringData))
+	for k := range sec.Data {
+		keys = append(keys, k)
+	}
+	for k := range sec.StringData {
+		if _, dup := sec.Data[k]; !dup {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return gen.Orders{Ns: sec.Namespace, Name: sec.Name, Kind: gen.OrdersKindSecret, Keys: keys}
 }
 
 // CreateService lights a lighthouse.

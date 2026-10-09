@@ -18,6 +18,9 @@ async function clickMapKey(page: Page, key: string): Promise<void> {
 /** Clicks the first structure cell of an island: one tile in from the corner, cells are 3x3 tiles. */
 async function clickIslandSite(page: Page, node: string): Promise<void> {
   await page.waitForFunction((n) => ((window.harbor.game.scene.keys['Map'] as MapHandle).screenRectOf(`dock:${n}`)?.width ?? 0) > 0, node);
+  // Bring the island comfortably into view first so the site is not under the HUD.
+  await page.evaluate((n) => (window.harbor.game.scene.keys['Map'] as MapHandle & { focusKey(k: string): void }).focusKey(`dock:${n}`), node);
+  await page.waitForTimeout(500);
   const pt = await page.evaluate((n) => {
     const m = window.harbor.game.scene.keys['Map'] as MapHandle;
     const p = m.layout.plateaus.find((x) => x.node === n)!;
@@ -44,7 +47,7 @@ test('Harbor Select lists the academy with level 2 locked', async ({ page }) => 
   await page.goto('/?demo&academy');
   const select = page.locator('#academy');
   await expect(select).toBeVisible({ timeout: 15_000 });
-  await expect(select.locator('.row.level')).toHaveCount(5);
+  await expect(select.locator('.row.level')).toHaveCount(8);
   await expect(select.locator('.row.level[data-level="academy/2"]')).toHaveClass(/locked/);
   await expect(select.locator('.row.level[data-level="academy/2"] button')).toBeDisabled();
   await select.locator('.row.level[data-level="academy/1"] button').click();
@@ -119,7 +122,7 @@ test('levels 1 and 2 play through, award stars and unlock the next', async ({ pa
   await expect(select.locator('.row.level[data-level="academy/1"] .stars')).toHaveText('★★★');
   await expect(select.locator('.row.level[data-level="academy/2"] .stars')).toHaveText('★★☆');
   await expect(select.locator('.row.level[data-level="academy/3"] button')).toBeEnabled();
-  await expect(select.locator('.row.level.locked')).toHaveCount(2);
+  await expect(select.locator('.row.level.locked')).toHaveCount(5);
   await expect(select.locator('.row.level[data-level="academy/2"] button')).toHaveText('REPLAY');
   expect(await page.evaluate(() => fetch('/api/progress').then((r) => r.json()))).toMatchObject({ levels: { 'academy/1': { stars: 3 }, 'academy/2': { stars: 2 } } });
 });
@@ -196,10 +199,104 @@ test('levels 3 to 5: scaling, lookouts and the lighthouse', async ({ page }) => 
   await expect(title(page)).toHaveText('One name, many ships', { timeout: 25_000 });
   await finishAndContinue(page);
   await expect(page.locator('#summary pre.kubectl')).toContainText('kubectl expose deployment courier');
+  await expect(page.locator('#summary [data-next]')).toBeVisible();
+  await page.locator('#summary [data-select]').click();
+  const select = page.locator('#academy');
+  await expect(select).toBeVisible();
+  await expect(select.locator('.row.level')).toHaveCount(8);
+  await expect(select.locator('.row.level[data-level="academy/5"] .stars')).toHaveText('★★★');
+});
+
+test('levels 6 to 8: the gate, sealed orders, berths and cargo', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: 1280, height: 760 });
+
+  // Level 6: open a gate to the courier lighthouse.
+  await page.goto('/?demo&level=academy/6');
+  await expect(title(page)).toHaveText('Traders outside the breakwater', { timeout: 15_000 });
+  await next(page).click();
+  await expect(title(page)).toHaveText('Open a gate');
+  await page.locator('#hud [data-shop-open]').click();
+  await expect(title(page)).toHaveText('The Gate card');
+  await page.locator('#shop [data-card=gate] button').click();
+  await expect(title(page)).toHaveText('Host, path, lighthouse');
+  const gate = page.locator('#gate-form form');
+  await gate.locator('select[name=ns]').selectOption('harbor');
+  await gate.locator('input[name=name]').fill('shop');
+  await gate.locator('input[name=host]').fill('shop.example');
+  await gate.locator('select[name=service]').selectOption('courier');
+  await gate.locator('input[name=tls]').check();
+  await gate.locator('button[type=submit]').click();
+  await expect(title(page)).toHaveText('Traders come in', { timeout: 10_000 });
+  await next(page).click();
+  await expect(title(page)).toHaveText('The gate and its keeper');
+  await finishAndContinue(page);
+  await expect(page.locator('#summary pre.yaml')).toContainText('kind: Ingress');
+  await expect(page.locator('#summary pre.yaml')).toContainText('host: shop.example');
+  await page.locator('#summary [data-next]').click();
+
+  // Level 7: seal orders, then a shipyard that reads them.
+  await expect(title(page)).toHaveText('Orders painted on the hull');
+  await next(page).click();
+  await expect(title(page)).toHaveText('Seal the orders');
+  await page.locator('#hud [data-shop-open]').click();
+  await expect(title(page)).toHaveText('Sealed orders');
+  await page.locator('#shop [data-card=orders] button').click();
+  await expect(title(page)).toHaveText('A chart locker');
+  const of = page.locator('#orders-form form');
+  await of.locator('select[name=kind]').selectOption('ConfigMap');
+  await of.locator('select[name=ns]').selectOption('harbor');
+  await of.locator('input[name=name]').fill('courier-orders');
+  await of.locator('textarea[name=data]').fill('PORT=8443\nREGION=north');
+  await expect(of.locator('details.manifest pre')).toContainText('PORT: "8443"');
+  await of.locator('button[type=submit]').click();
+  await expect(title(page)).toHaveText('A shipyard that reads them');
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=shipyard] button').click();
+  await expect.poll(() => page.evaluate(() => window.harbor.mode.current)).toBe('place');
+  await clickIslandSite(page, 'harbor-control-plane');
+  const bf = page.locator('#build-form form');
+  await expect(bf).toBeVisible();
+  await bf.locator('select[name=ns]').selectOption('harbor');
+  await bf.locator('select[name=orders]').selectOption('ConfigMap/courier-orders');
+  await bf.locator('input[name=name]').fill('courier-v2');
+  await expect(bf.locator('details.manifest pre')).toContainText('configMapRef');
+  await bf.locator('button[type=submit]').click();
+  await expect(title(page)).toHaveText('The orders change', { timeout: 15_000 });
+  await expect(title(page)).toHaveText('Image and configuration, apart', { timeout: 20_000 });
+  await finishAndContinue(page);
+  await expect(page.locator('#summary pre.yaml')).toContainText('kind: ConfigMap');
+  await expect(page.locator('#summary pre.kubectl')).toContainText('kubectl create configmap courier-orders');
+  await page.locator('#summary [data-next]').click();
+
+  // Level 8: sell the greedy hog, rebuild it with requests and limits.
+  await expect(title(page)).toHaveText('A greedy ship');
+  await expect(page.locator('#hud .selection')).toBeHidden();
+  await next(page).click();
+  await expect(title(page)).toHaveText('Overloaded and sunk');
+  await next(page).click();
+  await expect(title(page)).toHaveText('Retire the hog');
+  await clickMapKey(page, 'b:harbor/hog');
+  await page.locator('#hud .selection button', { hasText: 'Sell shipyard' }).click();
+  await page.locator('#hud .selection button', { hasText: 'Confirm' }).click();
+  await expect(title(page)).toHaveText('The courier moors', { timeout: 10_000 });
+  await expect.poll(() => page.evaluate(() => window.harbor.store.pods.get('harbor/courier-a')?.ready), { timeout: 10_000 }).toBe(true);
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=shipyard] button').click();
+  await expect.poll(() => page.evaluate(() => window.harbor.mode.current)).toBe('place');
+  await clickIslandSite(page, 'harbor-worker');
+  await expect(title(page)).toHaveText('A fair berth and a cargo cap');
+  await fillShipyard(page, 'hog', { cpu: '250m', mem: '64Mi', cpuLimit: '500m', memLimit: '128Mi' });
+  await expect(title(page)).toHaveText('The hog tries again', { timeout: 15_000 });
+  await next(page).click();
+  await expect(title(page)).toHaveText('Requests and limits');
+  await finishAndContinue(page);
+  await expect(page.locator('#summary pre.yaml')).toContainText('limits:');
+  await expect(page.locator('#summary pre.kubectl')).toContainText('kubectl set resources deployment/hog');
   await expect(page.locator('#summary [data-next]')).toBeHidden();
   await page.locator('#summary [data-select]').click();
   const select = page.locator('#academy');
   await expect(select).toBeVisible();
-  await expect(select.locator('.row.level')).toHaveCount(5);
-  await expect(select.locator('.row.level[data-level="academy/5"] .stars')).toHaveText('★★★');
+  await expect(select.locator('.row.level')).toHaveCount(8);
+  await expect(select.locator('.row.level[data-level="academy/8"] .stars')).toHaveText('★★★');
 });

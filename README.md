@@ -49,7 +49,8 @@ par); progress is kept in `~/.config/harbor/progress.json` (`-progress` to
 move it). `?level=academy/2` opens a level directly. Levels so far: 1 "A ship
 and its cargo" (pods and containers), 2 "The shipyard" (Deployments), 3 "Storm
 season" (scaling), 4 "Lookouts" (readiness and liveness probes), 5 "The
-lighthouse" (Services).
+lighthouse" (Services), 6 "The harbor mouth" (Ingress), 7 "Sealed orders"
+(ConfigMaps and Secrets), 8 "Berths and cargo" (requests and limits).
 
 Controls: left-click selects, drag box-selects ships, drag a shipyard to move
 it, right-drag pans, wheel or the right rail zooms, arrows or WASD scroll, H
@@ -62,11 +63,13 @@ selection card at the bottom carries the actions for whatever is selected.
 Playing: open the Shop, Build a shipyard (Deployment) or a tanker terminal
 (StatefulSet with its headless Service and an optional volume per tanker) on
 a free slipway (the land rows of an island) and fill in the form; a shipyard
-form takes readiness and liveness lookouts (HTTP probes) and shows the YAML
-it will produce under Ship's manifest. Fishing fleet sends out a Job (command,
+form takes readiness and liveness lookouts (HTTP probes), CPU and memory
+limits, sealed orders to inject as environment, and shows the YAML it will
+produce under Ship's manifest. Fishing fleet sends out a Job (command,
 catches, boats at sea, retries). The Harbor tab opens a gate (an Ingress with
-one host and path pointing at a lighthouse) or lights a lighthouse (a Service
-whose selector follows a fleet's labels). Select the shipyard
+one host and path pointing at a lighthouse), lights a lighthouse (a Service
+whose selector follows a fleet's labels) or seals orders (a ConfigMap or
+Secret from KEY=value lines; Secret values never come back to the browser). Select the shipyard
 to Launch or Scrap ships (scale replicas) or Sell it (confirm twice). Select
 ships to Scrap exactly those pods, Refit them (delete so the ReplicaSet
 replaces them), or read the Ship's log. Ships from an old rollout look
