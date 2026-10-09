@@ -1,4 +1,4 @@
-import type { ClusterStore, Snapshot, WsMessage } from '../store/cluster';
+import type { ClusterStore, Pod, Snapshot, WsMessage } from '../store/cluster';
 import type { HintedStep } from '../tour/bubbleUI';
 
 /** One scripted stream message at an offset from the script's start. */
@@ -19,8 +19,21 @@ export interface LevelSummary {
   kubectl?: string;
 }
 
+/** How a level runs: in the training simulator, or against the connected cluster. */
+export type LevelMode = 'sim' | 'real';
+
+/** What a level needs to run on a real cluster. */
+export interface RealPlan {
+  /** Creates the starting harbor in the academy namespace (ctx.ns). */
+  setup(ctx: LevelContext): Promise<void>;
+  /** True once the live store shows the starting harbor. */
+  ready(ctx: LevelContext): boolean;
+}
+
 export interface Level {
   id: string;
+  /** Present when the level can be replayed on a real cluster. */
+  real?: RealPlan;
   number: number;
   title: string;
   concept: string;
@@ -37,6 +50,15 @@ export interface Level {
 /** What a level's steps can use at runtime. */
 export interface LevelContext {
   store: ClusterStore;
+  mode: LevelMode;
+  /** The fleet the level plays in: `harbor` in the simulator, an academy namespace for real. */
+  ns: string;
+  /** Sinks a ship: the simulator or a staged incident, as the mode demands. */
+  sink(pod: Pod): void;
+  /** Stages a whitelisted incident on the real cluster (no-op in the simulator). */
+  stage(incident: 'found' | 'lone-ship' | 'sink-pod' | 'bad-refit', args?: { name?: string; image?: string }): Promise<void>;
+  /** Sealed orders of the fleet, keys only; refreshed in the background for real. */
+  orders(): { kind: string; name: string }[];
   /** Play a script into the store; returns a cancel function. */
   play: (script: ScriptedMessage[]) => () => void;
   /** Simulate an API call the way the training harbor does (e.g. sink a pod and let the controller relaunch it). */

@@ -1,6 +1,6 @@
 import { ACADEMY, levelById } from '../levels/academy';
 import { loadProgress, type ProgressMap } from '../levels/progress';
-import { startLevel } from '../levels/runner';
+import { startLevel, type RunOptions } from '../levels/runner';
 import type { Level } from '../levels/types';
 import type { MapApi } from '../hud/minimap';
 import { leaveTraining, training } from '../tour/training';
@@ -21,21 +21,23 @@ export function unlocked(level: Level, progress: ProgressMap): boolean {
 }
 
 /** Starts a level from anywhere (the select screen, a deep link, the summary's Next). */
-export function playLevel(level: Level, map: MapApi): void {
+export function playLevel(level: Level, map: MapApi, opts: RunOptions = {}): void {
   startLevel(level, map, {
     nextLevel: (id) => ACADEMY[ACADEMY.findIndex((l) => l.id === id) + 1],
     onExit: (where) => {
       if (where === 'select') openHarborSelect(map);
     },
-  });
+  }, opts);
 }
 
-export function playLevelById(id: string, map: MapApi): boolean {
+export function playLevelById(id: string, map: MapApi, opts: RunOptions = {}): boolean {
   const level = levelById(id);
   if (!level) return false;
-  playLevel(level, map);
+  playLevel(level, map, opts);
   return true;
 }
+
+const fmt = (s: number): string => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
 /**
  * Harbor Select: Open Harbor (the demo), your own cluster, and the academy's
@@ -72,12 +74,34 @@ export function openHarborSelect(map: MapApi): void {
       info.className = 'info';
       info.append(Object.assign(document.createElement('b'), { textContent: l.title }), Object.assign(document.createElement('span'), { className: 'desc', textContent: l.concept }));
       const st = Object.assign(document.createElement('span'), { className: 'stars', textContent: open ? stars(p?.stars ?? 0) : '' });
+      const best = Object.assign(document.createElement('span'), { className: 'best', textContent: p?.bestSeconds ? `best ${fmt(p.bestSeconds)} · par ${fmt(l.parSeconds)}` : `par ${fmt(l.parSeconds)}` });
+      const btns = document.createElement('div');
+      btns.className = 'btns';
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = p ? 'REPLAY' : 'PLAY';
       btn.disabled = !open;
       btn.onclick = () => { close(); playLevel(l, map); };
-      row.append(num, info, st, btn);
+      btns.append(btn);
+      if (p) {
+        const ch = document.createElement('button');
+        ch.type = 'button';
+        ch.textContent = 'CHALLENGE';
+        ch.title = 'No bubbles, just the objectives and the clock';
+        ch.dataset['challenge'] = '';
+        ch.onclick = () => { close(); playLevel(l, map, { challenge: true }); };
+        btns.append(ch);
+        if (l.real && !inDemo) {
+          const real = document.createElement('button');
+          real.type = 'button';
+          real.textContent = 'FOR REAL';
+          real.title = 'Play it on your connected cluster, in a harbor-academy namespace that is cleaned up afterwards';
+          real.dataset['real'] = '';
+          real.onclick = () => { close(); playLevel(l, map, { mode: 'real' }); };
+          btns.append(real);
+        }
+      }
+      row.append(num, info, st, best, btns);
       if (!open) row.classList.add('locked');
       return row;
     }));

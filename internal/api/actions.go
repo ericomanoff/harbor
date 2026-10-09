@@ -134,6 +134,26 @@ func (s *Server) RollbackDeployment(w http.ResponseWriter, r *http.Request, ns g
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// StageIncident performs one whitelisted academy incident on the real cluster.
+func (s *Server) StageIncident(w http.ResponseWriter, r *http.Request, incident gen.StageIncidentParamsIncident) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.StageRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	res, err := kube.Stage(ctx, cur.Client(), string(incident), req)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, res)
+}
+
 func (s *Server) CreateNamespace(w http.ResponseWriter, r *http.Request) {
 	cur, ok := s.clientOr409(w)
 	if !ok {
@@ -447,6 +467,14 @@ func (s *Server) GetProgress(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
+}
+
+func (s *Server) ResetProgress(w http.ResponseWriter, _ *http.Request) {
+	if err := s.progress.Reset(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) PutLevelProgress(w http.ResponseWriter, r *http.Request, level string) {

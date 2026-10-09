@@ -443,6 +443,36 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/stage/{incident}:
+    post:
+      operationId: stageIncident
+      summary: Stage a known incident on the connected cluster (academy real-cluster replays)
+      description: >
+        A fixed whitelist of things the academy may do to a real cluster, all
+        inside namespaces labelled harbor.dev/academy=true so cleanup can find them.
+      parameters:
+        - name: incident
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [found, lone-ship, sink-pod, bad-refit, cleanup]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StageRequest"
+      responses:
+        "202":
+          description: Staged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StageResult"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/progress:
     get:
       operationId: getProgress
@@ -454,6 +484,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Progress"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: resetProgress
+      summary: Forget all Harbor Academy progress (start the logbook afresh)
+      responses:
+        "204":
+          description: Reset
         default:
           $ref: "#/components/responses/Error"
 
@@ -1308,6 +1346,32 @@ components:
         tlsSecret:
           type: string
           description: TLS secret name, optional even when tls is true.
+
+    StageRequest:
+      type: object
+      properties:
+        ns:
+          type: string
+          description: Academy namespace (created with the academy label by "found"; required by every incident but cleanup).
+        name:
+          type: string
+          description: Pod or Deployment name, depending on the incident.
+        image:
+          type: string
+          description: Image for a lone ship; defaults to nginx:1.27-alpine.
+
+    StageResult:
+      type: object
+      required: [incident, message]
+      properties:
+        incident:
+          type: string
+        message:
+          type: string
+          description: What was done, in harbor words.
+        name:
+          type: string
+          description: The object the incident touched, if any.
 
     RefitRequest:
       type: object

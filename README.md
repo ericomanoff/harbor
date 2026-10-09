@@ -52,7 +52,10 @@ season" (scaling), 4 "Lookouts" (readiness and liveness probes), 5 "The
 lighthouse" (Services), 6 "The harbor mouth" (Ingress), 7 "Sealed orders"
 (ConfigMaps and Secrets), 8 "Berths and cargo" (requests and limits), 9
 "Fleets and ensigns" (namespaces and labels), 10 "Refit at sea" (rolling
-updates and rollback).
+updates and rollback). Each completed level can be replayed as a challenge
+(no bubbles, just objectives and the clock) and, when a cluster is connected,
+"for real": levels 2, 5, 6, 7 and 10 stage their incidents on your cluster in
+a `harbor-academy` namespace that is cleaned up when you leave.
 
 Controls: left-click selects, drag box-selects ships, drag a shipyard to move
 it, right-drag pans, wheel or the right rail zooms, arrows or WASD scroll, H

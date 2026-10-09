@@ -210,6 +210,33 @@ func (e DeleteOrdersParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for StageIncidentParamsIncident.
+const (
+	BadRefit StageIncidentParamsIncident = "bad-refit"
+	Cleanup  StageIncidentParamsIncident = "cleanup"
+	Found    StageIncidentParamsIncident = "found"
+	LoneShip StageIncidentParamsIncident = "lone-ship"
+	SinkPod  StageIncidentParamsIncident = "sink-pod"
+)
+
+// Valid indicates whether the value is a known member of the StageIncidentParamsIncident enum.
+func (e StageIncidentParamsIncident) Valid() bool {
+	switch e {
+	case BadRefit:
+		return true
+	case Cleanup:
+		return true
+	case Found:
+		return true
+	case LoneShip:
+		return true
+	case SinkPod:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeleteWorkloadParamsKind.
 const (
 	DeleteWorkloadParamsKindDaemonSet   DeleteWorkloadParamsKind = "DaemonSet"
@@ -745,6 +772,29 @@ type Snapshot struct {
 	Workloads   []Workload    `json:"workloads"`
 }
 
+// StageRequest defines model for StageRequest.
+type StageRequest struct {
+	// Image Image for a lone ship; defaults to nginx:1.27-alpine.
+	Image *string `json:"image,omitempty"`
+
+	// Name Pod or Deployment name, depending on the incident.
+	Name *string `json:"name,omitempty"`
+
+	// Ns Academy namespace (created with the academy label by "found"; required by every incident but cleanup).
+	Ns *string `json:"ns,omitempty"`
+}
+
+// StageResult defines model for StageResult.
+type StageResult struct {
+	Incident string `json:"incident"`
+
+	// Message What was done, in harbor words.
+	Message string `json:"message"`
+
+	// Name The object the incident touched, if any.
+	Name *string `json:"name,omitempty"`
+}
+
 // Workload A StatefulSet (tanker terminal), DaemonSet (tug company) or Job (fishing fleet).
 type Workload struct {
 	// Active Job pods still running.
@@ -838,6 +888,9 @@ type GetPodLogsParams struct {
 	Tail *int `form:"tail,omitempty" json:"tail,omitempty"`
 }
 
+// StageIncidentParamsIncident defines parameters for StageIncident.
+type StageIncidentParamsIncident string
+
 // DeleteWorkloadParamsKind defines parameters for DeleteWorkload.
 type DeleteWorkloadParamsKind string
 
@@ -885,6 +938,9 @@ type PutLevelProgressJSONRequestBody = LevelProgress
 
 // CreateServiceJSONRequestBody defines body for CreateService for application/json ContentType.
 type CreateServiceJSONRequestBody = CreateServiceRequest
+
+// StageIncidentJSONRequestBody defines body for StageIncident for application/json ContentType.
+type StageIncidentJSONRequestBody = StageRequest
 
 // CreateJobJSONRequestBody defines body for CreateJob for application/json ContentType.
 type CreateJobJSONRequestBody = CreateJobRequest
@@ -1254,6 +1310,9 @@ type ServerInterface interface {
 	// GetPodLogs Recent log lines of a pod's container (default container if unspecified)
 	// (GET /api/pods/{ns}/{name}/logs)
 	GetPodLogs(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam, params GetPodLogsParams)
+	// ResetProgress Forget all Harbor Academy progress (start the logbook afresh)
+	// (DELETE /api/progress)
+	ResetProgress(w http.ResponseWriter, r *http.Request)
 	// GetProgress Harbor Academy progress for this machine
 	// (GET /api/progress)
 	GetProgress(w http.ResponseWriter, r *http.Request)
@@ -1269,6 +1328,9 @@ type ServerInterface interface {
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
+	// StageIncident Stage a known incident on the connected cluster (academy real-cluster replays)
+	// (POST /api/stage/{incident})
+	StageIncident(w http.ResponseWriter, r *http.Request, incident StageIncidentParamsIncident)
 	// CreateJob Send out a fishing fleet (create a Job)
 	// (POST /api/workloads/jobs)
 	CreateJob(w http.ResponseWriter, r *http.Request)
@@ -2080,6 +2142,20 @@ func (siw *ServerInterfaceWrapper) GetPodLogs(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ResetProgress operation middleware
+func (siw *ServerInterfaceWrapper) ResetProgress(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetProgress(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetProgress operation middleware
 func (siw *ServerInterfaceWrapper) GetProgress(w http.ResponseWriter, r *http.Request) {
 
@@ -2174,6 +2250,32 @@ func (siw *ServerInterfaceWrapper) GetSnapshot(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSnapshot(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StageIncident operation middleware
+func (siw *ServerInterfaceWrapper) StageIncident(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "incident" -------------
+	var incident StageIncidentParamsIncident
+
+	err = runtime.BindStyledParameterWithOptions("simple", "incident", r.PathValue("incident"), &incident, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "incident", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StageIncident(w, r, incident)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2488,6 +2590,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/orders", wrapper.ListOrders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/orders", wrapper.CreateOrders)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/orders/{kind}/{ns}/{name}", wrapper.DeleteOrders)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/stage/{incident}", wrapper.StageIncident)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/progress", wrapper.ResetProgress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/progress", wrapper.GetProgress)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/progress/{level}", wrapper.PutLevelProgress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/helm/repos", wrapper.ListHelmRepos)

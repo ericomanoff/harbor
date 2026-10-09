@@ -11,7 +11,7 @@ describe('academy levels', () => {
       const store = new ClusterStore();
       store.replace(l.fixture());
       expect(store.nodes.size).toBeGreaterThan(0);
-      const steps = l.steps({ store, play: () => () => {}, simulate: () => undefined });
+      const steps = l.steps({ store, mode: 'sim', ns: 'harbor', play: () => () => {}, simulate: () => undefined, sink: () => undefined, stage: async () => undefined, orders: () => [] });
       expect(steps.length).toBeGreaterThan(3);
       expect(new Set(steps.map((s) => s.id)).size).toBe(steps.length);
       const sum = l.summary(store);

@@ -174,7 +174,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
       // Deep links: ?level=academy/2 plays a level; ?academy opens Harbor Select.
       const params = new URLSearchParams(location.search);
       const level = params.get('level');
-      if (level && playLevelById(level, this)) return;
+      if (level && playLevelById(level, this, { challenge: params.has('challenge'), mode: params.has('real') ? 'real' : 'sim' })) return;
       if (params.has('academy')) {
         openHarborSelect(this);
         return;

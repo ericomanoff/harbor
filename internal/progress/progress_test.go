@@ -39,3 +39,20 @@ func TestRecordKeepsTheBest(t *testing.T) {
 		t.Errorf("reload = %+v, %v", again, err)
 	}
 }
+
+func TestResetForgetsEverything(t *testing.T) {
+	st := New(filepath.Join(t.TempDir(), "p.json"))
+	if _, err := st.Record("academy/1", gen.LevelProgress{Stars: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Reset(); err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.Load()
+	if err != nil || len(p.Levels) != 0 {
+		t.Errorf("after reset: %+v (%v)", p, err)
+	}
+	if err := st.Reset(); err != nil {
+		t.Errorf("reset twice: %v", err)
+	}
+}

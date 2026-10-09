@@ -87,6 +87,13 @@ export function rollbackDeployment(ns: string, name: string, fetchFn: typeof fet
   return request<void>('POST', `/api/deployments/${enc(ns)}/${enc(name)}/rollback`, undefined, fetchFn);
 }
 
+export type StageResult = components['schemas']['StageResult'];
+
+/** Stage a whitelisted academy incident on the connected cluster. */
+export function stage(incident: string, args: { ns?: string; name?: string; image?: string } = {}, fetchFn: typeof fetch = fetch): Promise<StageResult> {
+  return request<StageResult>('POST', `/api/stage/${incident}`, args, fetchFn);
+}
+
 /** Found a fleet: create a Namespace. */
 export function createNamespace(name: string, fetchFn: typeof fetch = fetch): Promise<Namespace> {
   return request<Namespace>('POST', '/api/namespaces', { name }, fetchFn);

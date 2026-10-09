@@ -413,6 +413,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stage/{incident}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stage a known incident on the connected cluster (academy real-cluster replays)
+         * @description A fixed whitelist of things the academy may do to a real cluster, all inside namespaces labelled harbor.dev/academy=true so cleanup can find them.
+         */
+        post: operations["stageIncident"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/progress": {
         parameters: {
             query?: never;
@@ -424,7 +444,8 @@ export interface paths {
         get: operations["getProgress"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Forget all Harbor Academy progress (start the logbook afresh) */
+        delete: operations["resetProgress"];
         options?: never;
         head?: never;
         patch?: never;
@@ -902,6 +923,21 @@ export interface components {
             tls?: boolean;
             /** @description TLS secret name, optional even when tls is true. */
             tlsSecret?: string;
+        };
+        StageRequest: {
+            /** @description Academy namespace (created with the academy label by "found"; required by every incident but cleanup). */
+            ns?: string;
+            /** @description Pod or Deployment name, depending on the incident. */
+            name?: string;
+            /** @description Image for a lone ship; defaults to nginx:1.27-alpine. */
+            image?: string;
+        };
+        StageResult: {
+            incident: string;
+            /** @description What was done, in harbor words. */
+            message: string;
+            /** @description The object the incident touched, if any. */
+            name?: string;
         };
         RefitRequest: {
             /** @description New image for the first container. */
@@ -1622,6 +1658,33 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    stageIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                incident: "found" | "lone-ship" | "sink-pod" | "bad-refit" | "cleanup";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StageRequest"];
+            };
+        };
+        responses: {
+            /** @description Staged */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StageResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getProgress: {
         parameters: {
             query?: never;
@@ -1639,6 +1702,25 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Progress"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resetProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reset */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

@@ -42,6 +42,11 @@ async function finishAndContinue(page: Page): Promise<void> {
   await expect(page.locator('#summary')).toBeVisible();
 }
 
+// Every test starts with an empty logbook: other specs (the real-cluster one) record progress too.
+test.beforeEach(async ({ page }) => {
+  await page.request.delete('/api/progress');
+});
+
 test('Harbor Select lists the academy with level 2 locked', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 });
   await page.goto('/?demo&academy');
@@ -123,7 +128,7 @@ test('levels 1 and 2 play through, award stars and unlock the next', async ({ pa
   await expect(select.locator('.row.level[data-level="academy/2"] .stars')).toHaveText('★★☆');
   await expect(select.locator('.row.level[data-level="academy/3"] button')).toBeEnabled();
   await expect(select.locator('.row.level.locked')).toHaveCount(7);
-  await expect(select.locator('.row.level[data-level="academy/2"] button')).toHaveText('REPLAY');
+  await expect(select.locator('.row.level[data-level="academy/2"] button').first()).toHaveText('REPLAY');
   expect(await page.evaluate(() => fetch('/api/progress').then((r) => r.json()))).toMatchObject({ levels: { 'academy/1': { stars: 3 }, 'academy/2': { stars: 2 } } });
 });
 
@@ -374,4 +379,34 @@ test('levels 9 and 10: fleets and ensigns, refit at sea', async ({ page }) => {
   await expect(select).toBeVisible();
   await expect(select.locator('.row.level')).toHaveCount(10);
   await expect(select.locator('.row.level[data-level="academy/10"] .stars')).toHaveText('★★★');
+});
+
+test('challenge mode: level 2 with objectives and the clock, no bubbles', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 760 });
+  await page.goto('/?demo&level=academy/2&challenge');
+  const bar = page.locator('#challenge');
+  await expect(bar).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#tour')).toBeHidden();
+  await expect(bar.locator('.lvl')).toHaveText('Challenge · The shipyard');
+  await expect(bar.locator('.objectives li')).toHaveCount(6);
+  await expect(bar.locator('.objectives li.now')).toHaveText('Same reef, same sea');
+  await expect(bar.locator('.objectives li.now')).toHaveText('Open the Shop', { timeout: 15_000 });
+  await page.locator('#hud [data-shop-open]').click();
+  await expect(bar.locator('.objectives li.now')).toHaveText('Press Build on the Shipyard card');
+  await page.locator('#shop [data-card=shipyard] button').click();
+  await expect.poll(() => page.evaluate(() => window.harbor.mode.current)).toBe('place');
+  await clickIslandSite(page, 'harbor-worker');
+  await expect(bar.locator('.objectives li.now')).toHaveText('Fill it in and press BUILD');
+  await fillShipyard(page, 'courier');
+  await expect(bar.locator('.objectives li.done')).toHaveCount(5, { timeout: 15_000 });
+  const success = page.locator('#success');
+  await expect(success).toBeVisible({ timeout: 20_000 });
+  await expect(success.locator('.stars span.on')).toHaveCount(3, { timeout: 5000 });
+  await expect(bar).toBeHidden();
+  await success.locator('[data-continue]').click();
+  await page.locator('#summary [data-select]').click();
+  const row = page.locator('#academy .row.level[data-level="academy/2"]');
+  await expect(row.locator('.best')).toContainText('best 0:');
+  await expect(row.locator('button[data-challenge]')).toBeVisible();
+  await expect(row.locator('button[data-real]')).toHaveCount(0); // demo harbor: nothing to do it for real on
 });

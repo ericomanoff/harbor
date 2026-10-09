@@ -57,6 +57,16 @@ func (s *Store) load() (gen.Progress, error) {
 	return p, nil
 }
 
+// Reset forgets every level: the logbook starts afresh.
+func (s *Store) Reset() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := os.Remove(s.path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // Record merges a level result, keeping the best stars and time and the
 // fewest hints, and returns the whole progress.
 func (s *Store) Record(level string, in gen.LevelProgress) (gen.Progress, error) {
