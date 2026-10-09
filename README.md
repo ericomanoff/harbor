@@ -50,7 +50,9 @@ move it). `?level=academy/2` opens a level directly. Levels so far: 1 "A ship
 and its cargo" (pods and containers), 2 "The shipyard" (Deployments), 3 "Storm
 season" (scaling), 4 "Lookouts" (readiness and liveness probes), 5 "The
 lighthouse" (Services), 6 "The harbor mouth" (Ingress), 7 "Sealed orders"
-(ConfigMaps and Secrets), 8 "Berths and cargo" (requests and limits).
+(ConfigMaps and Secrets), 8 "Berths and cargo" (requests and limits), 9
+"Fleets and ensigns" (namespaces and labels), 10 "Refit at sea" (rolling
+updates and rollback).
 
 Controls: left-click selects, drag box-selects ships, drag a shipyard to move
 it, right-drag pans, wheel or the right rail zooms, arrows or WASD scroll, H
@@ -68,9 +70,12 @@ limits, sealed orders to inject as environment, and shows the YAML it will
 produce under Ship's manifest. Fishing fleet sends out a Job (command,
 catches, boats at sea, retries). The Harbor tab opens a gate (an Ingress with
 one host and path pointing at a lighthouse), lights a lighthouse (a Service
-whose selector follows a fleet's labels) or seals orders (a ConfigMap or
-Secret from KEY=value lines; Secret values never come back to the browser). Select the shipyard
-to Launch or Scrap ships (scale replicas) or Sell it (confirm twice). Select
+whose selector follows a fleet's labels), seals orders (a ConfigMap or
+Secret from KEY=value lines; Secret values never come back to the browser)
+or founds a new fleet (a Namespace). Select the shipyard
+to Launch or Scrap ships (scale replicas), Sell it (confirm twice), Refit it
+(a rollout to a new image, with max unavailable and max surge) or Roll back
+the last refit (rollout undo). Select
 ships to Scrap exactly those pods, Refit them (delete so the ReplicaSet
 replaces them), or read the Ship's log. Ships from an old rollout look
 weathered; crash-looping ships burn; Warning events flash their ship or

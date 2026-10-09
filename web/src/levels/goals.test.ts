@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Deployment, Pod } from '../store/cluster';
-import { cappedShipyard, gateFor, lighthouseFor, lookoutsShipyard, ordersShipyard, podGone, readyShips, relaunched, shipyardAfloat } from './goals';
+import { cappedShipyard, crashShips, fleetRefitted, gateFor, lighthouseFor, lookoutsShipyard, ordersShipyard, podGone, readyShips, relaunched, shipyardAfloat } from './goals';
 
 const dep = (ns: string, name: string, replicas: number, available: number): Deployment => ({ ns, name, replicas, available, updated: replicas, image: 'x', conditions: [] });
 const pod = (ns: string, name: string, deployment: string | undefined, ready: boolean): Pod => ({ ns, name, node: 'n', phase: 'Running', ready, restarts: 0, created: 'x', labels: {}, containers: ['c'], ...(deployment ? { deployment } : {}) });
@@ -56,5 +56,22 @@ describe('C2 goals', () => {
     expect(ordersShipyard({ deployments, pods }, 'harbor', 'Secret/c-orders')).toBeUndefined();
     expect(cappedShipyard({ deployments, pods }, 'harbor')).toBe('c');
     expect(cappedShipyard({ deployments: new Map([['harbor/c', { ...dep('harbor', 'c', 1, 1), requests: 'cpu 100m', limits: 'cpu 200m' }]]), pods }, 'harbor')).toBeUndefined();
+  });
+});
+
+describe('C3 goals', () => {
+  const d = { ...dep('harbor', 'c', 2, 2), image: 'c:1.0', currentRS: 'c-2' };
+  it('crashShips and fleetRefitted', () => {
+    const pods = new Map([
+      ['harbor/a', { ...pod('harbor', 'a', 'c', true), ownerRS: 'c-2' }],
+      ['harbor/b', { ...pod('harbor', 'b', 'c', false), ownerRS: 'c-2', reason: 'CrashLoopBackOff' }],
+    ]);
+    expect(crashShips({ pods }, 'harbor', 'c')).toBe(1);
+    expect(fleetRefitted({ deployments: new Map([['harbor/c', d]]), pods }, 'harbor', 'c', 'c:1.0', 1)).toBe(false);
+    pods.set('harbor/b', { ...pod('harbor', 'b', 'c', true), ownerRS: 'c-2' });
+    expect(fleetRefitted({ deployments: new Map([['harbor/c', d]]), pods }, 'harbor', 'c', 'c:1.0', 2)).toBe(true);
+    pods.set('harbor/b', { ...pod('harbor', 'b', 'c', true), ownerRS: 'c-1' });
+    expect(fleetRefitted({ deployments: new Map([['harbor/c', d]]), pods }, 'harbor', 'c', 'c:1.0', 2)).toBe(false);
+    expect(fleetRefitted({ deployments: new Map([['harbor/c', d]]), pods }, 'harbor', 'c', 'c:2.0', 1)).toBe(false);
   });
 });

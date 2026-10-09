@@ -196,6 +196,38 @@
         </div>
       </form>
     </div>
+    <div id="refit-form" class="overlay" hidden>
+      <form class="panel" autocomplete="off">
+        <h2>REFIT SHIPYARD <span class="where"></span></h2>
+        <label><span>NEW IMAGE</span> <input name="image" required /></label>
+        <div class="row">
+          <label><span>MAX UNAVAILABLE</span> <input name="maxUnavailable" placeholder="25%, or 0 for none" /></label>
+          <label><span>MAX SURGE</span> <input name="maxSurge" placeholder="25%, or 1" /></label>
+        </div>
+        <p class="muted">Ships are replaced one refit at a time: max unavailable is how many may be missing meanwhile, max surge how many extra may be launched first.</p>
+        <details class="manifest" data-no-terms>
+          <summary>Ship's manifest <span class="sub">what changes</span></summary>
+          <pre class="yaml"></pre>
+        </details>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="submit">REFIT</button>
+          <button type="button" data-cancel>CANCEL</button>
+        </div>
+      </form>
+    </div>
+    <div id="fleet-form" class="overlay" hidden>
+      <form class="panel" autocomplete="off">
+        <h2>FOUND A FLEET <span class="where">Namespace</span></h2>
+        <label>NAME <input name="name" required maxlength="63" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?" placeholder="lowercase, dashes" /></label>
+        <p class="muted">A fleet is a namespace: its own ensign colour, its own names, its own lighthouses. Ships in one fleet cannot be confused with another's.</p>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="submit">FOUND</button>
+          <button type="button" data-cancel>CANCEL</button>
+        </div>
+      </form>
+    </div>
     <div id="orders-form" class="overlay" hidden>
       <form class="panel" autocomplete="off">
         <h2>SEALED ORDERS <span class="where">ConfigMap or Secret</span></h2>

@@ -363,6 +363,109 @@ func ScaleDeployment(ctx context.Context, client kubernetes.Interface, ns, name 
 	return err
 }
 
+// RefitDeployment starts a rollout: a new image for the first container and,
+// when given, a RollingUpdate strategy with maxUnavailable/maxSurge.
+func RefitDeployment(ctx context.Context, client kubernetes.Interface, ns, name string, req gen.RefitRequest) error {
+	image := strings.TrimSpace(req.Image)
+	if image == "" {
+		return invalid("image is required")
+	}
+	d, err := client.AppsV1().Deployments(ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	if len(d.Spec.Template.Spec.Containers) == 0 {
+		return invalid("deployment has no containers")
+	}
+	spec := map[string]any{
+		"template": map[string]any{"spec": map[string]any{"containers": []map[string]any{{"name": d.Spec.Template.Spec.Containers[0].Name, "image": image}}}},
+	}
+	if derefStr(req.MaxUnavailable) != "" || derefStr(req.MaxSurge) != "" {
+		ru := map[string]any{}
+		if v := derefStr(req.MaxUnavailable); v != "" {
+			if _, err := parseIntOrPercent(v); err != nil {
+				return invalid("maxUnavailable %q: %v", v, err)
+			}
+			ru["maxUnavailable"] = intstr.Parse(v)
+		}
+		if v := derefStr(req.MaxSurge); v != "" {
+			if _, err := parseIntOrPercent(v); err != nil {
+				return invalid("maxSurge %q: %v", v, err)
+			}
+			ru["maxSurge"] = intstr.Parse(v)
+		}
+		spec["strategy"] = map[string]any{"type": "RollingUpdate", "rollingUpdate": ru}
+	}
+	patch, _ := json.Marshal(map[string]any{"spec": spec})
+	_, err = client.AppsV1().Deployments(ns).Patch(ctx, name, types.StrategicMergePatchType, patch, metav1.PatchOptions{})
+	return err
+}
+
+func parseIntOrPercent(v string) (intstr.IntOrString, error) {
+	x := intstr.Parse(v)
+	if x.Type == intstr.String {
+		if !strings.HasSuffix(v, "%") {
+			return x, fmt.Errorf("want a count or a percent")
+		}
+		if _, err := strconv.Atoi(strings.TrimSuffix(v, "%")); err != nil {
+			return x, err
+		}
+	}
+	return x, nil
+}
+
+// RollbackDeployment is `kubectl rollout undo`: the pod template of the
+// ReplicaSet one revision back becomes the deployment's template again.
+func RollbackDeployment(ctx context.Context, client kubernetes.Interface, ns, name string) error {
+	d, err := client.AppsV1().Deployments(ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	sel, err := metav1.LabelSelectorAsSelector(d.Spec.Selector)
+	if err != nil {
+		return err
+	}
+	rsl, err := client.AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{LabelSelector: sel.String()})
+	if err != nil {
+		return err
+	}
+	cur := int64(-1)
+	if v, err := strconv.ParseInt(d.Annotations[revisionAnnotation], 10, 64); err == nil {
+		cur = v
+	}
+	var prev *appsv1.ReplicaSet
+	prevRev := int64(-1)
+	for i := range rsl.Items {
+		rs := &rsl.Items[i]
+		if !metav1.IsControlledBy(rs, d) {
+			continue
+		}
+		rev, err := strconv.ParseInt(rs.Annotations[revisionAnnotation], 10, 64)
+		if err != nil || (cur >= 0 && rev >= cur) {
+			continue
+		}
+		if rev > prevRev {
+			prevRev, prev = rev, rs
+		}
+	}
+	if prev == nil {
+		return invalid("no previous refit to roll back to")
+	}
+	tmpl := prev.Spec.Template.DeepCopy()
+	delete(tmpl.Labels, "pod-template-hash")
+	patch, _ := json.Marshal(map[string]any{"spec": map[string]any{"template": tmpl}})
+	_, err = client.AppsV1().Deployments(ns).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	return err
+}
+
+// CreateNamespace founds a fleet.
+func CreateNamespace(ctx context.Context, client kubernetes.Interface, name string) (*corev1.Namespace, error) {
+	if errs := validation.IsDNS1123Label(name); len(errs) > 0 {
+		return nil, invalid("name %q: %s", name, strings.Join(errs, "; "))
+	}
+	return client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{ManagedByLabel: managedByValue}}}, metav1.CreateOptions{})
+}
+
 // SetMapPos stores the building's tile in its annotation.
 func SetMapPos(ctx context.Context, client kubernetes.Interface, ns, name string, mp gen.MapPos) error {
 	patch := annotationPatch(MapPosAnnotation, FormatMapPos(mp))

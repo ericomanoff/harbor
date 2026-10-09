@@ -404,3 +404,78 @@ func TestOrders(t *testing.T) {
 		t.Errorf("after delete: %+v", list)
 	}
 }
+
+func TestRefitAndRollback(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewClientset()
+	d, err := CreateDeployment(ctx, client, gen.CreateDeploymentRequest{Ns: "harbor", Name: "courier", Image: "courier:1.0", Replicas: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Pretend the controller has recorded revision 1 and its ReplicaSet.
+	d.Annotations[revisionAnnotation] = "1"
+	if _, err := client.AppsV1().Deployments("harbor").Update(ctx, d, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	rs := func(name, rev, image string) *appsv1.ReplicaSet {
+		tmpl := d.Spec.Template.DeepCopy()
+		tmpl.Spec.Containers[0].Image = image
+		tmpl.Labels["pod-template-hash"] = name
+		return &appsv1.ReplicaSet{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "harbor", Labels: tmpl.Labels, Annotations: map[string]string{revisionAnnotation: rev}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(d, appsv1.SchemeGroupVersion.WithKind("Deployment"))}},
+			Spec:       appsv1.ReplicaSetSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "courier"}}, Template: *tmpl},
+		}
+	}
+	if _, err := client.AppsV1().ReplicaSets("harbor").Create(ctx, rs("courier-1", "1", "courier:1.0"), metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := RollbackDeployment(ctx, client, "harbor", "courier"); err == nil {
+		t.Error("rollback with one revision should fail")
+	}
+
+	if err := RefitDeployment(ctx, client, "harbor", "courier", gen.RefitRequest{Image: "courier:2.0", MaxUnavailable: ptr("0"), MaxSurge: ptr("1")}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := client.AppsV1().Deployments("harbor").Get(ctx, "courier", metav1.GetOptions{})
+	if got.Spec.Template.Spec.Containers[0].Image != "courier:2.0" || got.Spec.Strategy.RollingUpdate == nil || got.Spec.Strategy.RollingUpdate.MaxUnavailable.IntValue() != 0 || got.Spec.Strategy.RollingUpdate.MaxSurge.IntValue() != 1 {
+		t.Errorf("after refit: image %s strategy %+v", got.Spec.Template.Spec.Containers[0].Image, got.Spec.Strategy)
+	}
+	if s := ConvertDeployment(got); s.Strategy == nil || *s.Strategy != "RollingUpdate maxUnavailable=0 maxSurge=1" || s.Revision == nil || *s.Revision != 1 {
+		t.Errorf("summary: %v %v", s.Strategy, s.Revision)
+	}
+	if err := RefitDeployment(ctx, client, "harbor", "courier", gen.RefitRequest{Image: "x", MaxSurge: ptr("lots")}); err == nil {
+		t.Error("bad maxSurge should be invalid")
+	}
+
+	// The controller would now record revision 2; roll back to 1.
+	got.Annotations[revisionAnnotation] = "2"
+	if _, err := client.AppsV1().Deployments("harbor").Update(ctx, got, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.AppsV1().ReplicaSets("harbor").Create(ctx, rs("courier-2", "2", "courier:2.0"), metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := RollbackDeployment(ctx, client, "harbor", "courier"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = client.AppsV1().Deployments("harbor").Get(ctx, "courier", metav1.GetOptions{})
+	if img := got.Spec.Template.Spec.Containers[0].Image; img != "courier:1.0" {
+		t.Errorf("after rollback image = %s", img)
+	}
+	if _, ok := got.Spec.Template.Labels["pod-template-hash"]; ok {
+		t.Error("pod-template-hash must not be copied into the template")
+	}
+}
+
+func TestCreateNamespace(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewClientset()
+	ns, err := CreateNamespace(ctx, client, "ferry")
+	if err != nil || ns.Name != "ferry" || ns.Labels[ManagedByLabel] != managedByValue {
+		t.Fatalf("ns = %+v, err %v", ns, err)
+	}
+	var ve *ValidationError
+	if _, err := CreateNamespace(ctx, client, "Bad Name"); !errors.As(err, &ve) {
+		t.Errorf("err = %v, want ValidationError", err)
+	}
+}

@@ -121,6 +121,29 @@ export class BubbleUI {
     }
     x = Math.max(12, Math.min(vw - bw - 12, x));
     y = Math.max(12, Math.min(vh - bh - 12, y));
+    // Never cover an open form or panel: step beside it, narrowing if needed.
+    const panel = document.querySelector<HTMLElement>('.overlay:not([hidden]) .panel, .overlay:not([hidden]) .drawer');
+    const pr = panel?.getBoundingClientRect();
+    const anchorInPanel = step.anchor?.kind === 'dom' && !!panel?.contains(document.querySelector(step.anchor.selector));
+    // A panel over the map hides what the spotlight pointed at; do not paint over the panel.
+    if (pr && pr.width > 0 && !anchorInPanel) this.spot.hidden = true;
+    if (pr && pr.width > 0 && x < pr.right && x + bw > pr.left && y < pr.bottom && y + bh > pr.top && !anchorInPanel) {
+      const roomLeft = pr.left - 30;
+      const roomRight = vw - pr.right - 30;
+      const side: Placement = roomLeft >= roomRight ? 'left' : 'right';
+      const room = Math.max(roomLeft, roomRight);
+      if (room < bw) this.bubble.style.maxWidth = `${Math.max(260, room)}px`;
+      const w = Math.min(bw, Math.max(260, room));
+      x = side === 'left' ? Math.max(12, pr.left - 18 - w) : Math.min(vw - w - 12, pr.right + 18);
+      y = Math.max(12, Math.min(vh - bh - 12, pr.top + pr.height / 2 - bh / 2));
+      place = side;
+    }
+    // Nor over the selection card: its buttons are usually the next thing to press.
+    const card = document.querySelector<HTMLElement>('#hud .selection:not([hidden])');
+    const cr = card?.getBoundingClientRect();
+    if (cr && cr.width > 0 && x < cr.right && x + bw > cr.left && y < cr.bottom && y + bh > cr.top && !(step.anchor?.kind === 'dom' && card?.contains(document.querySelector(step.anchor.selector)))) {
+      y = Math.max(12, cr.top - 18 - bh);
+    }
     this.bubble.style.left = `${x}px`;
     this.bubble.style.top = `${y}px`;
     this.bubble.dataset['place'] = place;

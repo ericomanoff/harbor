@@ -376,6 +376,11 @@ type CreateJobRequest struct {
 // CreateJobRequestRestartPolicy defines model for CreateJobRequest.RestartPolicy.
 type CreateJobRequestRestartPolicy string
 
+// CreateNamespaceRequest defines model for CreateNamespaceRequest.
+type CreateNamespaceRequest struct {
+	Name string `json:"name"`
+}
+
 // CreateOrdersRequest defines model for CreateOrdersRequest.
 type CreateOrdersRequest struct {
 	Data map[string]string `json:"data"`
@@ -457,6 +462,12 @@ type Deployment struct {
 
 	// Requests Resource requests of the first container, summarised (e.g. "cpu 50m · mem 64Mi"), if any.
 	Requests *string `json:"requests,omitempty"`
+
+	// Revision Current rollout revision (deployment.kubernetes.io/revision), if known.
+	Revision *int `json:"revision,omitempty"`
+
+	// Strategy Rollout strategy, summarised ("RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate").
+	Strategy *string `json:"strategy,omitempty"`
 	Updated  int     `json:"updated"`
 }
 
@@ -681,6 +692,18 @@ type Progress struct {
 	Levels map[string]LevelProgress `json:"levels"`
 }
 
+// RefitRequest defines model for RefitRequest.
+type RefitRequest struct {
+	// Image New image for the first container.
+	Image string `json:"image"`
+
+	// MaxSurge RollingUpdate maxSurge (count or percent), optional.
+	MaxSurge *string `json:"maxSurge,omitempty"`
+
+	// MaxUnavailable RollingUpdate maxUnavailable (count or percent), optional.
+	MaxUnavailable *string `json:"maxUnavailable,omitempty"`
+}
+
 // ScaleRequest defines model for ScaleRequest.
 type ScaleRequest struct {
 	Replicas int `json:"replicas"`
@@ -830,6 +853,9 @@ type CreateDeploymentJSONRequestBody = CreateDeploymentRequest
 // SetDeploymentMapPosJSONRequestBody defines body for SetDeploymentMapPos for application/json ContentType.
 type SetDeploymentMapPosJSONRequestBody = MapPos
 
+// RefitDeploymentJSONRequestBody defines body for RefitDeployment for application/json ContentType.
+type RefitDeploymentJSONRequestBody = RefitRequest
+
 // ScaleDeploymentJSONRequestBody defines body for ScaleDeployment for application/json ContentType.
 type ScaleDeploymentJSONRequestBody = ScaleRequest
 
@@ -847,6 +873,9 @@ type AddHelmRepoJSONRequestBody = HelmRepo
 
 // CreateIngressJSONRequestBody defines body for CreateIngress for application/json ContentType.
 type CreateIngressJSONRequestBody = CreateIngressRequest
+
+// CreateNamespaceJSONRequestBody defines body for CreateNamespace for application/json ContentType.
+type CreateNamespaceJSONRequestBody = CreateNamespaceRequest
 
 // CreateOrdersJSONRequestBody defines body for CreateOrders for application/json ContentType.
 type CreateOrdersJSONRequestBody = CreateOrdersRequest
@@ -1156,6 +1185,12 @@ type ServerInterface interface {
 	// SetDeploymentMapPos Persist the building's map tile as an annotation
 	// (PATCH /api/deployments/{ns}/{name}/mappos)
 	SetDeploymentMapPos(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// RefitDeployment Refit a shipyard (new image and rollout strategy)
+	// (PATCH /api/deployments/{ns}/{name}/refit)
+	RefitDeployment(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// RollbackDeployment Roll back a shipyard to its previous refit (rollout undo)
+	// (POST /api/deployments/{ns}/{name}/rollback)
+	RollbackDeployment(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
 	// ScaleDeployment Set replica count (build or sell units)
 	// (PATCH /api/deployments/{ns}/{name}/scale)
 	ScaleDeployment(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
@@ -1201,6 +1236,9 @@ type ServerInterface interface {
 	// DeleteIngress Close a gate (delete the Ingress)
 	// (DELETE /api/ingresses/{ns}/{name})
 	DeleteIngress(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// CreateNamespace Found a fleet (create a Namespace)
+	// (POST /api/namespaces)
+	CreateNamespace(w http.ResponseWriter, r *http.Request)
 	// ListOrders Sealed orders (ConfigMaps and Secrets) in a namespace, keys only
 	// (GET /api/orders)
 	ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams)
@@ -1372,6 +1410,76 @@ func (siw *ServerInterfaceWrapper) SetDeploymentMapPos(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetDeploymentMapPos(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefitDeployment operation middleware
+func (siw *ServerInterfaceWrapper) RefitDeployment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefitDeployment(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RollbackDeployment operation middleware
+func (siw *ServerInterfaceWrapper) RollbackDeployment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RollbackDeployment(w, r, ns, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1759,6 +1867,20 @@ func (siw *ServerInterfaceWrapper) DeleteIngress(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteIngress(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNamespace operation middleware
+func (siw *ServerInterfaceWrapper) CreateNamespace(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNamespace(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2358,6 +2480,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/ingresses/{ns}/{name}", wrapper.DeleteIngress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/pods/{ns}/{name}/logs", wrapper.GetPodLogs)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/pods/{ns}/{name}", wrapper.DeletePod)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/refit", wrapper.RefitDeployment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/deployments/{ns}/{name}/rollback", wrapper.RollbackDeployment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/namespaces", wrapper.CreateNamespace)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/scale", wrapper.ScaleDeployment)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/mappos", wrapper.SetDeploymentMapPos)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/orders", wrapper.ListOrders)

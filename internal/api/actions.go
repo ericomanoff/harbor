@@ -100,6 +100,59 @@ func (s *Server) ScaleDeployment(w http.ResponseWriter, r *http.Request, ns gen.
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// RefitDeployment starts a rollout with a new image (and strategy).
+func (s *Server) RefitDeployment(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.RefitRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.RefitDeployment(ctx, cur.Client(), ns, name, req); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// RollbackDeployment is rollout undo.
+func (s *Server) RollbackDeployment(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.RollbackDeployment(ctx, cur.Client(), ns, name); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) CreateNamespace(w http.ResponseWriter, r *http.Request) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.CreateNamespaceRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	ns, err := kube.CreateNamespace(ctx, cur.Client(), req.Name)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, kube.ConvertNamespace(ns))
+}
+
 // SetDeploymentMapPos persists where the player put the building.
 func (s *Server) SetDeploymentMapPos(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
 	cur, ok := s.clientOr409(w)

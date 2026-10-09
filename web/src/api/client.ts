@@ -19,6 +19,8 @@ export type CreateServiceRequest = components['schemas']['CreateServiceRequest']
 export type Orders = components['schemas']['Orders'];
 export type OrdersRef = components['schemas']['OrdersRef'];
 export type CreateOrdersRequest = components['schemas']['CreateOrdersRequest'];
+export type RefitRequest = components['schemas']['RefitRequest'];
+export type Namespace = components['schemas']['Namespace'];
 export type Service = components['schemas']['Service'];
 export type CreateJobRequest = components['schemas']['CreateJobRequest'];
 export type Workload = components['schemas']['Workload'];
@@ -73,6 +75,21 @@ export function scaleDeployment(ns: string, name: string, replicas: number, reti
 
 export function setMapPos(ns: string, name: string, mp: MapPos, fetchFn: typeof fetch = fetch): Promise<void> {
   return request<void>('PATCH', `/api/deployments/${encodeURIComponent(ns)}/${encodeURIComponent(name)}/mappos`, mp, fetchFn);
+}
+
+/** Refit a shipyard: a new image and, optionally, how the rollout may proceed. */
+export function refitDeployment(ns: string, name: string, req: RefitRequest, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('PATCH', `/api/deployments/${enc(ns)}/${enc(name)}/refit`, req, fetchFn);
+}
+
+/** Roll back to the previous refit (rollout undo). */
+export function rollbackDeployment(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('POST', `/api/deployments/${enc(ns)}/${enc(name)}/rollback`, undefined, fetchFn);
+}
+
+/** Found a fleet: create a Namespace. */
+export function createNamespace(name: string, fetchFn: typeof fetch = fetch): Promise<Namespace> {
+  return request<Namespace>('POST', '/api/namespaces', { name }, fetchFn);
 }
 
 export function deleteDeployment(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {

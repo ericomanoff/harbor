@@ -299,6 +299,58 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/deployments/{ns}/{name}/refit:
+    patch:
+      operationId: refitDeployment
+      summary: Refit a shipyard (new image and rollout strategy)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefitRequest"
+      responses:
+        "204":
+          description: Rollout started
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/deployments/{ns}/{name}/rollback:
+    post:
+      operationId: rollbackDeployment
+      summary: Roll back a shipyard to its previous refit (rollout undo)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "204":
+          description: Rolled back
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/namespaces:
+    post:
+      operationId: createNamespace
+      summary: Found a fleet (create a Namespace)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNamespaceRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Namespace"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/deployments/{ns}/{name}/scale:
     patch:
       operationId: scaleDeployment
@@ -799,6 +851,12 @@ components:
         release:
           type: string
           description: Helm release that owns this Deployment (meta.helm.sh/release-name), if any.
+        strategy:
+          type: string
+          description: Rollout strategy, summarised ("RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate").
+        revision:
+          type: integer
+          description: Current rollout revision (deployment.kubernetes.io/revision), if known.
         requests:
           type: string
           description: Resource requests of the first container, summarised (e.g. "cpu 50m · mem 64Mi"), if any.
@@ -1250,6 +1308,27 @@ components:
         tlsSecret:
           type: string
           description: TLS secret name, optional even when tls is true.
+
+    RefitRequest:
+      type: object
+      required: [image]
+      properties:
+        image:
+          type: string
+          description: New image for the first container.
+        maxUnavailable:
+          type: string
+          description: RollingUpdate maxUnavailable (count or percent), optional.
+        maxSurge:
+          type: string
+          description: RollingUpdate maxSurge (count or percent), optional.
+
+    CreateNamespaceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
 
     ScaleRequest:
       type: object

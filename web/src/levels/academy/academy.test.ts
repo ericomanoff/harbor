@@ -24,6 +24,7 @@ describe('academy levels', () => {
     expect(nextLevel('academy/1')?.id).toBe('academy/2');
     expect(nextLevel('academy/2')?.id).toBe('academy/3');
     expect(nextLevel('academy/5')?.id).toBe('academy/6');
-    expect(nextLevel('academy/8')).toBeUndefined();
+    expect(nextLevel('academy/8')?.id).toBe('academy/9');
+    expect(nextLevel('academy/10')).toBeUndefined();
   });
 });

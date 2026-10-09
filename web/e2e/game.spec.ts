@@ -83,6 +83,7 @@ test.afterEach(() => {
     kubectl('delete', 'job', `${NAME}-haul`, '-n', NS, '--ignore-not-found');
     kubectl('delete', 'service', `${NAME}-light`, '-n', NS, '--ignore-not-found');
     kubectl('delete', 'configmap', `${NAME}-orders`, '-n', NS, '--ignore-not-found');
+    kubectl('delete', 'namespace', `${NAME}-fleet`, '--ignore-not-found', '--wait=false');
   } catch {
     /* cluster gone; nothing to clean */
   }
@@ -455,4 +456,53 @@ test('seal orders from the shop and read them from a shipyard', async ({ page })
     return d?.orders?.[0] === `ConfigMap/${key.split('/')[1]}-orders` && d.limits === 'cpu 200m · mem 128Mi';
   }, `${NS}/${NAME}`, { timeout: 60_000 });
   expect(kubectl('get', 'deployment', NAME, '-n', NS, '-o', 'jsonpath={.spec.template.spec.containers[0].envFrom[0].configMapRef.name}')).toBe(`${NAME}-orders`);
+});
+
+test('refit a shipyard, roll it back, and found a fleet', async ({ page }) => {
+  test.setTimeout(300_000);
+  await page.goto('/');
+  await page.waitForFunction(() => window.harbor?.store.context === 'kind-harbor', null, { timeout: 30_000 })
+    .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
+  await page.waitForFunction(() => !document.getElementById('hud')?.hidden && document.getElementById('splash')?.hidden);
+
+  // A shipyard straight from the API, so the test is about the rollout, not placement.
+  const created = await page.evaluate(async ([ns, name]) => {
+    const r = await fetch('/api/deployments', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ns, name, image: 'nginx:1.27-alpine', replicas: 2, port: 80 }) });
+    return r.status;
+  }, [NS, NAME] as const);
+  expect(created).toBe(201);
+  await page.waitForFunction((key) => window.harbor.store.deployments.get(key)?.available === 2, `${NS}/${NAME}`, { timeout: 120_000 });
+
+  const dep = () => page.evaluate((key) => window.harbor.store.deployments.get(key) as { image: string; revision?: number; strategy?: string; available: number; updated: number } | undefined, `${NS}/${NAME}`);
+  await page.evaluate((key) => window.harbor.selection.set([`b:${key}`]), `${NS}/${NAME}`);
+  await page.locator('#hud .selection button', { hasText: 'Refit shipyard' }).click();
+  const rf = page.locator('#refit-form form');
+  await expect(rf).toBeVisible();
+  await rf.locator('input[name=image]').fill('nginx:1.26-alpine');
+  await rf.locator('input[name=maxUnavailable]').fill('0');
+  await rf.locator('input[name=maxSurge]').fill('1');
+  await rf.locator('button[type=submit]').click();
+  await expect(rf).toBeHidden();
+  await expect.poll(async () => (await dep())?.image, { timeout: 60_000 }).toBe('nginx:1.26-alpine');
+  await expect.poll(async () => (await dep())?.strategy, { timeout: 10_000 }).toBe('RollingUpdate maxUnavailable=0 maxSurge=1');
+  await expect.poll(async () => { const d = await dep(); return d && d.revision === 2 && d.updated === 2 && d.available === 2; }, { timeout: 120_000 }).toBe(true);
+
+  await page.evaluate((key) => window.harbor.selection.set([`b:${key}`]), `${NS}/${NAME}`);
+  const back = page.locator('#hud .selection button', { hasText: 'Roll back refit' });
+  await back.click();
+  await page.locator('#hud .selection button', { hasText: 'Confirm' }).click();
+  await expect.poll(async () => (await dep())?.image, { timeout: 60_000 }).toBe('nginx:1.27-alpine');
+  await expect.poll(async () => (await dep())?.revision, { timeout: 60_000 }).toBe(3);
+  expect(kubectl('get', 'deployment', NAME, '-n', NS, '-o', 'jsonpath={.spec.template.spec.containers[0].image}')).toBe('nginx:1.27-alpine');
+
+  // A fleet from the shop.
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=fleet-ns] button').click();
+  const ff = page.locator('#fleet-form');
+  await expect(ff).toBeVisible();
+  await ff.locator('input[name=name]').fill(`${NAME}-fleet`);
+  await ff.locator('button[type=submit]').click();
+  await expect(ff).toBeHidden();
+  await page.waitForFunction((ns) => (window.harbor.store as unknown as { namespaces: Map<string, unknown> }).namespaces.has(ns), `${NAME}-fleet`, { timeout: 30_000 });
+  expect(kubectl('get', 'namespace', `${NAME}-fleet`, '-o', 'jsonpath={.status.phase}')).toBe('Active');
 });

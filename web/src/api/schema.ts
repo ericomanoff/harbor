@@ -293,6 +293,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/deployments/{ns}/{name}/refit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Refit a shipyard (new image and rollout strategy) */
+        patch: operations["refitDeployment"];
+        trace?: never;
+    };
+    "/api/deployments/{ns}/{name}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Roll back a shipyard to its previous refit (rollout undo) */
+        post: operations["rollbackDeployment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/namespaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Found a fleet (create a Namespace) */
+        post: operations["createNamespace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/deployments/{ns}/{name}/scale": {
         parameters: {
             query?: never;
@@ -623,6 +674,10 @@ export interface components {
             currentRS?: string;
             /** @description Helm release that owns this Deployment (meta.helm.sh/release-name), if any. */
             release?: string;
+            /** @description Rollout strategy, summarised ("RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate"). */
+            strategy?: string;
+            /** @description Current rollout revision (deployment.kubernetes.io/revision), if known. */
+            revision?: number;
             /** @description Resource requests of the first container, summarised (e.g. "cpu 50m · mem 64Mi"), if any. */
             requests?: string;
             /** @description Resource limits of the first container, summarised, if any. */
@@ -847,6 +902,17 @@ export interface components {
             tls?: boolean;
             /** @description TLS secret name, optional even when tls is true. */
             tlsSecret?: string;
+        };
+        RefitRequest: {
+            /** @description New image for the first container. */
+            image: string;
+            /** @description RollingUpdate maxUnavailable (count or percent), optional. */
+            maxUnavailable?: string;
+            /** @description RollingUpdate maxSurge (count or percent), optional. */
+            maxSurge?: string;
+        };
+        CreateNamespaceRequest: {
+            name: string;
         };
         ScaleRequest: {
             replicas: number;
@@ -1356,6 +1422,79 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    refitDeployment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefitRequest"];
+            };
+        };
+        responses: {
+            /** @description Rollout started */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    rollbackDeployment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rolled back */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createNamespace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNamespaceRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Namespace"];
+                };
             };
             default: components["responses"]["Error"];
         };

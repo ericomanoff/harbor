@@ -1,4 +1,5 @@
-import { deleteDeployment, deleteIngress, deletePod, helm, scaleDeployment, workloads as workloadApi, type HelmRelease, deleteService } from '../api/client';
+import { deleteDeployment, deleteIngress, deletePod, helm, rollbackDeployment, scaleDeployment, workloads as workloadApi, type HelmRelease, deleteService } from '../api/client';
+import { openRefitForm } from '../ui/refitForm';
 import { hullNumber, shipVariant } from '../entities/Ship';
 import { eva, link, mode, modal, selection, settings, store, type LinkStatus } from '../app';
 import { sfx } from '../game/audio';
@@ -317,7 +318,7 @@ export class Hud {
       const rolling = d.replicas > 0 && d.updated < d.replicas;
       this.setCard(`Shipyard ${d.name}`, [
         `${d.ns} · ${d.image}`,
-        `${d.available}/${d.replicas} ships moored${rolling ? ` · refit ${d.updated}/${d.replicas}` : ''}`,
+        `${d.available}/${d.replicas} ships moored${rolling ? ` · refit ${d.updated}/${d.replicas}` : ''}${d.revision ? ` · refit #${d.revision}` : ''}${d.strategy ? ` · ${d.strategy}` : ''}`,
         d.readiness || d.liveness ? `lookouts: readiness ${d.readiness ?? 'none'} · liveness ${d.liveness ?? 'none'}` : 'no lookouts (no probes)',
         `berth: requests ${d.requests ?? 'none (greedy ship)'} · limits ${d.limits ?? 'none'}`,
         d.orders?.length ? `sealed orders: ${d.orders.join(', ')}` : '',
@@ -326,6 +327,8 @@ export class Hud {
         { label: 'Launch ship', kind: 'primary', enabled: true, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas + 1); this.announce(`UNIT ORDERED: ${d.name}`); } },
         { label: 'Scrap one', kind: 'secondary', enabled: d.replicas > 0, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas - 1); this.announce(`UNIT RETIRED: ${d.name}`); } },
         { label: 'Sell shipyard', kind: 'danger', confirm: 'Confirm: sell and lose its ships?', enabled: true, run: async () => { await deleteDeployment(d.ns, d.name); selection.clear(); } },
+        { label: 'Refit shipyard', kind: 'secondary', enabled: true, run: async () => openRefitForm(d) },
+        { label: 'Roll back refit', kind: 'secondary', confirm: 'Confirm: return to the previous refit?', enabled: (d.revision ?? 1) > 1, run: async () => { await rollbackDeployment(d.ns, d.name); this.announce(`ROLLBACK ORDERED: ${d.name}`); } },
       ], namespaceColor(d.ns));
       return;
     }

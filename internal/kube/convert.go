@@ -159,6 +159,23 @@ func ConvertService(svc *corev1.Service) gen.Service {
 	}
 }
 
+// strategySummary: "RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate".
+func strategySummary(st appsv1.DeploymentStrategy) string {
+	if st.Type == appsv1.RecreateDeploymentStrategyType {
+		return "Recreate"
+	}
+	mu, ms := "25%", "25%"
+	if st.RollingUpdate != nil {
+		if st.RollingUpdate.MaxUnavailable != nil {
+			mu = st.RollingUpdate.MaxUnavailable.String()
+		}
+		if st.RollingUpdate.MaxSurge != nil {
+			ms = st.RollingUpdate.MaxSurge.String()
+		}
+	}
+	return "RollingUpdate maxUnavailable=" + mu + " maxSurge=" + ms
+}
+
 // resourceSummary: "cpu 50m · mem 64Mi" (only what is set).
 func resourceSummary(rl corev1.ResourceList) string {
 	parts := []string{}
@@ -326,6 +343,10 @@ func ConvertDeployment(d *appsv1.Deployment) gen.Deployment {
 	}
 	if o := ordersOf(&d.Spec.Template.Spec); len(o) > 0 {
 		out.Orders = &o
+	}
+	out.Strategy = optString(strategySummary(d.Spec.Strategy))
+	if rev, err := strconv.Atoi(d.Annotations[revisionAnnotation]); err == nil {
+		out.Revision = &rev
 	}
 	return out
 }

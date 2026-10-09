@@ -548,3 +548,43 @@ func TestOrdersRoutes(t *testing.T) {
 		t.Errorf("bad kind param: %d, want 400", rec.Code)
 	}
 }
+
+func TestRefitRollbackAndNamespaceRoutes(t *testing.T) {
+	s := fakeServer(t)
+	if err := s.SelectContextByName(context.Background(), "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	if rec := do(http.MethodPost, "/api/deployments", `{"ns":"sandbox","name":"courier","image":"courier:1.0","replicas":1}`); rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodPatch, "/api/deployments/sandbox/courier/refit", `{"image":"courier:2.0","maxUnavailable":"0"}`); rec.Code != http.StatusNoContent {
+		t.Errorf("refit: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodPatch, "/api/deployments/sandbox/courier/refit", `{"image":""}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("empty image: %d, want 400", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/api/deployments/sandbox/courier/rollback", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("rollback without history: %d, want 400", rec.Code)
+	}
+	if rec := do(http.MethodPost, "/api/deployments/sandbox/nope/rollback", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("rollback unknown: %d, want 404", rec.Code)
+	}
+	rec := do(http.MethodPost, "/api/namespaces", `{"name":"ferry"}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create ns: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = do(http.MethodPost, "/api/namespaces", `{"name":"ferry"}`); rec.Code != http.StatusConflict {
+		t.Errorf("duplicate ns: %d, want 409", rec.Code)
+	}
+	if rec = do(http.MethodPost, "/api/namespaces", `{"name":"Fe rry"}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("bad ns: %d, want 400", rec.Code)
+	}
+}

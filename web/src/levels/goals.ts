@@ -65,3 +65,16 @@ export function cappedShipyard(store: Pick<ClusterStore, 'deployments' | 'pods'>
   }
   return undefined;
 }
+
+/** Burning ships of a shipyard (crash-looping pods). */
+export function crashShips(store: Pick<ClusterStore, 'pods'>, ns: string, deployment: string): number {
+  return [...store.pods.values()].filter((p) => p.ns === ns && p.deployment === deployment && /BackOff|Err|OOM/i.test(p.reason ?? '')).length;
+}
+
+/** The whole fleet is on the current refit: n ready ships, none from an old ReplicaSet, none burning. */
+export function fleetRefitted(store: Pick<ClusterStore, 'deployments' | 'pods'>, ns: string, deployment: string, image: string, n: number): boolean {
+  const d = store.deployments.get(`${ns}/${deployment}`);
+  if (!d || d.image !== image) return false;
+  const ships = [...store.pods.values()].filter((p) => p.ns === ns && p.deployment === deployment);
+  return ships.filter((p) => p.ready).length >= n && ships.every((p) => !d.currentRS || p.ownerRS === d.currentRS) && crashShips(store, ns, deployment) === 0;
+}

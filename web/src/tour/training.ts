@@ -14,6 +14,9 @@ export const training = { active: false };
 /** Sealed orders the training harbor holds, by "ns/name"; keys only, like the backend. */
 export const trainingOrders = new Map<string, { ns: string; name: string; kind: 'ConfigMap' | 'Secret'; keys: string[] }>();
 
+/** Refit history per shipyard ("ns/name"): earlier images, oldest first. Levels may seed it. */
+export const trainingHistory = new Map<string, { image: string; rs?: string }[]>();
+
 let liveWasDemo = false;
 
 /**
@@ -30,6 +33,7 @@ export function enterTraining(snapshot: Snapshot = demoSnapshot()): void {
   for (const t of timers) clearTimeout(t);
   timers.length = 0;
   trainingOrders.clear();
+  trainingHistory.clear();
   store.replace(snapshot);
   link.set('demo');
 }
@@ -47,26 +51,49 @@ const later = (ms: number, fn: () => void): void => {
   timers.push(setTimeout(fn, ms));
 };
 
-const podOf = (ns: string, name: string, deployment: string, nodeName: string, phase: 'Pending' | 'Running'): Pod => ({
+const podOf = (ns: string, name: string, deployment: string, nodeName: string, phase: 'Pending' | 'Running', ownerRS?: string): Pod => ({
   ns, name, node: nodeName, phase, ready: phase === 'Running', restarts: 0, created: new Date().toISOString(), deployment,
-  labels: { app: deployment }, containers: [deployment],
+  labels: { app: deployment }, containers: [deployment], ...(ownerRS ? { ownerRS } : {}),
 });
 
 const nodes = (): string[] => [...store.nodes.values()].filter((n) => n.ready).map((n) => n.name);
 let seq = 0;
 
-function launch(dep: Deployment, count: number): void {
+function launch(dep: Deployment, count: number, onReady?: (name: string) => void, delay = 0): void {
   for (let i = 0; i < count; i++) {
     const name = `${dep.name}-trn-${(++seq).toString(36)}`;
-    store.apply({ type: 'modified', kind: 'Pod', obj: podOf(dep.ns, name, dep.name, '', 'Pending') });
-    later(1200 + i * 400, () => {
+    const rs = store.deployments.get(nsKey(dep.ns, dep.name))?.currentRS;
+    later(delay, () => store.apply({ type: 'modified', kind: 'Pod', obj: podOf(dep.ns, name, dep.name, '', 'Pending', rs) }));
+    later(delay + 1200 + i * 400, () => {
       const ns = nodes();
       const node = ns[seq % Math.max(1, ns.length)] ?? '';
-      store.apply({ type: 'modified', kind: 'Pod', obj: podOf(dep.ns, name, dep.name, node, 'Running') });
+      store.apply({ type: 'modified', kind: 'Pod', obj: podOf(dep.ns, name, dep.name, node, 'Running', rs) });
       const cur = store.deployments.get(nsKey(dep.ns, dep.name));
-      if (cur) store.apply({ type: 'modified', kind: 'Deployment', obj: { ...cur, available: Math.min(cur.replicas, cur.available + 1), updated: cur.replicas } });
+      if (cur) store.apply({ type: 'modified', kind: 'Deployment', obj: { ...cur, available: Math.min(cur.replicas, cur.available + 1), updated: Math.min(cur.replicas, cur.updated + 1) } });
+      onReady?.(name);
     });
   }
+}
+
+/**
+ * A rollout: ships of the old refit are replaced by ships of the new one.
+ * With maxUnavailable 0 a new ship moors before an old one is scrapped;
+ * otherwise an old ship goes first and the fleet dips meanwhile.
+ */
+function roll(key: string, newImage: string, strategy: string, safe: boolean): void {
+  const dep = store.deployments.get(key);
+  if (!dep) return;
+  const rs = `${dep.name}-${(++seq).toString(36)}`;
+  store.apply({ type: 'modified', kind: 'Deployment', obj: { ...dep, image: newImage, currentRS: rs, strategy, revision: (dep.revision ?? 1) + 1, updated: 0 } });
+  const old = [...store.pods.values()].filter((p) => p.ns === dep.ns && p.deployment === dep.name && p.ownerRS !== rs);
+  old.forEach((p, i) => {
+    const at = i * 1800;
+    if (safe) launch(dep, 1, () => scrap(dep, [p.name]), at);
+    else {
+      later(at, () => scrap(dep, [p.name]));
+      launch(dep, 1, undefined, at + 300);
+    }
+  });
 }
 
 function scrap(dep: Deployment, names: string[]): void {
@@ -171,6 +198,7 @@ export function simulate(method: string, path: string, body: unknown): unknown {
     const dep: Deployment = {
       ns: req.ns, name: req.name, image: req.image, replicas: req.replicas, available: 0, updated: 0, conditions: [],
       requests: `cpu ${req.cpuRequest || '50m'} · mem ${req.memRequest || '64Mi'}`,
+      strategy: 'RollingUpdate maxUnavailable=25% maxSurge=25%', revision: 1,
       ...(limits ? { limits } : {}),
       ...(req.orders?.length ? { orders: req.orders.map((o) => `${o.kind}/${o.name}`) } : {}),
       ...(req.mapPos ? { mapPos: req.mapPos } : {}),
@@ -191,6 +219,37 @@ export function simulate(method: string, path: string, body: unknown): unknown {
     if (target > own.length) launch(dep, target - own.length);
     else if (target < own.length) scrap(dep, [...retire, ...own.map((p) => p.name).filter((n) => !retire.includes(n))].slice(0, own.length - target));
     return undefined;
+  }
+  if ((m = /^\/api\/deployments\/([^/]+)\/([^/]+)\/refit$/.exec(path)) && method === 'PATCH') {
+    const key = nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!));
+    const dep = store.deployments.get(key);
+    if (!dep) throw new Error('no such shipyard');
+    const req = b as { image: string; maxUnavailable?: string; maxSurge?: string };
+    if (!req.image?.trim()) throw new Error('image is required');
+    const mu = req.maxUnavailable?.trim();
+    const ms = req.maxSurge?.trim();
+    const strategy = mu || ms ? `RollingUpdate maxUnavailable=${mu || '25%'} maxSurge=${ms || '25%'}` : dep.strategy ?? 'RollingUpdate maxUnavailable=25% maxSurge=25%';
+    trainingHistory.set(key, [...(trainingHistory.get(key) ?? []), { image: dep.image, ...(dep.currentRS ? { rs: dep.currentRS } : {}) }]);
+    roll(key, req.image.trim(), strategy, /maxUnavailable=0(\s|$)/.test(strategy));
+    return undefined;
+  }
+  if ((m = /^\/api\/deployments\/([^/]+)\/([^/]+)\/rollback$/.exec(path)) && method === 'POST') {
+    const key = nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!));
+    const dep = store.deployments.get(key);
+    if (!dep) throw new Error('no such shipyard');
+    const hist = trainingHistory.get(key) ?? [];
+    const prev = hist.pop();
+    if (!prev) throw new Error('no previous refit to roll back to');
+    roll(key, prev.image, dep.strategy ?? 'RollingUpdate maxUnavailable=25% maxSurge=25%', true);
+    return undefined;
+  }
+  if (method === 'POST' && path === '/api/namespaces') {
+    const req = b as { name: string };
+    if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(req.name ?? '')) throw new Error('name must be lowercase letters, digits and dashes');
+    if (store.namespaces.has(req.name)) throw new Error('a fleet of that name exists');
+    const ns = { name: req.name, phase: 'Active' };
+    store.apply({ type: 'modified', kind: 'Namespace', obj: ns });
+    return ns;
   }
   if ((m = /^\/api\/deployments\/([^/]+)\/([^/]+)\/mappos$/.exec(path)) && method === 'PATCH') {
     const dep = store.deployments.get(nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)));
