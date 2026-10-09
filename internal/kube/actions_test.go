@@ -269,3 +269,59 @@ func TestBuildJob(t *testing.T) {
 		t.Error("duplicate job should fail")
 	}
 }
+
+func TestBuildDeploymentLookouts(t *testing.T) {
+	d, err := BuildDeployment(gen.CreateDeploymentRequest{Ns: "harbor", Name: "courier", Image: "x", Replicas: 1, Port: ptr(8080), ReadinessPath: ptr("ready"), LivenessPath: ptr("/healthz")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := d.Spec.Template.Spec.Containers[0]
+	if c.ReadinessProbe == nil || c.ReadinessProbe.HTTPGet.Path != "/ready" || c.ReadinessProbe.HTTPGet.Port.IntValue() != 8080 {
+		t.Errorf("readiness: %+v", c.ReadinessProbe)
+	}
+	if c.LivenessProbe == nil || c.LivenessProbe.HTTPGet.Path != "/healthz" || c.LivenessProbe.PeriodSeconds != 10 {
+		t.Errorf("liveness: %+v", c.LivenessProbe)
+	}
+	if _, err := BuildDeployment(gen.CreateDeploymentRequest{Ns: "harbor", Name: "courier", Image: "x", Replicas: 1, ReadinessPath: ptr("/ready")}); err == nil {
+		t.Error("probe without a port should be invalid")
+	}
+	// Converted back, the wire model summarises the lookouts.
+	out := ConvertDeployment(d)
+	if out.Readiness == nil || *out.Readiness != "http /ready" || out.Liveness == nil || *out.Liveness != "http /healthz" {
+		t.Errorf("converted probes: %v %v", out.Readiness, out.Liveness)
+	}
+}
+
+func TestBuildService(t *testing.T) {
+	svc, err := BuildService(gen.CreateServiceRequest{Ns: "harbor", Name: "courier", Selector: map[string]string{"app": "courier"}, Port: 80, TargetPort: ptr(8080)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if svc.Spec.Type != corev1.ServiceTypeClusterIP || svc.Spec.Selector["app"] != "courier" || svc.Spec.Ports[0].Port != 80 || svc.Spec.Ports[0].TargetPort.IntValue() != 8080 {
+		t.Errorf("service: %+v", svc.Spec)
+	}
+	if svc.Labels[ManagedByLabel] != managedByValue {
+		t.Errorf("labels: %v", svc.Labels)
+	}
+	for name, req := range map[string]gen.CreateServiceRequest{
+		"no selector": {Ns: "harbor", Name: "a", Port: 80},
+		"bad port":    {Ns: "harbor", Name: "a", Selector: map[string]string{"app": "a"}, Port: 0},
+		"bad type":    {Ns: "harbor", Name: "a", Selector: map[string]string{"app": "a"}, Port: 80, Type: ptr("ExternalName")},
+	} {
+		var ve *ValidationError
+		if _, err := BuildService(req); !errors.As(err, &ve) {
+			t.Errorf("%s: err = %v, want ValidationError", name, err)
+		}
+	}
+	ctx := context.Background()
+	client := fake.NewClientset()
+	if _, err := CreateService(ctx, client, gen.CreateServiceRequest{Ns: "harbor", Name: "courier", Selector: map[string]string{"app": "courier"}, Port: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteService(ctx, client, "harbor", "courier"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.CoreV1().Services("harbor").Get(ctx, "courier", metav1.GetOptions{}); err == nil {
+		t.Error("service should be gone")
+	}
+}

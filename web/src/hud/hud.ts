@@ -1,4 +1,4 @@
-import { deleteDeployment, deleteIngress, deletePod, helm, scaleDeployment, workloads as workloadApi, type HelmRelease } from '../api/client';
+import { deleteDeployment, deleteIngress, deletePod, helm, scaleDeployment, workloads as workloadApi, type HelmRelease, deleteService } from '../api/client';
 import { hullNumber, shipVariant } from '../entities/Ship';
 import { eva, link, mode, modal, selection, settings, store, type LinkStatus } from '../app';
 import { sfx } from '../game/audio';
@@ -318,6 +318,7 @@ export class Hud {
       this.setCard(`Shipyard ${d.name}`, [
         `${d.ns} · ${d.image}`,
         `${d.available}/${d.replicas} ships moored${rolling ? ` · refit ${d.updated}/${d.replicas}` : ''}`,
+        d.readiness || d.liveness ? `lookouts: readiness ${d.readiness ?? 'none'} · liveness ${d.liveness ?? 'none'}` : 'no lookouts (no probes)',
         d.mapPos ? `berth ${d.mapPos.x},${d.mapPos.y}` : 'auto-berthed (drag to choose a site)',
       ], [
         { label: 'Launch ship', kind: 'primary', enabled: true, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas + 1); this.announce(`UNIT ORDERED: ${d.name}`); } },
@@ -336,7 +337,9 @@ export class Hud {
         `guides ${linked.length} ship${linked.length === 1 ? '' : 's'} (${linked.filter((p) => p.ready).length} ready)`,
         ingressesForService(sv, store.ingresses.values()).length ? `reached through gate ${ingressesForService(sv, store.ingresses.values()).map((k) => k.split('/')[1]).join(', ')}` : 'not reachable from outside',
         Object.keys(sv.selector).length ? `selector ${Object.entries(sv.selector).map(([k, v]) => `${k}=${v}`).join(',')}` : 'no selector',
-      ], [], namespaceColor(sv.ns));
+      ], [
+        { label: 'Put out lighthouse', kind: 'danger', confirm: 'Confirm: delete the Service?', enabled: true, run: async () => { await deleteService(sv.ns, sv.name); selection.clear(); } },
+      ], namespaceColor(sv.ns));
       return;
     }
     if (keys.length === 1 && k0.startsWith('g:')) {

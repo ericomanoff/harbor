@@ -130,9 +130,29 @@ export function simulate(method: string, path: string, body: unknown): unknown {
     store.apply({ type: 'modified', kind: 'Ingress', obj: ing });
     return ing;
   }
+  if (method === 'POST' && path === '/api/services') {
+    const req = b as { ns: string; name: string; selector: Record<string, string>; port: number; targetPort?: number; type?: string };
+    if (!Object.keys(req.selector ?? {}).length) throw new Error('selector needs at least one label');
+    if (store.services.has(nsKey(req.ns, req.name))) throw new Error('a lighthouse of that name already stands');
+    const svc = { ns: req.ns, name: req.name, type: req.type || 'ClusterIP', clusterIP: `10.96.${(++seq % 250) + 1}.${(seq * 7) % 250}`, ports: [{ port: req.port, targetPort: String(req.targetPort ?? req.port), protocol: 'TCP', name: 'http' }], selector: req.selector };
+    store.apply({ type: 'modified', kind: 'Service', obj: svc });
+    return svc;
+  }
+  if ((m = /^\/api\/services\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'DELETE') {
+    const svc = store.services.get(nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)));
+    if (!svc) throw new Error('no such lighthouse');
+    store.apply({ type: 'deleted', kind: 'Service', obj: svc });
+    return undefined;
+  }
   if (method === 'POST' && path === '/api/deployments') {
-    const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number } };
-    const dep: Deployment = { ns: req.ns, name: req.name, image: req.image, replicas: req.replicas, available: 0, updated: 0, conditions: [], ...(req.mapPos ? { mapPos: req.mapPos } : {}) };
+    const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number }; readinessPath?: string; livenessPath?: string };
+    if (store.deployments.has(nsKey(req.ns, req.name))) throw new Error('a shipyard of that name already stands');
+    const dep: Deployment = {
+      ns: req.ns, name: req.name, image: req.image, replicas: req.replicas, available: 0, updated: 0, conditions: [],
+      ...(req.mapPos ? { mapPos: req.mapPos } : {}),
+      ...(req.readinessPath ? { readiness: `http ${req.readinessPath}` } : {}),
+      ...(req.livenessPath ? { liveness: `http ${req.livenessPath}` } : {}),
+    };
     store.apply({ type: 'modified', kind: 'Deployment', obj: dep });
     launch(dep, req.replicas);
     return dep;

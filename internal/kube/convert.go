@@ -159,6 +159,23 @@ func ConvertService(svc *corev1.Service) gen.Service {
 	}
 }
 
+// probeSummary describes a probe in a few words: "http /healthz", "tcp 5432", "exec".
+func probeSummary(p *corev1.Probe) string {
+	switch {
+	case p == nil:
+		return ""
+	case p.HTTPGet != nil:
+		return "http " + p.HTTPGet.Path
+	case p.TCPSocket != nil:
+		return "tcp " + p.TCPSocket.Port.String()
+	case p.GRPC != nil:
+		return "grpc"
+	case p.Exec != nil:
+		return "exec"
+	}
+	return "probe"
+}
+
 // ConvertIngress: the harbor mouth. Rules are flattened to host/path/service.
 func ConvertIngress(ing *netv1.Ingress) gen.Ingress {
 	out := gen.Ingress{Ns: ing.Namespace, Name: ing.Name, Hosts: []string{}, Rules: []gen.IngressRule{}, Addresses: []string{}, Tls: len(ing.Spec.TLS) > 0}
@@ -243,6 +260,10 @@ func ConvertDeployment(d *appsv1.Deployment) gen.Deployment {
 		out.MapPos = &mp
 	}
 	out.Release = optString(d.Annotations[helmReleaseAnnotation])
+	if cs := d.Spec.Template.Spec.Containers; len(cs) > 0 {
+		out.Readiness = optString(probeSummary(cs[0].ReadinessProbe))
+		out.Liveness = optString(probeSummary(cs[0].LivenessProbe))
+	}
 	return out
 }
 

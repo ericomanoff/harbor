@@ -22,6 +22,7 @@ describe('academy levels', () => {
   it('links levels', () => {
     expect(levelById('academy/1')?.title).toBe('A ship and its cargo');
     expect(nextLevel('academy/1')?.id).toBe('academy/2');
-    expect(nextLevel('academy/2')).toBeUndefined();
+    expect(nextLevel('academy/2')?.id).toBe('academy/3');
+    expect(nextLevel('academy/5')).toBeUndefined();
   });
 });

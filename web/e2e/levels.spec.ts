@@ -44,7 +44,7 @@ test('Harbor Select lists the academy with level 2 locked', async ({ page }) => 
   await page.goto('/?demo&academy');
   const select = page.locator('#academy');
   await expect(select).toBeVisible({ timeout: 15_000 });
-  await expect(select.locator('.row.level')).toHaveCount(2);
+  await expect(select.locator('.row.level')).toHaveCount(5);
   await expect(select.locator('.row.level[data-level="academy/2"]')).toHaveClass(/locked/);
   await expect(select.locator('.row.level[data-level="academy/2"] button')).toBeDisabled();
   await select.locator('.row.level[data-level="academy/1"] button').click();
@@ -110,15 +110,96 @@ test('levels 1 and 2 play through, award stars and unlock the next', async ({ pa
   await expect(summary).toBeVisible();
   await expect(summary.locator('pre.yaml')).toContainText('kind: Deployment');
   await expect(summary.locator('pre.kubectl')).toContainText('kubectl create deployment courier');
-  await expect(summary.locator('[data-next]')).toBeHidden();
+  await expect(summary.locator('[data-next]')).toBeVisible();
   await summary.locator('[data-select]').click();
 
-  // Back at Harbor Select: both levels completed, stars kept, nothing locked.
+  // Back at Harbor Select: both levels completed, stars kept, level 3 open and the rest locked.
   const select = page.locator('#academy');
   await expect(select).toBeVisible();
   await expect(select.locator('.row.level[data-level="academy/1"] .stars')).toHaveText('★★★');
   await expect(select.locator('.row.level[data-level="academy/2"] .stars')).toHaveText('★★☆');
-  await expect(select.locator('.row.level.locked')).toHaveCount(0);
+  await expect(select.locator('.row.level[data-level="academy/3"] button')).toBeEnabled();
+  await expect(select.locator('.row.level.locked')).toHaveCount(2);
   await expect(select.locator('.row.level[data-level="academy/2"] button')).toHaveText('REPLAY');
   expect(await page.evaluate(() => fetch('/api/progress').then((r) => r.json()))).toMatchObject({ levels: { 'academy/1': { stars: 3 }, 'academy/2': { stars: 2 } } });
+});
+
+/** The map scene exposes `layout.plateaus`; a free structure cell is one tile in from the island corner. */
+async function fillShipyard(page: Page, name: string, extra: Record<string, string> = {}): Promise<void> {
+  const form = page.locator('#build-form form');
+  await form.locator('select[name=ns]').selectOption('harbor');
+  await form.locator('input[name=name]').fill(name);
+  for (const [k, v] of Object.entries(extra)) await form.locator(`input[name=${k}]`).fill(v);
+  await form.locator('button[type=submit]').click();
+}
+
+test('levels 3 to 5: scaling, lookouts and the lighthouse', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: 1280, height: 760 });
+
+  // Level 3: ride out the storm with three ships.
+  await page.goto('/?demo&level=academy/3');
+  await expect(title(page)).toHaveText('A lighthouse for the fleet', { timeout: 15_000 });
+  await next(page).click();
+  await expect(title(page)).toHaveText('Storm season');
+  await expect(title(page)).toHaveText('More ships', { timeout: 15_000 });
+  await clickMapKey(page, 'b:harbor/courier');
+  await expect(title(page)).toHaveText('Launch ships');
+  const launch = page.locator('#hud .selection button', { hasText: 'Launch ship' });
+  await launch.click();
+  await launch.click();
+  await expect(title(page)).toHaveText('The storm returns', { timeout: 15_000 });
+  await expect(title(page)).toHaveText('Replicas', { timeout: 15_000 });
+  await finishAndContinue(page);
+  await expect(page.locator('#summary pre.kubectl')).toContainText('kubectl scale deployment courier --replicas=3');
+  await page.locator('#summary [data-next]').click();
+
+  // Level 4: a shipyard with lookouts, then sell the old one.
+  await expect(title(page)).toHaveText('A broken hull');
+  await next(page).click();
+  await expect(title(page)).toHaveText('Post lookouts');
+  await page.locator('#hud [data-shop-open]').click();
+  await expect(title(page)).toHaveText('A new shipyard');
+  await page.locator('#shop [data-card=shipyard] button').click();
+  await expect(title(page)).toHaveText('Choose a site');
+  await clickIslandSite(page, 'harbor-control-plane');
+  await expect(title(page)).toHaveText('Lookouts on the manifest');
+  await expect(page.locator('#build-form .lookouts')).toBeVisible();
+  await fillShipyard(page, 'courier-v2', { port: '80', readiness: '/ready', liveness: '/healthz' });
+  await expect(title(page)).toHaveText('Retire the old shipyard', { timeout: 15_000 });
+  await clickMapKey(page, 'b:harbor/courier');
+  const sell = page.locator('#hud .selection button', { hasText: 'Sell shipyard' });
+  await sell.click();
+  await page.locator('#hud .selection button', { hasText: 'Confirm' }).click();
+  await expect(title(page)).toHaveText('The hull breaks again', { timeout: 10_000 });
+  await expect(title(page)).toHaveText('Two questions', { timeout: 20_000 });
+  await finishAndContinue(page);
+  await expect(page.locator('#summary pre.yaml')).toContainText('livenessProbe');
+  await page.locator('#summary [data-next]').click();
+
+  // Level 5: light a lighthouse for the courier fleet.
+  await expect(title(page)).toHaveText('A trader with an address');
+  await next(page).click();
+  await expect(title(page)).toHaveText('The address is gone');
+  await expect(title(page)).toHaveText('Light a lighthouse', { timeout: 15_000 });
+  await page.locator('#hud [data-shop-open]').click();
+  await expect(title(page)).toHaveText('The Lighthouse card');
+  await page.locator('#shop [data-card=lighthouse] button').click();
+  await expect(title(page)).toHaveText('Which ships?');
+  const lf = page.locator('#lighthouse-form form');
+  await lf.locator('select[name=ns]').selectOption('harbor');
+  await lf.locator('input[name=name]').fill('courier');
+  await lf.locator('select[name=fleet]').selectOption('courier');
+  await expect(lf.locator('details.manifest pre')).toContainText('app: courier');
+  await lf.locator('button[type=submit]').click();
+  await expect(title(page)).toHaveText('Ships come and go', { timeout: 15_000 });
+  await expect(title(page)).toHaveText('One name, many ships', { timeout: 25_000 });
+  await finishAndContinue(page);
+  await expect(page.locator('#summary pre.kubectl')).toContainText('kubectl expose deployment courier');
+  await expect(page.locator('#summary [data-next]')).toBeHidden();
+  await page.locator('#summary [data-select]').click();
+  const select = page.locator('#academy');
+  await expect(select).toBeVisible();
+  await expect(select.locator('.row.level')).toHaveCount(5);
+  await expect(select.locator('.row.level[data-level="academy/5"] .stars')).toHaveText('★★★');
 });

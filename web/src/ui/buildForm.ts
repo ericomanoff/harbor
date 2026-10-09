@@ -35,6 +35,7 @@ export function openBuildForm(opts: BuildFormOptions): void {
   where.textContent = opts.mapPos ? `site ${opts.mapPos.x},${opts.mapPos.y}` : 'auto-placed';
   heading.textContent = opts.kind === 'StatefulSet' ? 'TANKER TERMINAL' : 'SHIPYARD';
   storageRow.hidden = opts.kind !== 'StatefulSet';
+  $<HTMLDivElement>(form, '.lookouts').hidden = opts.kind !== 'Deployment';
   err.hidden = true;
   form.reset();
   if (opts.defaultNamespace) nsSel.value = opts.defaultNamespace;
@@ -49,6 +50,8 @@ export function openBuildForm(opts: BuildFormOptions): void {
     if (str('port')) req.port = Number(str('port'));
     if (str('cpu')) req.cpuRequest = str('cpu');
     if (str('mem')) req.memRequest = str('mem');
+    if (str('readiness')) req.readinessPath = str('readiness');
+    if (str('liveness')) req.livenessPath = str('liveness');
     $<HTMLPreElement>(manifest, 'pre').textContent = deploymentYaml(req);
   };
   form.oninput = renderManifest;
@@ -76,6 +79,11 @@ export function openBuildForm(opts: BuildFormOptions): void {
     if (str('cpu')) req.cpuRequest = str('cpu');
     if (str('mem')) req.memRequest = str('mem');
     if (opts.mapPos) req.mapPos = opts.mapPos;
+    if (opts.kind === 'Deployment') {
+      const dep = req as CreateDeploymentRequest;
+      if (str('readiness')) dep.readinessPath = str('readiness');
+      if (str('liveness')) dep.livenessPath = str('liveness');
+    }
     if (opts.kind === 'StatefulSet') {
       const sts = req as CreateStatefulSetRequest;
       if (str('storage')) sts.storage = str('storage');

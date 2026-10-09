@@ -94,6 +94,19 @@ func BuildDeployment(req gen.CreateDeploymentRequest) (*appsv1.Deployment, error
 		}
 		container.Ports = []corev1.ContainerPort{{ContainerPort: int32(*req.Port), Name: "http"}}
 	}
+	// Lookouts: HTTP probes on the container port.
+	if p := derefStr(req.ReadinessPath); p != "" {
+		if req.Port == nil {
+			return nil, invalid("readinessPath needs a port")
+		}
+		container.ReadinessProbe = httpProbe(p, *req.Port, 5)
+	}
+	if p := derefStr(req.LivenessPath); p != "" {
+		if req.Port == nil {
+			return nil, invalid("livenessPath needs a port")
+		}
+		container.LivenessProbe = httpProbe(p, *req.Port, 10)
+	}
 	replicas := int32(req.Replicas)
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: req.Name, Namespace: req.Ns, Labels: labels, Annotations: annotations},
@@ -106,6 +119,74 @@ func BuildDeployment(req gen.CreateDeploymentRequest) (*appsv1.Deployment, error
 			},
 		},
 	}, nil
+}
+
+func httpProbe(path string, port int, period int32) *corev1.Probe {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return &corev1.Probe{
+		ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: path, Port: intstr.FromInt(port)}},
+		PeriodSeconds:       period,
+		InitialDelaySeconds: 2,
+		FailureThreshold:    3,
+	}
+}
+
+// BuildService turns a create request into a Service: a lighthouse whose
+// selector picks the ships it guides.
+func BuildService(req gen.CreateServiceRequest) (*corev1.Service, error) {
+	if errs := validation.IsDNS1123Label(req.Name); len(errs) > 0 {
+		return nil, invalid("name %q: %s", req.Name, strings.Join(errs, "; "))
+	}
+	if errs := validation.IsDNS1123Label(req.Ns); len(errs) > 0 {
+		return nil, invalid("namespace %q: %s", req.Ns, strings.Join(errs, "; "))
+	}
+	if len(req.Selector) == 0 {
+		return nil, invalid("selector needs at least one label")
+	}
+	if req.Port < 1 || req.Port > 65535 {
+		return nil, invalid("port must be 1-65535")
+	}
+	target := req.Port
+	if req.TargetPort != nil {
+		if *req.TargetPort < 1 || *req.TargetPort > 65535 {
+			return nil, invalid("targetPort must be 1-65535")
+		}
+		target = *req.TargetPort
+	}
+	typ := corev1.ServiceTypeClusterIP
+	switch derefStr(req.Type) {
+	case "", "ClusterIP":
+	case "NodePort":
+		typ = corev1.ServiceTypeNodePort
+	case "LoadBalancer":
+		typ = corev1.ServiceTypeLoadBalancer
+	default:
+		return nil, invalid("type must be ClusterIP, NodePort or LoadBalancer")
+	}
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: req.Name, Namespace: req.Ns, Labels: map[string]string{ManagedByLabel: managedByValue}},
+		Spec: corev1.ServiceSpec{
+			Type:     typ,
+			Selector: req.Selector,
+			Ports:    []corev1.ServicePort{{Name: "http", Port: int32(req.Port), TargetPort: intstr.FromInt(target), Protocol: corev1.ProtocolTCP}},
+		},
+	}, nil
+}
+
+// CreateService lights a lighthouse.
+func CreateService(ctx context.Context, client kubernetes.Interface, req gen.CreateServiceRequest) (*corev1.Service, error) {
+	svc, err := BuildService(req)
+	if err != nil {
+		return nil, err
+	}
+	return client.CoreV1().Services(req.Ns).Create(ctx, svc, metav1.CreateOptions{})
+}
+
+// DeleteService puts a lighthouse out.
+func DeleteService(ctx context.Context, client kubernetes.Interface, ns, name string) error {
+	return client.CoreV1().Services(ns).Delete(ctx, name, metav1.DeleteOptions{})
 }
 
 // CreateDeployment places a new War Factory.

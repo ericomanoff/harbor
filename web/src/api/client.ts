@@ -15,6 +15,8 @@ export type HelmUpgradeRequest = components['schemas']['HelmUpgradeRequest'];
 export type ContextList = components['schemas']['ContextList'];
 export type CreateStatefulSetRequest = components['schemas']['CreateStatefulSetRequest'];
 export type CreateIngressRequest = components['schemas']['CreateIngressRequest'];
+export type CreateServiceRequest = components['schemas']['CreateServiceRequest'];
+export type Service = components['schemas']['Service'];
 export type CreateJobRequest = components['schemas']['CreateJobRequest'];
 export type Workload = components['schemas']['Workload'];
 export type Ingress = components['schemas']['Ingress'];
@@ -135,6 +137,14 @@ export function deleteIngress(ns: string, name: string, fetchFn: typeof fetch = 
 
 export function createStatefulSet(req: CreateStatefulSetRequest, fetchFn: typeof fetch = fetch): Promise<Workload> {
   return request<Workload>('POST', '/api/workloads/statefulsets', req, fetchFn);
+}
+
+export function createService(req: CreateServiceRequest, fetchFn: typeof fetch = fetch): Promise<Service> {
+  return request<Service>('POST', '/api/services', req, fetchFn);
+}
+
+export function deleteService(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('DELETE', `/api/services/${enc(ns)}/${enc(name)}`, undefined, fetchFn);
 }
 
 export function createIngress(req: CreateIngressRequest, fetchFn: typeof fetch = fetch): Promise<Ingress> {

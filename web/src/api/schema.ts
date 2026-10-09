@@ -140,6 +140,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Light a lighthouse (create a Service) */
+        post: operations["createService"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/services/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Put out a lighthouse (delete the Service) */
+        delete: operations["deleteService"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ingresses": {
         parameters: {
             query?: never;
@@ -554,6 +588,10 @@ export interface components {
             currentRS?: string;
             /** @description Helm release that owns this Deployment (meta.helm.sh/release-name), if any. */
             release?: string;
+            /** @description Readiness probe of the first container, summarised (e.g. "http /healthz"), if any. */
+            readiness?: string;
+            /** @description Liveness probe of the first container, summarised, if any. */
+            liveness?: string;
             mapPos?: components["schemas"]["MapPos"];
             conditions: components["schemas"]["Condition"][];
         };
@@ -671,6 +709,24 @@ export interface components {
             cpuRequest?: string;
             /** @description Memory request per pod (e.g. "64Mi"). Defaults to 64Mi. */
             memRequest?: string;
+            /** @description HTTP GET readiness probe path on the container port (a lookout); empty for none. */
+            readinessPath?: string;
+            /** @description HTTP GET liveness probe path on the container port (a lookout); empty for none. */
+            livenessPath?: string;
+        };
+        CreateServiceRequest: {
+            ns: string;
+            name: string;
+            /** @description Labels the ships must fly for the beam to reach them. */
+            selector: {
+                [key: string]: string;
+            };
+            /** @description Service port. */
+            port: number;
+            /** @description Container port; defaults to port. */
+            targetPort?: number;
+            /** @description ClusterIP (default), NodePort or LoadBalancer. */
+            type?: string;
         };
         CreateStatefulSetRequest: {
             ns: string;
@@ -1010,6 +1066,53 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Workload"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateServiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Service"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteService: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

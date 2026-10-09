@@ -474,3 +474,38 @@ func TestRootServesFrontendOrPlaceholder(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 }
+
+func TestServiceRoutes(t *testing.T) {
+	s := fakeServer(t)
+	if err := s.SelectContextByName(context.Background(), "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := do(http.MethodPost, "/api/services", `{"ns":"sandbox","name":"courier","selector":{"app":"courier"},"port":80,"targetPort":8080}`)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create service: %d %s", rec.Code, rec.Body.String())
+	}
+	var svc gen.Service
+	if err := json.Unmarshal(rec.Body.Bytes(), &svc); err != nil || svc.Selector["app"] != "courier" || len(svc.Ports) != 1 || svc.Ports[0].Port != 80 {
+		t.Errorf("service = %+v (%v)", svc, err)
+	}
+	if rec = do(http.MethodPost, "/api/services", `{"ns":"sandbox","name":"courier","selector":{"app":"courier"},"port":80}`); rec.Code != http.StatusConflict {
+		t.Errorf("duplicate: %d, want 409", rec.Code)
+	}
+	if rec = do(http.MethodPost, "/api/services", `{"ns":"sandbox","name":"s2","selector":{},"port":80}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("empty selector: %d, want 400", rec.Code)
+	}
+	if rec = do(http.MethodDelete, "/api/services/sandbox/courier", ""); rec.Code != http.StatusNoContent {
+		t.Errorf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = do(http.MethodDelete, "/api/services/sandbox/courier", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("delete twice: %d, want 404", rec.Code)
+	}
+}

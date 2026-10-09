@@ -136,6 +136,39 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/services:
+    post:
+      operationId: createService
+      summary: Light a lighthouse (create a Service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/services/{ns}/{name}:
+    delete:
+      operationId: deleteService
+      summary: Put out a lighthouse (delete the Service)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "204":
+          description: Deleted
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/ingresses:
     post:
       operationId: createIngress
@@ -705,6 +738,12 @@ components:
         release:
           type: string
           description: Helm release that owns this Deployment (meta.helm.sh/release-name), if any.
+        readiness:
+          type: string
+          description: Readiness probe of the first container, summarised (e.g. "http /healthz"), if any.
+        liveness:
+          type: string
+          description: Liveness probe of the first container, summarised, if any.
         mapPos:
           $ref: "#/components/schemas/MapPos"
         conditions:
@@ -953,6 +992,35 @@ components:
         memRequest:
           type: string
           description: Memory request per pod (e.g. "64Mi"). Defaults to 64Mi.
+        readinessPath:
+          type: string
+          description: HTTP GET readiness probe path on the container port (a lookout); empty for none.
+        livenessPath:
+          type: string
+          description: HTTP GET liveness probe path on the container port (a lookout); empty for none.
+
+    CreateServiceRequest:
+      type: object
+      required: [ns, name, selector, port]
+      properties:
+        ns:
+          type: string
+        name:
+          type: string
+        selector:
+          type: object
+          description: Labels the ships must fly for the beam to reach them.
+          additionalProperties:
+            type: string
+        port:
+          type: integer
+          description: Service port.
+        targetPort:
+          type: integer
+          description: Container port; defaults to port.
+        type:
+          type: string
+          description: ClusterIP (default), NodePort or LoadBalancer.
 
     CreateStatefulSetRequest:
       type: object

@@ -81,6 +81,7 @@ test.afterEach(() => {
     kubectl('delete', 'service', `${NAME}-db`, '-n', NS, '--ignore-not-found');
     kubectl('delete', 'ingress', `${NAME}-gate`, '-n', NS, '--ignore-not-found');
     kubectl('delete', 'job', `${NAME}-haul`, '-n', NS, '--ignore-not-found');
+    kubectl('delete', 'service', `${NAME}-light`, '-n', NS, '--ignore-not-found');
   } catch {
     /* cluster gone; nothing to clean */
   }
@@ -359,4 +360,44 @@ test('send out a fishing fleet and watch the catch come home', async ({ page }) 
   await page.locator('#hud .selection button', { hasText: 'Confirm' }).click(); // the armed label
   await page.waitForFunction((k) => !(window.harbor.store as unknown as { workloads: Map<string, unknown> }).workloads.has(k), key, { timeout: 60_000 });
   expect(() => kubectl('get', 'job', `${NAME}-haul`, '-n', NS)).toThrow();
+});
+
+test('light a lighthouse from the shop and put it out from its card', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForFunction(() => window.harbor?.store.context === 'kind-harbor', null, { timeout: 30_000 })
+    .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
+  await page.waitForFunction(() => !document.getElementById('hud')?.hidden && document.getElementById('splash')?.hidden);
+
+  await page.locator('#hud [data-shop-open]').click();
+  await page.locator('#shop [data-card=lighthouse] button').click();
+  const form = page.locator('#lighthouse-form');
+  await expect(form).toBeVisible();
+  await form.locator('select[name=ns]').selectOption(NS);
+  await form.locator('input[name=name]').fill(`${NAME}-light`);
+  await form.locator('select[name=fleet]').selectOption('');
+  await form.locator('input[name=labels]').fill(`app=${NAME}`);
+  await form.locator('input[name=port]').fill('8080');
+  await form.locator('button[type=submit]').click();
+  await expect(form).toBeHidden();
+  await page.waitForFunction((key) => (window.harbor.store as unknown as { services: Map<string, unknown> }).services.has(key), `${NS}/${NAME}-light`, { timeout: 60_000 });
+  expect(kubectl('get', 'service', `${NAME}-light`, '-n', NS, '-o', 'jsonpath={.spec.selector.app}')).toBe(NAME);
+
+  // Select the lighthouse on the map and put it out (asks twice).
+  const key = `s:${NS}/${NAME}-light`;
+  await page.waitForFunction((k) => {
+    const m = window.harbor.game.scene.keys.Map as { screenRectOf(k: string): { width: number } | undefined };
+    return (m.screenRectOf(k)?.width ?? 0) > 0;
+  }, key, { timeout: 15_000 });
+  const r = await page.evaluate((k) => {
+    const m = window.harbor.game.scene.keys.Map as { focusKey(k: string): void; screenRectOf(k: string): { x: number; y: number; width: number; height: number } | undefined };
+    m.focusKey(k);
+    return new Promise<{ x: number; y: number; width: number; height: number }>((res) => setTimeout(() => res(m.screenRectOf(k)!), 700));
+  }, key);
+  await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
+  await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([key]);
+  await page.locator(action(0)).click();
+  await expect(page.locator(action(0))).toHaveText(/Confirm/);
+  await page.locator(action(0)).click();
+  await page.waitForFunction((k) => !(window.harbor.store as unknown as { services: Map<string, unknown> }).services.has(k), `${NS}/${NAME}-light`, { timeout: 60_000 });
+  expect(() => kubectl('get', 'service', `${NAME}-light`, '-n', NS)).toThrow();
 });

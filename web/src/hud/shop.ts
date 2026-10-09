@@ -3,6 +3,7 @@ import { mode, store } from '../app';
 import { openOverlay } from '../ui/overlay';
 import { openTechTree } from '../ui/techTree';
 import { openGateForm } from '../ui/gateForm';
+import { openLighthouseForm } from '../ui/lighthouseForm';
 import { openJobForm } from '../ui/jobForm';
 
 type Tab = 'all' | 'shipyards' | 'harbor' | 'charts';
@@ -43,7 +44,7 @@ export function openShop(): void {
     }
     if (tab === 'all' || tab === 'harbor') {
       out.push(card({ id: 'gate', icon: '⛩', title: 'Gate', sub: 'Ingress', button: 'Open', kind: 'primary', enabled: store.services.size > 0, onClick: () => { close(); openGateForm(); } }));
-      out.push(card({ icon: '🗼', title: 'Lighthouse', sub: 'Service · soon', button: 'Soon', kind: 'secondary', enabled: false }));
+      out.push(card({ id: 'lighthouse', icon: '🗼', title: 'Lighthouse', sub: 'Service', button: 'Light', kind: 'primary', enabled: store.namespaces.size > 0, onClick: () => { close(); openLighthouseForm(); } }));
     }
     if (tab === 'all' || tab === 'charts') {
       if (!charts) {

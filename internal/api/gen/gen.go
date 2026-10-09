@@ -241,6 +241,9 @@ type CreateDeploymentRequest struct {
 	CpuRequest *string `json:"cpuRequest,omitempty"`
 	Image      string  `json:"image"`
 
+	// LivenessPath HTTP GET liveness probe path on the container port (a lookout); empty for none.
+	LivenessPath *string `json:"livenessPath,omitempty"`
+
 	// MapPos Tile coordinates on the map grid.
 	MapPos *MapPos `json:"mapPos,omitempty"`
 
@@ -250,8 +253,11 @@ type CreateDeploymentRequest struct {
 	Ns         string  `json:"ns"`
 
 	// Port Container port to expose, optional.
-	Port     *int `json:"port,omitempty"`
-	Replicas int  `json:"replicas"`
+	Port *int `json:"port,omitempty"`
+
+	// ReadinessPath HTTP GET readiness probe path on the container port (a lookout); empty for none.
+	ReadinessPath *string `json:"readinessPath,omitempty"`
+	Replicas      int     `json:"replicas"`
 }
 
 // CreateIngressRequest defines model for CreateIngressRequest.
@@ -307,6 +313,24 @@ type CreateJobRequest struct {
 // CreateJobRequestRestartPolicy defines model for CreateJobRequest.RestartPolicy.
 type CreateJobRequestRestartPolicy string
 
+// CreateServiceRequest defines model for CreateServiceRequest.
+type CreateServiceRequest struct {
+	Name string `json:"name"`
+	Ns   string `json:"ns"`
+
+	// Port Service port.
+	Port int `json:"port"`
+
+	// Selector Labels the ships must fly for the beam to reach them.
+	Selector map[string]string `json:"selector"`
+
+	// TargetPort Container port; defaults to port.
+	TargetPort *int `json:"targetPort,omitempty"`
+
+	// Type ClusterIP (default), NodePort or LoadBalancer.
+	Type *string `json:"type,omitempty"`
+}
+
 // CreateStatefulSetRequest defines model for CreateStatefulSetRequest.
 type CreateStatefulSetRequest struct {
 	CpuRequest *string `json:"cpuRequest,omitempty"`
@@ -339,10 +363,16 @@ type Deployment struct {
 	// Image Image of the first container.
 	Image string `json:"image"`
 
+	// Liveness Liveness probe of the first container, summarised, if any.
+	Liveness *string `json:"liveness,omitempty"`
+
 	// MapPos Tile coordinates on the map grid.
 	MapPos *MapPos `json:"mapPos,omitempty"`
 	Name   string  `json:"name"`
 	Ns     string  `json:"ns"`
+
+	// Readiness Readiness probe of the first container, summarised (e.g. "http /healthz"), if any.
+	Readiness *string `json:"readiness,omitempty"`
 
 	// Release Helm release that owns this Deployment (meta.helm.sh/release-name), if any.
 	Release  *string `json:"release,omitempty"`
@@ -713,6 +743,9 @@ type CreateIngressJSONRequestBody = CreateIngressRequest
 // PutLevelProgressJSONRequestBody defines body for PutLevelProgress for application/json ContentType.
 type PutLevelProgressJSONRequestBody = LevelProgress
 
+// CreateServiceJSONRequestBody defines body for CreateService for application/json ContentType.
+type CreateServiceJSONRequestBody = CreateServiceRequest
+
 // CreateJobJSONRequestBody defines body for CreateJob for application/json ContentType.
 type CreateJobJSONRequestBody = CreateJobRequest
 
@@ -1069,6 +1102,12 @@ type ServerInterface interface {
 	// PutLevelProgress Record a level result (best values are kept)
 	// (PUT /api/progress/{level})
 	PutLevelProgress(w http.ResponseWriter, r *http.Request, level string)
+	// CreateService Light a lighthouse (create a Service)
+	// (POST /api/services)
+	CreateService(w http.ResponseWriter, r *http.Request)
+	// DeleteService Put out a lighthouse (delete the Service)
+	// (DELETE /api/services/{ns}/{name})
+	DeleteService(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
@@ -1748,6 +1787,55 @@ func (siw *ServerInterfaceWrapper) PutLevelProgress(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// CreateService operation middleware
+func (siw *ServerInterfaceWrapper) CreateService(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateService(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteService operation middleware
+func (siw *ServerInterfaceWrapper) DeleteService(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteService(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSnapshot operation middleware
 func (siw *ServerInterfaceWrapper) GetSnapshot(w http.ResponseWriter, r *http.Request) {
 
@@ -2050,6 +2138,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/deployments/{ns}/{name}", wrapper.DeleteDeployment)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/workloads/statefulsets", wrapper.CreateStatefulSet)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/workloads/jobs", wrapper.CreateJob)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/services", wrapper.CreateService)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/services/{ns}/{name}", wrapper.DeleteService)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/ingresses", wrapper.CreateIngress)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}", wrapper.DeleteWorkload)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/scale", wrapper.ScaleWorkload)
