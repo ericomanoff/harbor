@@ -23,12 +23,16 @@ func main() {
 	kctx := flag.String("context", "", "kubeconfig context to watch at startup (default: kubeconfig current-context)")
 	noConnect := flag.Bool("no-connect", false, "do not connect to any cluster at startup; wait for the UI to pick one")
 	progressPath := flag.String("progress", "", "academy progress file (default: ~/.config/harbor/progress.json)")
+	campaignsDir := flag.String("campaigns", "", "directory of extra expeditions, one campaign.yaml per subdirectory (default: ~/.config/harbor/campaigns)")
 	flag.Parse()
 
 	server := api.NewServer()
 	defer server.Close()
 	if *progressPath != "" {
 		server.SetProgressPath(*progressPath)
+	}
+	if *campaignsDir != "" {
+		server.SetCampaignsDir(*campaignsDir)
 	}
 
 	srv := &http.Server{

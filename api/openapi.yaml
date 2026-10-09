@@ -443,6 +443,42 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/campaigns:
+    get:
+      operationId: listCampaigns
+      summary: Expeditions (vendor campaigns) built in and from ~/.config/harbor/campaigns
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Campaign"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/campaigns/probe:
+    post:
+      operationId: runProbe
+      summary: Run one whitelisted check against the connected cluster
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProbeRequest"
+      responses:
+        "200":
+          description: Probe ran (ok says whether it passed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeResult"
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/stage/{incident}:
     post:
       operationId: stageIncident
@@ -1346,6 +1382,140 @@ components:
         tlsSecret:
           type: string
           description: TLS secret name, optional even when tls is true.
+
+    Campaign:
+      type: object
+      description: An expedition, data not code; see PLAN-CAMPAIGN.md section 6.
+      required: [id, title, levels]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        tagline:
+          type: string
+        source:
+          type: string
+          description: URL of the vendor guide the expedition follows.
+        builtin:
+          type: boolean
+          description: Shipped inside the binary (as opposed to ~/.config/harbor/campaigns).
+        levels:
+          type: array
+          items:
+            $ref: "#/components/schemas/CampaignLevel"
+
+    CampaignLevel:
+      type: object
+      required: [id, title, steps]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        concept:
+          type: string
+        par:
+          type: integer
+          description: Par time in seconds.
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/CampaignStep"
+        summary:
+          $ref: "#/components/schemas/CampaignSummary"
+
+    CampaignStep:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [instruct, check, form, values, helm-install, helm-upgrade, wait]
+        title:
+          type: string
+        text:
+          type: string
+        hint:
+          type: string
+        probe:
+          type: string
+          description: "check: a whitelisted probe name."
+        args:
+          type: object
+          additionalProperties:
+            type: string
+        form:
+          type: string
+          description: "form: shipyard, lighthouse, gate, orders, fleet or refit."
+        prefill:
+          type: object
+          additionalProperties: true
+        chart:
+          type: string
+          description: "values / helm-install: repo/name."
+        release:
+          type: string
+        ns:
+          type: string
+        version:
+          type: string
+        required:
+          type: array
+          description: "values: keys the learner must set."
+          items:
+            type: string
+        goal:
+          $ref: "#/components/schemas/CampaignGoal"
+
+    CampaignGoal:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [namespace-exists, orders-exist, deployment-ready, release-deployed, release-revision, ingress-exists, service-exists]
+        ns:
+          type: string
+        name:
+          type: string
+        orders:
+          type: string
+          description: "orders-exist: ConfigMap or Secret."
+        min:
+          type: integer
+
+    CampaignSummary:
+      type: object
+      properties:
+        naval:
+          type: string
+        kubernetes:
+          type: string
+        practice:
+          type: string
+        kubectl:
+          type: string
+
+    ProbeRequest:
+      type: object
+      required: [probe]
+      properties:
+        probe:
+          type: string
+        args:
+          type: object
+          additionalProperties:
+            type: string
+
+    ProbeResult:
+      type: object
+      required: [ok, message]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
 
     StageRequest:
       type: object

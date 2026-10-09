@@ -9,13 +9,14 @@ const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
 };
 
 /** Found a fleet: create a Namespace. */
-export function openFleetForm(): void {
+export function openFleetForm(opts: { name?: string } = {}): void {
   const root = $<HTMLDivElement>(document, '#fleet-form');
   const form = $<HTMLFormElement>(root, 'form');
   const err = $<HTMLParagraphElement>(form, '.err');
   const submit = $<HTMLButtonElement>(form, 'button[type=submit]');
   const close = openOverlay('fleet-form');
   form.reset();
+  if (opts.name) $<HTMLInputElement>(form, 'input[name=name]').value = opts.name;
   err.hidden = true;
   form.onsubmit = async (ev) => {
     ev.preventDefault();

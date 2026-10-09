@@ -1,0 +1,221 @@
+# The FortiAIGate expedition: the vendor deployment guide as harbor levels.
+# Authored from the guide's seven steps (prepare and validate the
+# environment, prepare the image, configure the chart, configure the
+# license, deploy, access, upgrade). It needs GPU nodes and Fortinet images
+# to complete for real; every check can be skipped for a dry run.
+id: fortiaigate
+title: FortiAIGate expedition
+tagline: Deploy FortiAIGate on your cluster, step by step from the administration guide.
+source: https://docs.fortinet.com/document/fortiaigate/8.0.1/fortiaigate-administration-guide/512071/fortiaigate-deployment
+levels:
+  - id: validate
+    title: Survey the harbor
+    concept: Prerequisites and environment validation
+    par: 300
+    steps:
+      - kind: instruct
+        title: Before the expedition
+        text: >-
+          FortiAIGate sails on Kubernetes 1.25 or newer, on linux/amd64 worker
+          nodes with NVIDIA GPUs (L4, A10 or A100), behind an ingress
+          controller, with ReadWriteMany storage for its models. We survey the
+          harbor first; a check that fails can be skipped for a dry run, but
+          the real deployment will founder on it.
+      - kind: check
+        title: Kubernetes version
+        text: The guide requires Kubernetes 1.25 or newer.
+        probe: kube-version
+        args: { min: "1.25" }
+      - kind: check
+        title: Worker architecture
+        text: FortiAIGate images are built for linux/amd64 nodes.
+        probe: node-arch
+        args: { arch: linux/amd64 }
+      - kind: check
+        title: GPU docks
+        text: >-
+          At least one node must carry a GPU and the NVIDIA device plugin's
+          label. Without it the inference pods stay Pending.
+        probe: node-label
+        args: { label: nvidia.com/gpu.present=true }
+      - kind: check
+        title: A gatekeeper
+        text: The web UI and API are published through an Ingress, so an ingress controller must claim gates.
+        probe: ingress-controller
+      - kind: check
+        title: Storage for the models
+        text: >-
+          Model files are shared by several pods, so the chart asks for a
+          ReadWriteMany StorageClass (NFS, CephFS, cloud file shares) or
+          pre-provisioned PersistentVolumes.
+        probe: storage-class
+        args: { access: rwx }
+    summary:
+      naval: The harbor was surveyed before the expedition sailed; every dock, gate and storehouse the guide asks for was checked.
+      kubernetes: Prerequisite checks read the API server version, node OS/arch and labels, IngressClasses and StorageClasses; they are the same objects kubectl get would show.
+      practice: Most failed vendor deployments are environment problems found after hours of debugging. Checking the prerequisites first turns them into a ten-minute list.
+      kubectl: |
+        kubectl version
+        kubectl get nodes -o wide -L nvidia.com/gpu.present
+        kubectl get ingressclass
+        kubectl get storageclass
+  - id: cargo
+    title: Load the cargo
+    concept: Images and a registry pull secret
+    par: 300
+    steps:
+      - kind: instruct
+        title: Images in your own registry
+        text: >-
+          Fortinet ships the images as an archive. Push them to a registry your
+          nodes can pull from, then give the fleet a sealed envelope with the
+          registry credentials so every ship can fetch its hull.
+      - kind: form
+        title: Found the fleet
+        text: Everything FortiAIGate deploys lives in one namespace.
+        form: fleet
+        prefill: { name: fortiaigate }
+        goal: { kind: namespace-exists, name: fortiaigate }
+      - kind: form
+        title: Seal the registry credentials
+        text: >-
+          A Secret named fortiaigate-registry holds the registry login. Use
+          the keys registry, username and password; the chart turns them into
+          an image pull secret.
+        form: orders
+        prefill: { kind: Secret, ns: fortiaigate, name: fortiaigate-registry, data: { registry: registry.example.com, username: "", password: "" } }
+        goal: { kind: orders-exist, ns: fortiaigate, name: fortiaigate-registry, orders: Secret }
+      - kind: check
+        title: The envelope is sealed
+        probe: secret-exists
+        args: { ns: fortiaigate, name: fortiaigate-registry }
+    summary:
+      naval: The cargo was pushed to your own registry and the fleet carries a sealed envelope that lets every ship fetch it.
+      kubernetes: An imagePullSecret of type kubernetes.io/dockerconfigjson (or a generic Secret the chart converts) is referenced by the pod spec so the kubelet can authenticate to a private registry.
+      practice: ImagePullBackOff on day one is nearly always a missing or misnamed pull secret in the right namespace.
+      kubectl: |
+        kubectl create namespace fortiaigate
+        kubectl create secret docker-registry fortiaigate-registry --docker-server=... --docker-username=... --docker-password=... -n fortiaigate
+  - id: course
+    title: Chart the course
+    concept: Helm values for the chart
+    par: 600
+    steps:
+      - kind: instruct
+        title: The chart's sailing orders
+        text: >-
+          Add Fortinet's chart repository (or unpack the chart archive) so
+          the chart table can see fortiaigate, then fill the values the guide
+          lists: image repository and tag, the pull secret, GPU enablement,
+          storage size and class, the ingress class and host, TLS, and the
+          license-to-node mapping.
+      - kind: values
+        title: Set the required values
+        text: Open the chart with these keys set; the deployment will not sail without them.
+        chart: fortinet/fortiaigate
+        release: fortiaigate
+        ns: fortiaigate
+        required: [image.repository, image.tag, imagePullSecrets, gpu.enabled, storage.size, storage.storageClass, ingress.className, ingress.host]
+        goal: { kind: release-deployed, ns: fortiaigate, name: fortiaigate }
+    summary:
+      naval: The course was charted; the chart's values name the hulls, the storehouse, the gate and the papers.
+      kubernetes: values.yaml overrides the chart defaults; helm install renders the templates with them into Deployments, Services, PVCs and an Ingress.
+      practice: Keep the values file in version control next to the environment it describes; the chart version plus the values file is the whole deployment.
+      kubectl: |
+        helm repo add fortinet https://helm.fortinet.example/charts
+        helm show values fortinet/fortiaigate > values.yaml
+  - id: papers
+    title: Papers, please
+    concept: License configuration
+    par: 300
+    steps:
+      - kind: instruct
+        title: Licenses map to nodes
+        text: >-
+          Each GPU node needs its own FortiAIGate license file. The chart reads
+          them from a ConfigMap, one key per node name.
+      - kind: form
+        title: Store the licenses
+        form: orders
+        prefill: { kind: ConfigMap, ns: fortiaigate, name: fortiaigate-licenses, data: { "node-1": "<license for node-1>" } }
+        goal: { kind: orders-exist, ns: fortiaigate, name: fortiaigate-licenses, orders: ConfigMap }
+      - kind: check
+        title: The papers are in order
+        probe: configmap-exists
+        args: { ns: fortiaigate, name: fortiaigate-licenses }
+    summary:
+      naval: Every GPU dock has its papers in the chart locker.
+      kubernetes: A ConfigMap mounted as files gives each pod the license matching the node it runs on.
+      practice: Licenses tied to hardware identity are a classic day-two surprise when nodes are replaced; keep the mapping documented.
+  - id: launch
+    title: Launch
+    concept: helm install and readiness
+    par: 900
+    steps:
+      - kind: helm-install
+        title: Deploy the chart
+        text: Install the release with the values you charted; then watch the pods moor and the claims bind.
+        chart: fortinet/fortiaigate
+        release: fortiaigate
+        ns: fortiaigate
+        goal: { kind: release-deployed, ns: fortiaigate, name: fortiaigate }
+      - kind: check
+        title: Storage bound
+        probe: pvc-bound
+        args: { ns: fortiaigate }
+      - kind: check
+        title: All ships ready
+        probe: pods-ready
+        args: { ns: fortiaigate }
+    summary:
+      naval: The expedition launched; the release is moored, the tanks are bound and every ship flies ready.
+      kubernetes: helm install creates the release's objects; readiness depends on images pulling, PVCs binding and GPU scheduling succeeding.
+      practice: Watch kubectl get pods -w during a first install; the first failure tells you which prerequisite you missed.
+      kubectl: |
+        helm install fortiaigate fortinet/fortiaigate -n fortiaigate -f values.yaml
+        kubectl get pods,pvc -n fortiaigate -w
+  - id: gate
+    title: Open the gate
+    concept: Access through the Ingress
+    par: 300
+    steps:
+      - kind: check
+        title: The gate has an address
+        probe: ingress-address
+        args: { ns: fortiaigate, name: fortiaigate }
+      - kind: check
+        title: The UI answers
+        text: Point DNS at the gate's address first; the check accepts the appliance's self-signed certificate.
+        probe: http
+        args: { url: "https://fortiaigate.example.com/" }
+    summary:
+      naval: Traders can reach the UI through the gate.
+      kubernetes: The ingress controller assigns an address to the Ingress; DNS for the host must point at it, and TLS is served from the Secret the Ingress names.
+      practice: Verify from outside the cluster, not from a pod; most access problems are DNS or firewall, not Kubernetes.
+      kubectl: |
+        kubectl get ingress -n fortiaigate
+        curl -k https://fortiaigate.example.com/
+  - id: refit
+    title: Refit
+    concept: helm upgrade
+    par: 600
+    steps:
+      - kind: instruct
+        title: New hulls
+        text: Upgrades are a new chart version and image tag applied with helm upgrade; the release keeps its history so a bad refit can be rolled back.
+      - kind: helm-upgrade
+        title: Upgrade the release
+        release: fortiaigate
+        ns: fortiaigate
+        goal: { kind: release-revision, ns: fortiaigate, name: fortiaigate, min: 2 }
+      - kind: check
+        title: Revision advanced
+        probe: release-revision
+        args: { ns: fortiaigate, name: fortiaigate, min: "2" }
+    summary:
+      naval: The fleet was refitted and the anchorage remembers the previous revision.
+      kubernetes: helm upgrade creates a new release revision; helm rollback returns to any earlier one.
+      practice: Upgrade in a staging namespace first; the same chart plus the same values should behave the same.
+      kubectl: |
+        helm upgrade fortiaigate fortinet/fortiaigate -n fortiaigate -f values.yaml --version <new>
+        helm history fortiaigate -n fortiaigate

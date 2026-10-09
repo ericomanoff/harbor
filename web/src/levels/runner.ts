@@ -41,22 +41,27 @@ let stopUI: (() => void) | undefined;
  * objectives bar and the clock.
  */
 export function startLevel(level: Level, map: MapApi, hooks: RunnerHooks, opts: RunOptions = {}): void {
-  const mode: LevelMode = opts.mode === 'real' && level.real ? 'real' : 'sim';
+  const mode: LevelMode = level.live ? 'live' : opts.mode === 'real' && level.real ? 'real' : 'sim';
   const challenge = !!opts.challenge;
   stopUI?.();
   activeLevel.current = level;
   activeLevel.mode = mode;
   activeLevel.challenge = challenge;
-  const ns = mode === 'real' ? REAL_NS : 'harbor';
+  const ns = mode === 'real' ? REAL_NS : mode === 'live' ? 'default' : 'harbor';
   if (mode === 'sim') enterTraining(level.fixture());
   else if (training.active) leaveTraining();
+  if (mode === 'live' && new URLSearchParams(location.search).has('demo')) {
+    eva.emit('ACADEMY: expeditions sail on a connected cluster, not the demo harbor');
+    hooks.onExit('select');
+    return;
+  }
   selection.clear();
   map.home();
   // The map rebuilds its layout on the next frame; home again once it has.
   requestAnimationFrame(() => requestAnimationFrame(() => map.home()));
 
-  let ordersCache: { kind: string; name: string }[] = [];
-  let ordersAt = 0;
+  const ordersCache = new Map<string, { kind: string; name: string }[]>();
+  const ordersAt = new Map<string, number>();
   const ctx: LevelContext = {
     store,
     mode,
@@ -80,13 +85,14 @@ export function startLevel(level: Level, map: MapApi, hooks: RunnerHooks, opts: 
         eva.emit(`ACADEMY: could not stage ${incident}: ${e instanceof Error ? e.message : String(e)}`);
       }
     },
-    orders: () => {
-      if (mode === 'sim') return (simulate('GET', `/api/orders?ns=${ns}`, undefined) as { kind: string; name: string }[] | undefined) ?? [];
-      if (Date.now() - ordersAt > 1500) {
-        ordersAt = Date.now();
-        void ordersApi.list(ns).then((l) => { ordersCache = l; }).catch(() => undefined);
+    orders: (which = ns) => {
+      if (mode === 'sim') return (simulate('GET', `/api/orders?ns=${which}`, undefined) as { kind: string; name: string }[] | undefined) ?? [];
+      const at = ordersAt.get(which) ?? 0;
+      if (Date.now() - at > 1500) {
+        ordersAt.set(which, Date.now());
+        void ordersApi.list(which).then((l) => ordersCache.set(which, l)).catch(() => undefined);
       }
-      return ordersCache;
+      return ordersCache.get(which) ?? [];
     },
   };
 

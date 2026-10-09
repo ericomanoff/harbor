@@ -19,8 +19,8 @@ export interface LevelSummary {
   kubectl?: string;
 }
 
-/** How a level runs: in the training simulator, or against the connected cluster. */
-export type LevelMode = 'sim' | 'real';
+/** How a level runs: in the training simulator, staged on the connected cluster, or live on it as it is. */
+export type LevelMode = 'sim' | 'real' | 'live';
 
 /** What a level needs to run on a real cluster. */
 export interface RealPlan {
@@ -34,6 +34,8 @@ export interface Level {
   id: string;
   /** Present when the level can be replayed on a real cluster. */
   real?: RealPlan;
+  /** Runs only on the connected cluster as it is (expeditions): no fixture, no staging, no cleanup. */
+  live?: boolean;
   number: number;
   title: string;
   concept: string;
@@ -57,8 +59,8 @@ export interface LevelContext {
   sink(pod: Pod): void;
   /** Stages a whitelisted incident on the real cluster (no-op in the simulator). */
   stage(incident: 'found' | 'lone-ship' | 'sink-pod' | 'bad-refit', args?: { name?: string; image?: string }): Promise<void>;
-  /** Sealed orders of the fleet, keys only; refreshed in the background for real. */
-  orders(): { kind: string; name: string }[];
+  /** Sealed orders of a fleet (the level's by default), keys only; refreshed in the background for real. */
+  orders(ns?: string): { kind: string; name: string }[];
   /** Play a script into the store; returns a cancel function. */
   play: (script: ScriptedMessage[]) => () => void;
   /** Simulate an API call the way the training harbor does (e.g. sink a pod and let the controller relaunch it). */

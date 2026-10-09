@@ -57,6 +57,15 @@ updates and rollback). Each completed level can be replayed as a challenge
 "for real": levels 2, 5, 6, 7 and 10 stage their incidents on your cluster in
 a `harbor-academy` namespace that is cleaned up when you leave.
 
+Expeditions are vendor deployment guides played as levels on your own
+cluster: instructions, checks against the cluster (a fixed whitelist such as
+Kubernetes version, node labels, ingress controller, storage classes, release
+state, an HTTP answer), prefilled forms, chart values with required keys, and
+Helm installs or upgrades. The FortiAIGate expedition is built in; add your
+own as `~/.config/harbor/campaigns/<id>/campaign.yaml` (or `-campaigns DIR`),
+following `internal/campaign/builtin/fortiaigate/campaign.yaml`. Failed
+checks can be skipped for a dry run.
+
 Controls: left-click selects, drag box-selects ships, drag a shipyard to move
 it, right-drag pans, wheel or the right rail zooms, arrows or WASD scroll, H
 or the home button fits the harbor, Shop (or B) starts placing a shipyard,

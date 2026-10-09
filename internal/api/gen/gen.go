@@ -15,6 +15,72 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for CampaignGoalKind.
+const (
+	DeploymentReady CampaignGoalKind = "deployment-ready"
+	IngressExists   CampaignGoalKind = "ingress-exists"
+	NamespaceExists CampaignGoalKind = "namespace-exists"
+	OrdersExist     CampaignGoalKind = "orders-exist"
+	ReleaseDeployed CampaignGoalKind = "release-deployed"
+	ReleaseRevision CampaignGoalKind = "release-revision"
+	ServiceExists   CampaignGoalKind = "service-exists"
+)
+
+// Valid indicates whether the value is a known member of the CampaignGoalKind enum.
+func (e CampaignGoalKind) Valid() bool {
+	switch e {
+	case DeploymentReady:
+		return true
+	case IngressExists:
+		return true
+	case NamespaceExists:
+		return true
+	case OrdersExist:
+		return true
+	case ReleaseDeployed:
+		return true
+	case ReleaseRevision:
+		return true
+	case ServiceExists:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CampaignStepKind.
+const (
+	Check       CampaignStepKind = "check"
+	Form        CampaignStepKind = "form"
+	HelmInstall CampaignStepKind = "helm-install"
+	HelmUpgrade CampaignStepKind = "helm-upgrade"
+	Instruct    CampaignStepKind = "instruct"
+	Values      CampaignStepKind = "values"
+	Wait        CampaignStepKind = "wait"
+)
+
+// Valid indicates whether the value is a known member of the CampaignStepKind enum.
+func (e CampaignStepKind) Valid() bool {
+	switch e {
+	case Check:
+		return true
+	case Form:
+		return true
+	case HelmInstall:
+		return true
+	case HelmUpgrade:
+		return true
+	case Instruct:
+		return true
+	case Values:
+		return true
+	case Wait:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateJobRequestRestartPolicy.
 const (
 	Never     CreateJobRequestRestartPolicy = "Never"
@@ -298,6 +364,82 @@ func (e ScaleWorkloadParamsKind) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Campaign An expedition, data not code; see PLAN-CAMPAIGN.md section 6.
+type Campaign struct {
+	// Builtin Shipped inside the binary (as opposed to ~/.config/harbor/campaigns).
+	Builtin *bool           `json:"builtin,omitempty"`
+	Id      string          `json:"id"`
+	Levels  []CampaignLevel `json:"levels"`
+
+	// Source URL of the vendor guide the expedition follows.
+	Source  *string `json:"source,omitempty"`
+	Tagline *string `json:"tagline,omitempty"`
+	Title   string  `json:"title"`
+}
+
+// CampaignGoal defines model for CampaignGoal.
+type CampaignGoal struct {
+	Kind CampaignGoalKind `json:"kind"`
+	Min  *int             `json:"min,omitempty"`
+	Name *string          `json:"name,omitempty"`
+	Ns   *string          `json:"ns,omitempty"`
+
+	// Orders orders-exist: ConfigMap or Secret.
+	Orders *string `json:"orders,omitempty"`
+}
+
+// CampaignGoalKind defines model for CampaignGoal.Kind.
+type CampaignGoalKind string
+
+// CampaignLevel defines model for CampaignLevel.
+type CampaignLevel struct {
+	Concept *string `json:"concept,omitempty"`
+	Id      string  `json:"id"`
+
+	// Par Par time in seconds.
+	Par     *int             `json:"par,omitempty"`
+	Steps   []CampaignStep   `json:"steps"`
+	Summary *CampaignSummary `json:"summary,omitempty"`
+	Title   string           `json:"title"`
+}
+
+// CampaignStep defines model for CampaignStep.
+type CampaignStep struct {
+	Args *map[string]string `json:"args,omitempty"`
+
+	// Chart values / helm-install: repo/name.
+	Chart *string `json:"chart,omitempty"`
+
+	// Form form: shipyard, lighthouse, gate, orders, fleet or refit.
+	Form    *string                 `json:"form,omitempty"`
+	Goal    *CampaignGoal           `json:"goal,omitempty"`
+	Hint    *string                 `json:"hint,omitempty"`
+	Kind    CampaignStepKind        `json:"kind"`
+	Ns      *string                 `json:"ns,omitempty"`
+	Prefill *map[string]interface{} `json:"prefill,omitempty"`
+
+	// Probe check: a whitelisted probe name.
+	Probe   *string `json:"probe,omitempty"`
+	Release *string `json:"release,omitempty"`
+
+	// Required values: keys the learner must set.
+	Required *[]string `json:"required,omitempty"`
+	Text     *string   `json:"text,omitempty"`
+	Title    *string   `json:"title,omitempty"`
+	Version  *string   `json:"version,omitempty"`
+}
+
+// CampaignStepKind defines model for CampaignStep.Kind.
+type CampaignStepKind string
+
+// CampaignSummary defines model for CampaignSummary.
+type CampaignSummary struct {
+	Kubectl    *string `json:"kubectl,omitempty"`
+	Kubernetes *string `json:"kubernetes,omitempty"`
+	Naval      *string `json:"naval,omitempty"`
+	Practice   *string `json:"practice,omitempty"`
 }
 
 // Condition defines model for Condition.
@@ -714,6 +856,18 @@ type Pod struct {
 	Restarts int     `json:"restarts"`
 }
 
+// ProbeRequest defines model for ProbeRequest.
+type ProbeRequest struct {
+	Args  *map[string]string `json:"args,omitempty"`
+	Probe string             `json:"probe"`
+}
+
+// ProbeResult defines model for ProbeResult.
+type ProbeResult struct {
+	Message string `json:"message"`
+	Ok      bool   `json:"ok"`
+}
+
 // Progress defines model for Progress.
 type Progress struct {
 	Levels map[string]LevelProgress `json:"levels"`
@@ -899,6 +1053,9 @@ type SetWorkloadMapPosParamsKind string
 
 // ScaleWorkloadParamsKind defines parameters for ScaleWorkload.
 type ScaleWorkloadParamsKind string
+
+// RunProbeJSONRequestBody defines body for RunProbe for application/json ContentType.
+type RunProbeJSONRequestBody = ProbeRequest
 
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
 type CreateDeploymentJSONRequestBody = CreateDeploymentRequest
@@ -1226,6 +1383,12 @@ func (t *WsMessage_Obj) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListCampaigns Expeditions (vendor campaigns) built in and from ~/.config/harbor/campaigns
+	// (GET /api/campaigns)
+	ListCampaigns(w http.ResponseWriter, r *http.Request)
+	// RunProbe Run one whitelisted check against the connected cluster
+	// (POST /api/campaigns/probe)
+	RunProbe(w http.ResponseWriter, r *http.Request)
 	// ListContexts List kubeconfig contexts
 	// (GET /api/contexts)
 	ListContexts(w http.ResponseWriter, r *http.Request)
@@ -1356,6 +1519,34 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListCampaigns operation middleware
+func (siw *ServerInterfaceWrapper) ListCampaigns(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCampaigns(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunProbe operation middleware
+func (siw *ServerInterfaceWrapper) RunProbe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunProbe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListContexts operation middleware
 func (siw *ServerInterfaceWrapper) ListContexts(w http.ResponseWriter, r *http.Request) {
@@ -2590,6 +2781,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/orders", wrapper.ListOrders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/orders", wrapper.CreateOrders)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/orders/{kind}/{ns}/{name}", wrapper.DeleteOrders)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/campaigns", wrapper.ListCampaigns)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/campaigns/probe", wrapper.RunProbe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/stage/{incident}", wrapper.StageIncident)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/progress", wrapper.ResetProgress)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/progress", wrapper.GetProgress)

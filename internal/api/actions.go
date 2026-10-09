@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/ericomanoff/harbor/internal/api/gen"
+	"github.com/ericomanoff/harbor/internal/campaign"
 	"github.com/ericomanoff/harbor/internal/kube"
 )
 
@@ -132,6 +133,37 @@ func (s *Server) RollbackDeployment(w http.ResponseWriter, r *http.Request, ns g
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListCampaigns: the expeditions, built in and from the user's campaigns directory.
+func (s *Server) ListCampaigns(w http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	cs := s.campaigns
+	s.mu.Unlock()
+	if cs == nil {
+		cs = []gen.Campaign{}
+	}
+	writeJSON(w, http.StatusOK, cs)
+}
+
+// RunProbe runs one whitelisted check against the connected cluster.
+func (s *Server) RunProbe(w http.ResponseWriter, r *http.Request) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.ProbeRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	res, err := campaign.Run(ctx, cur.Client(), req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // StageIncident performs one whitelisted academy incident on the real cluster.

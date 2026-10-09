@@ -9,9 +9,11 @@ export interface BubbleHandlers {
   onHint?(): void;
 }
 
-/** A step with an optional hint the learner can ask for. */
+/** A step with an optional hint the learner can ask for, and an optional action button. */
 export interface HintedStep extends TourStep {
   hint?: string;
+  /** A button in the bubble (campaign checks and forms); the result line shows what it did. */
+  action?: { label: string; run: () => Promise<{ ok: boolean; message: string } | void> };
 }
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T => {
@@ -42,6 +44,33 @@ export class BubbleUI {
     $('[data-tour=skip]', this.root).onclick = () => handlers.onSkip();
     $('[data-tour=skip]', this.root).textContent = skipLabel;
     $('[data-tour=hint]', this.root).onclick = () => this.revealHint();
+    $('[data-tour=action]', this.root).onclick = () => void this.runAction();
+  }
+
+  private async runAction(): Promise<void> {
+    const step = this.step;
+    if (!step?.action) return;
+    const btn = $<HTMLButtonElement>('[data-tour=action]', this.root);
+    const out = $('.result', this.bubble);
+    btn.disabled = true;
+    out.hidden = false;
+    out.className = 'result busy';
+    out.textContent = '…';
+    try {
+      const r = await step.action.run();
+      if (r) {
+        out.className = `result ${r.ok ? 'ok' : 'fail'}`;
+        out.textContent = `${r.ok ? '✓' : '✗'} ${r.message}`;
+      } else {
+        out.hidden = true;
+      }
+    } catch (e) {
+      out.className = 'result fail';
+      out.textContent = `✗ ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+      if (this.step === step) btn.disabled = false;
+      this.position();
+    }
   }
 
   show(step: HintedStep, i: number, n: number): void {
@@ -56,6 +85,11 @@ export class BubbleUI {
     hintBtn.hidden = !step.hint;
     hintBtn.disabled = false;
     $('.hint', this.bubble).hidden = true;
+    const actBtn = $<HTMLButtonElement>('[data-tour=action]', this.root);
+    actBtn.hidden = !step.action;
+    actBtn.disabled = false;
+    actBtn.textContent = step.action?.label ?? '';
+    $('.result', this.bubble).hidden = true;
     $('.dots', this.bubble).replaceChildren(...Array.from({ length: n }, (_, k) => Object.assign(document.createElement('span'), { className: k === i ? 'dot on' : 'dot' })));
     $<HTMLButtonElement>('[data-tour=back]', this.root).disabled = i === 0;
     $('[data-tour=next]', this.root).textContent = i === n - 1 ? 'Finish' : step.waitFor ? 'Skip step' : 'Next';

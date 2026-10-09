@@ -61,7 +61,7 @@ test-kind:
 
 # End-to-end: Playwright drives the built game against the binary and kind.
 test-e2e: build
-	cd web && npx playwright test game.spec.ts tour.spec.ts glossary.spec.ts levels.spec.ts levels-real.spec.ts
+	cd web && npx playwright test game.spec.ts tour.spec.ts glossary.spec.ts levels.spec.ts levels-real.spec.ts campaign.spec.ts
 
 # Visual snapshots of the style page and the demo harbor (no cluster needed).
 # Baselines are per machine: run test-visual-update once where tests will run.

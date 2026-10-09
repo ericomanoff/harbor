@@ -413,6 +413,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expeditions (vendor campaigns) built in and from ~/.config/harbor/campaigns */
+        get: operations["listCampaigns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/campaigns/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run one whitelisted check against the connected cluster */
+        post: operations["runProbe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stage/{incident}": {
         parameters: {
             query?: never;
@@ -923,6 +957,76 @@ export interface components {
             tls?: boolean;
             /** @description TLS secret name, optional even when tls is true. */
             tlsSecret?: string;
+        };
+        /** @description An expedition, data not code; see PLAN-CAMPAIGN.md section 6. */
+        Campaign: {
+            id: string;
+            title: string;
+            tagline?: string;
+            /** @description URL of the vendor guide the expedition follows. */
+            source?: string;
+            /** @description Shipped inside the binary (as opposed to ~/.config/harbor/campaigns). */
+            builtin?: boolean;
+            levels: components["schemas"]["CampaignLevel"][];
+        };
+        CampaignLevel: {
+            id: string;
+            title: string;
+            concept?: string;
+            /** @description Par time in seconds. */
+            par?: number;
+            steps: components["schemas"]["CampaignStep"][];
+            summary?: components["schemas"]["CampaignSummary"];
+        };
+        CampaignStep: {
+            /** @enum {string} */
+            kind: "instruct" | "check" | "form" | "values" | "helm-install" | "helm-upgrade" | "wait";
+            title?: string;
+            text?: string;
+            hint?: string;
+            /** @description check: a whitelisted probe name. */
+            probe?: string;
+            args?: {
+                [key: string]: string;
+            };
+            /** @description form: shipyard, lighthouse, gate, orders, fleet or refit. */
+            form?: string;
+            prefill?: {
+                [key: string]: unknown;
+            };
+            /** @description values / helm-install: repo/name. */
+            chart?: string;
+            release?: string;
+            ns?: string;
+            version?: string;
+            /** @description values: keys the learner must set. */
+            required?: string[];
+            goal?: components["schemas"]["CampaignGoal"];
+        };
+        CampaignGoal: {
+            /** @enum {string} */
+            kind: "namespace-exists" | "orders-exist" | "deployment-ready" | "release-deployed" | "release-revision" | "ingress-exists" | "service-exists";
+            ns?: string;
+            name?: string;
+            /** @description orders-exist: ConfigMap or Secret. */
+            orders?: string;
+            min?: number;
+        };
+        CampaignSummary: {
+            naval?: string;
+            kubernetes?: string;
+            practice?: string;
+            kubectl?: string;
+        };
+        ProbeRequest: {
+            probe: string;
+            args?: {
+                [key: string]: string;
+            };
+        };
+        ProbeResult: {
+            ok: boolean;
+            message: string;
         };
         StageRequest: {
             /** @description Academy namespace (created with the academy label by "found"; required by every incident but cleanup). */
@@ -1654,6 +1758,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCampaigns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Campaign"][];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    runProbe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description Probe ran (ok says whether it passed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbeResult"];
+                };
             };
             default: components["responses"]["Error"];
         };

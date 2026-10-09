@@ -15,6 +15,7 @@ import (
 
 	"github.com/ericomanoff/harbor/internal/api/gen"
 	"github.com/ericomanoff/harbor/internal/assets"
+	"github.com/ericomanoff/harbor/internal/campaign"
 	"github.com/ericomanoff/harbor/internal/helm"
 	"github.com/ericomanoff/harbor/internal/kube"
 	"github.com/ericomanoff/harbor/internal/progress"
@@ -41,6 +42,8 @@ type Server struct {
 	helm    *helm.Client
 
 	progress *progress.Store
+	// campaigns are the expeditions loaded at startup (built in + user dir).
+	campaigns []gen.Campaign
 }
 
 var _ gen.ServerInterface = (*Server)(nil)
@@ -54,7 +57,23 @@ func NewServer() *Server {
 		newWatcher:   connectWatcher,
 		newHelm:      helm.New,
 		progress:     progress.New(progressPath()),
+		campaigns:    loadCampaigns(campaign.DefaultUserDir()),
 	}
+}
+
+func loadCampaigns(dir string) []gen.Campaign {
+	cs, errs := campaign.Load(dir)
+	for _, err := range errs {
+		log.Printf("campaigns: %v", err)
+	}
+	return cs
+}
+
+// SetCampaignsDir reloads expeditions from another user directory (tests, the -campaigns flag).
+func (s *Server) SetCampaignsDir(dir string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.campaigns = loadCampaigns(dir)
 }
 
 func progressPath() string {

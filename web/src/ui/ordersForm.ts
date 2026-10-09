@@ -22,7 +22,7 @@ export function parseOrders(text: string): Record<string, string> {
 }
 
 /** Seal orders: write a ConfigMap (chart locker) or a Secret (sealed envelope). */
-export function openOrdersForm(opts: { defaultNamespace?: string; kind?: 'ConfigMap' | 'Secret' } = {}): void {
+export function openOrdersForm(opts: { defaultNamespace?: string; kind?: 'ConfigMap' | 'Secret'; name?: string; data?: Record<string, string> } = {}): void {
   const root = $<HTMLDivElement>(document, '#orders-form');
   const form = $<HTMLFormElement>(root, 'form');
   const nsSel = $<HTMLSelectElement>(form, 'select[name=ns]');
@@ -36,6 +36,8 @@ export function openOrdersForm(opts: { defaultNamespace?: string; kind?: 'Config
   if (opts.defaultNamespace && names.includes(opts.defaultNamespace)) nsSel.value = opts.defaultNamespace;
   else if (names.includes('default')) nsSel.value = 'default';
   if (opts.kind) kindSel.value = opts.kind;
+  if (opts.name) $<HTMLInputElement>(form, 'input[name=name]').value = opts.name;
+  if (opts.data) $<HTMLTextAreaElement>(form, 'textarea[name=data]').value = Object.entries(opts.data).map(([k, v]) => `${k}=${v}`).join('\n');
   err.hidden = true;
   const request = (): CreateOrdersRequest => {
     const data = new FormData(form);

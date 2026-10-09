@@ -588,3 +588,48 @@ func TestRefitRollbackAndNamespaceRoutes(t *testing.T) {
 		t.Errorf("bad ns: %d, want 400", rec.Code)
 	}
 }
+
+func TestCampaignRoutes(t *testing.T) {
+	s := fakeServer(t)
+	h := s.Handler()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/campaigns", nil))
+	var cs []gen.Campaign
+	if err := json.Unmarshal(rec.Body.Bytes(), &cs); err != nil || len(cs) != 1 || cs[0].Id != "fortiaigate" {
+		t.Fatalf("campaigns: %d %s (%v)", rec.Code, rec.Body.String(), err)
+	}
+	// Probes need a cluster.
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/campaigns/probe", strings.NewReader(`{"probe":"kube-version"}`))
+	req.Header.Set("Content-Type", "application/json")
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Errorf("probe without a context: %d, want 409", rec.Code)
+	}
+	if err := s.SelectContextByName(context.Background(), "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	for body, want := range map[string]int{`{"probe":"kube-version"}`: http.StatusOK, `{"probe":"shell","args":{"cmd":"rm"}}`: http.StatusBadRequest} {
+		rec = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodPost, "/api/campaigns/probe", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("%s: %d, want %d (%s)", body, rec.Code, want, rec.Body.String())
+		}
+	}
+	// A user directory can override the built-in expedition.
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "fortiaigate"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "fortiaigate", "campaign.yaml"), []byte("id: fortiaigate\ntitle: Mine\nlevels:\n  - id: a\n    title: A\n    steps: [{kind: instruct, text: hi}]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s.SetCampaignsDir(dir)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/campaigns", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &cs); err != nil || len(cs) != 1 || cs[0].Title != "Mine" {
+		t.Errorf("after override: %s (%v)", rec.Body.String(), err)
+	}
+}

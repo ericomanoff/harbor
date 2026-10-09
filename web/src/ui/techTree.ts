@@ -10,6 +10,34 @@ export interface TechOptions {
   upgrade?: string;
   /** Jump straight to the install form for this chart. */
   install?: HelmChart;
+  /** Install by reference (expeditions): a chart that may not be in any library yet, with keys the values must set. */
+  installRef?: { chart: string; release: string; ns: string; version?: string; required?: string[] };
+}
+
+/** Dotted keys missing from a values YAML, judged by the leaf key having a non-empty value on its own line. */
+export function missingValues(values: string, required: string[]): string[] {
+  return required.filter((key) => {
+    const leaf = key.split('.').pop() ?? key;
+    // Spaces only after the colon: \s would run on to the next line's key.
+    const re = new RegExp(`^[ \\t]*${leaf.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[ \\t]*:[ \\t]*\\S`, 'm');
+    return !re.test(values);
+  });
+}
+
+/** A values skeleton listing the required keys, nested by their dots. */
+export function valuesSkeleton(required: string[]): string {
+  const lines: string[] = ['# Required by this expedition; fill every key.'];
+  const seen = new Set<string>();
+  for (const key of required) {
+    const parts = key.split('.');
+    parts.forEach((part, i) => {
+      const path = parts.slice(0, i + 1).join('.');
+      if (seen.has(path)) return;
+      seen.add(path);
+      lines.push(`${'  '.repeat(i)}${part}:${i === parts.length - 1 ? ' ' : ''}`);
+    });
+  }
+  return lines.join('\n');
 }
 
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
@@ -204,6 +232,45 @@ export function openTechTree(opts: TechOptions = {}): void {
     };
   };
 
+  const openInstallRef = async (ref: NonNullable<TechOptions['installRef']>): Promise<void> => {
+    backTo = 'charts';
+    f.title.textContent = 'BUILD BASE EXPANSION';
+    f.chart.value = ref.chart;
+    f.chart.readOnly = false;
+    f.name.value = ref.release;
+    f.name.readOnly = false;
+    f.ns.replaceChildren(...[...new Set([...nsOptions(store), ref.ns])].map((ns) => Object.assign(document.createElement('option'), { value: ns, textContent: ns })));
+    f.ns.value = ref.ns;
+    f.ns.disabled = false;
+    f.version.value = ref.version ?? '';
+    f.submit.textContent = 'DEPLOY';
+    show('form');
+    const required = ref.required ?? [];
+    try {
+      const v = await helm.chartValues(ref.chart, ref.version);
+      f.values.value = required.length ? `${valuesSkeleton(required)}\n\n# chart defaults\n${v.values}` : v.values;
+      if (!f.version.value) f.version.value = v.version;
+    } catch {
+      f.values.value = required.length ? valuesSkeleton(required) : '';
+      err.textContent = 'This chart is in no chart library yet: add its repository under REPOS (or set the chart to a local path), then fill the values.';
+      err.hidden = false;
+    }
+    form.onsubmit = async (ev) => {
+      ev.preventDefault();
+      const missing = missingValues(f.values.value, required);
+      if (missing.length) {
+        fail(new Error(`values still need ${missing.join(', ')}`));
+        return;
+      }
+      f.submit.disabled = true;
+      try {
+        await helm.install({ ns: f.ns.value, name: f.name.value.trim(), chart: f.chart.value.trim(), version: f.version.value.trim() || undefined, values: f.values.value });
+        eva.emit(`EXPANSION ORDERED: ${f.name.value.trim()}`);
+        close();
+      } catch (e) { fail(e); } finally { f.submit.disabled = false; }
+    };
+  };
+
   const openUpgrade = async (r: HelmRelease): Promise<void> => {
     backTo = 'releases';
     f.title.textContent = `UPGRADE ${r.ns}/${r.name}`;
@@ -244,6 +311,10 @@ export function openTechTree(opts: TechOptions = {}): void {
     else await renderReleases();
   };
 
+  if (opts.installRef) {
+    void openInstallRef(opts.installRef);
+    return;
+  }
   if (opts.upgrade) {
     const r = store.releases.get(opts.upgrade);
     if (r) {

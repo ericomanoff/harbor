@@ -88,6 +88,17 @@ export function rollbackDeployment(ns: string, name: string, fetchFn: typeof fet
 }
 
 export type StageResult = components['schemas']['StageResult'];
+export type Campaign = components['schemas']['Campaign'];
+export type CampaignLevel = components['schemas']['CampaignLevel'];
+export type CampaignStep = components['schemas']['CampaignStep'];
+export type CampaignGoal = components['schemas']['CampaignGoal'];
+export type ProbeResult = components['schemas']['ProbeResult'];
+
+/** Expeditions: vendor campaigns as data, and the checks they may run. */
+export const campaigns = {
+  list: (fetchFn: typeof fetch = fetch): Promise<Campaign[]> => request<Campaign[]>('GET', '/api/campaigns', undefined, fetchFn),
+  probe: (probe: string, args: Record<string, string> = {}, fetchFn: typeof fetch = fetch): Promise<ProbeResult> => request<ProbeResult>('POST', '/api/campaigns/probe', { probe, args }, fetchFn),
+};
 
 /** Stage a whitelisted academy incident on the connected cluster. */
 export function stage(incident: string, args: { ns?: string; name?: string; image?: string } = {}, fetchFn: typeof fetch = fetch): Promise<StageResult> {
