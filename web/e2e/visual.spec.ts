@@ -52,4 +52,17 @@ test.describe('visual', () => {
     // and ignore the toast column.
     await expect(page).toHaveScreenshot('demo-home.png', { maxDiffPixelRatio: 0.06, mask: [page.locator('#hud .toasts')] });
   });
+
+  test('a glossary tooltip', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 760 });
+    await page.addInitScript(() => localStorage.setItem('harbor.tour.v1', 'done'));
+    await page.goto('/?demo');
+    await page.waitForFunction(() => !document.getElementById('hud')?.hidden && document.getElementById('splash')?.hidden);
+    await page.evaluate(() => window.harbor.selection.set(['b:sandbox/nginx']));
+    const term = page.locator('#hud .selection abbr.term[data-term=shipyard]').first();
+    await term.hover();
+    const tip = page.locator('#term-tip');
+    await expect(tip).toBeVisible();
+    await expect(tip).toHaveScreenshot('tooltip-shipyard.png');
+  });
 });

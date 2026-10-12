@@ -15,7 +15,7 @@ export const level7: Level = {
   number: 7,
   title: 'Sealed orders',
   concept: 'ConfigMaps and Secrets',
-  terms: ['sealed-orders', 'cargo-crate', 'refit', 'shipyard'],
+  terms: ['configmap', 'secret', 'cargo-crate', 'refit', 'shipyard'],
   parSeconds: 240,
   fixture: () => {
     const y = shipyard('courier', 1);

@@ -14,7 +14,7 @@ export const level5: Level = {
   number: 5,
   title: 'The lighthouse',
   concept: 'Services (a stable address and a selector)',
-  terms: ['lighthouse', 'beam', 'ensign', 'trader'],
+  terms: ['lighthouse', 'beam', 'label', 'trader'],
   parSeconds: 180,
   fixture: () => {
     const y = shipyard('courier', 2);

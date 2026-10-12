@@ -1,6 +1,8 @@
 import { openOverlay } from '../ui/overlay';
-import { TERMS, termById, type Term } from './terms';
-import { pairLine } from './tooltip';
+import { isHarborOnly, TERMS, termById, titleOf, type Term } from './terms';
+
+/** Kubernetes terms alphabetically, then the harbor-only words. */
+const ORDERED: Term[] = [...TERMS].sort((a, b) => Number(isHarborOnly(a)) - Number(isHarborOnly(b)) || titleOf(a).localeCompare(titleOf(b)));
 
 const $ = <T extends HTMLElement>(root: ParentNode, sel: string): T => {
   const el = root.querySelector<T>(sel);
@@ -21,13 +23,24 @@ export function openGlossary(id?: string): void {
     list.querySelectorAll('li').forEach((li) => li.classList.toggle('active', li.dataset['id'] === t.id));
     detail.replaceChildren();
     const h = document.createElement('h3');
-    h.textContent = pairLine(t);
-    const naval = document.createElement('p');
-    naval.className = 'muted';
-    naval.textContent = `Harbor: ${t.naval.join(', ')}${t.k8s.length ? ` · Kubernetes: ${t.k8s.join(', ')}` : ''}`;
-    const long = document.createElement('p');
-    long.textContent = t.long;
-    detail.append(h, naval, long);
+    h.textContent = titleOf(t);
+    const names = document.createElement('p');
+    names.className = 'muted';
+    names.textContent = `${t.k8s.length ? `Kubernetes: ${t.k8s.join(', ')} · ` : ''}Harbor: ${t.naval.join(', ')}`;
+    const concept = document.createElement('p');
+    concept.textContent = t.concept;
+    detail.append(h, names, concept);
+    if (t.detail) detail.append(Object.assign(document.createElement('p'), { textContent: t.detail }));
+    if (t.useCase) {
+      const u = document.createElement('p');
+      u.className = 'use';
+      u.textContent = t.useCase;
+      detail.append(u);
+    }
+    const inHarbor = document.createElement('p');
+    inHarbor.className = 'harbor';
+    inHarbor.textContent = `In the harbor: ${t.inHarbor}`;
+    detail.append(inHarbor);
     if (t.where) {
       const w = document.createElement('p');
       w.className = 'muted';
@@ -45,11 +58,12 @@ export function openGlossary(id?: string): void {
   };
   const render = (): void => {
     const q = input.value.trim().toLowerCase();
-    const hits = TERMS.filter((t) => !q || [...t.naval, ...t.k8s, t.short].some((s) => s.toLowerCase().includes(q)));
+    const hits = ORDERED.filter((t) => !q || [...t.naval, ...t.k8s, t.concept].some((s) => s.toLowerCase().includes(q)));
     list.replaceChildren(...hits.map((t) => {
       const li = document.createElement('li');
       li.dataset['id'] = t.id;
-      li.textContent = pairLine(t);
+      li.textContent = titleOf(t);
+      if (isHarborOnly(t)) li.classList.add('harbor-only');
       li.onclick = () => show(t);
       return li;
     }));

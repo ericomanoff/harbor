@@ -18,7 +18,9 @@ test('terms get tooltips and the glossary opens on them', async ({ page }) => {
   await term.hover();
   const tip = page.locator('#term-tip');
   await expect(tip).toBeVisible();
-  await expect(tip.locator('.pair')).toContainText('=');
+  await expect(tip.locator('.pair')).toContainText('·');
+  await expect(tip.locator('.concept')).not.toBeEmpty();
+  await expect(tip.locator('.harbor')).toContainText('In the harbor:');
 
   // Clicking a term opens the glossary at that entry.
   const id = await term.getAttribute('data-term');
@@ -27,7 +29,8 @@ test('terms get tooltips and the glossary opens on them', async ({ page }) => {
   await expect(glossary).toBeVisible();
   await expect(glossary.locator('ul.entries li.active')).toHaveAttribute('data-id', id!);
   await glossary.locator('input[name=q]').fill('Deployment');
-  await expect(glossary.locator('ul.entries li').first()).toContainText('Shipyard = Deployment');
+  await expect(glossary.locator('ul.entries li').first()).toContainText('Deployment · shipyard');
+  await expect(glossary.locator('.detail .use')).toContainText('Use it');
   await page.keyboard.press('Escape');
   await expect(glossary).toBeHidden();
 

@@ -1,4 +1,4 @@
-import { pairOf, termById, type Term } from './terms';
+import { termById, titleOf } from './terms';
 
 /** One tooltip for the whole page; shown for `[data-term]` elements and map hovers. */
 export class Tooltip {
@@ -12,7 +12,7 @@ export class Tooltip {
     this.el.id = 'term-tip';
     this.el.className = 'hud';
     this.el.hidden = true;
-    this.el.innerHTML = '<div class="pair"></div><div class="short"></div><div class="more">Click for more</div>';
+    this.el.innerHTML = '<div class="pair"></div><div class="concept"></div><div class="use"></div><div class="harbor"></div><div class="more">Click for more</div>';
     document.body.append(this.el);
     this.el.onmouseenter = () => this.cancelHide();
     this.el.onmouseleave = () => this.scheduleHide();
@@ -47,8 +47,12 @@ export class Tooltip {
     if (!term) return;
     this.cancelHide();
     this.el.dataset['term'] = id;
-    this.el.querySelector('.pair')!.textContent = pairLine(term);
-    this.el.querySelector('.short')!.textContent = term.short;
+    this.el.querySelector('.pair')!.textContent = titleOf(term);
+    this.el.querySelector('.concept')!.textContent = term.concept;
+    const use = this.el.querySelector<HTMLElement>('.use')!;
+    use.hidden = !term.useCase;
+    use.textContent = term.useCase ?? '';
+    this.el.querySelector('.harbor')!.textContent = `In the harbor: ${term.inHarbor}`;
     this.el.hidden = false;
     const w = this.el.offsetWidth;
     const h = this.el.offsetHeight;
@@ -76,10 +80,3 @@ export class Tooltip {
     this.hideTimer = undefined;
   }
 }
-
-export function pairLine(t: Term): string {
-  const k = pairOf(t);
-  return k ? `${cap(t.naval[0]!)} = ${k}` : cap(t.naval[0]!);
-}
-
-const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);

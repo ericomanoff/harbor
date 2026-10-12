@@ -12,7 +12,7 @@ export const level9: Level = {
   number: 9,
   title: 'Fleets and ensigns',
   concept: 'Namespaces and labels',
-  terms: ['ensign', 'lighthouse', 'beam', 'system-fleets'],
+  terms: ['namespace', 'label', 'lighthouse', 'beam', 'system-fleets'],
   parSeconds: 300,
   fixture: () => {
     const courier = shipyard('courier', 2);

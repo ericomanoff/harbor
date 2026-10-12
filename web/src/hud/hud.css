@@ -403,7 +403,7 @@ abbr.term .k8s { opacity: 0.75; font-weight: 600; }
 #term-tip {
   position: fixed;
   z-index: 40;
-  width: 260px;
+  width: 340px;
   background: var(--cream);
   color: var(--ink);
   border: 2px solid var(--olive);
@@ -411,11 +411,16 @@ abbr.term .k8s { opacity: 0.75; font-weight: 600; }
   padding: 8px 10px;
   box-shadow: var(--shadow-sm);
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 1.4;
   cursor: pointer;
 }
-#term-tip .pair { font-weight: 900; font-size: 13px; margin-bottom: 2px; }
-#term-tip .short { font-weight: 600; }
+#term-tip .pair { font-weight: 900; font-size: 13px; margin-bottom: 3px; }
+#term-tip .concept { font-weight: 600; }
+#term-tip .use { font-weight: 600; margin-top: 4px; color: var(--green-dark); }
+#term-tip .harbor { margin-top: 5px; padding-top: 4px; border-top: 1px dashed #d9cfb0; font-size: 11px; color: var(--ink-soft); font-weight: 700; }
+.panel.glossary .detail .use { color: var(--green-dark); font-weight: 700; }
+.panel.glossary .detail .harbor { color: var(--ink-soft); font-weight: 700; font-size: 12px; border-top: 1px dashed #d9cfb0; padding-top: 6px; }
+.panel.glossary ul.entries li.harbor-only { color: var(--ink-soft); }
 #term-tip .more { margin-top: 4px; font-size: 10px; color: var(--ink-soft); font-weight: 800; letter-spacing: 0.5px; }
 #term-tip::after {
   content: '';
