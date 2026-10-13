@@ -11,11 +11,12 @@ const ORDERS = 'ConfigMap/courier-orders';
 
 /** Level 7: configuration lives outside the image, in ConfigMaps and Secrets. */
 export const level7: Level = {
-  id: 'academy/7',
+  id: 'advanced/7',
   number: 7,
   title: 'Sealed orders',
   concept: 'ConfigMaps and Secrets',
   terms: ['configmap', 'secret', 'cargo-crate', 'refit', 'shipyard'],
+  practises: 'One door',
   parSeconds: 240,
   fixture: () => {
     const y = shipyard('courier', 1);

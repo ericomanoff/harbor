@@ -633,3 +633,54 @@ func TestCampaignRoutes(t *testing.T) {
 		t.Errorf("after override: %s (%v)", rec.Body.String(), err)
 	}
 }
+
+func TestPapersApplyAndLabelRoutes(t *testing.T) {
+	s := fakeServer(t)
+	if err := s.SelectContextByName(context.Background(), "kind-harbor"); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	manifest := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: orders\n  namespace: sandbox\ndata:\n  PORT: \"80\"\n"
+	body, _ := json.Marshal(map[string]any{"manifest": manifest, "dryRun": true})
+	if rec := do(http.MethodPost, "/api/apply", string(body)); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"created"`) {
+		t.Fatalf("dry apply: %d %s", rec.Code, rec.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{"manifest": manifest})
+	if rec := do(http.MethodPost, "/api/apply", string(body)); rec.Code != http.StatusOK {
+		t.Fatalf("apply: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := do(http.MethodPost, "/api/apply", string(body)); !strings.Contains(rec.Body.String(), `"unchanged"`) {
+		t.Errorf("second apply: %s", rec.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{"manifest": "apiVersion: v1\nkind: Pod\nmetadata: {name: p, namespace: sandbox}\n"})
+	if rec := do(http.MethodPost, "/api/apply", string(body)); rec.Code != http.StatusBadRequest {
+		t.Errorf("pod apply: %d, want 400", rec.Code)
+	}
+	rec := do(http.MethodGet, "/api/objects/ConfigMap/sandbox/orders", "")
+	var papers gen.ObjectPapers
+	if err := json.Unmarshal(rec.Body.Bytes(), &papers); err != nil || !strings.Contains(papers.Spec, "PORT") {
+		t.Errorf("papers: %d %s (%v)", rec.Code, rec.Body.String(), err)
+	}
+	if rec = do(http.MethodGet, "/api/objects/Secret/sandbox/orders", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("secret papers: %d, want 400", rec.Code)
+	}
+	if rec = do(http.MethodPost, "/api/deployments", `{"ns":"sandbox","name":"courier","image":"x","replicas":1}`); rec.Code != http.StatusCreated {
+		t.Fatal(rec.Body.String())
+	}
+	if rec = do(http.MethodPatch, "/api/deployments/sandbox/courier/labels", `{"set":{"track":"blue"}}`); rec.Code != http.StatusNoContent {
+		t.Errorf("template labels: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec = do(http.MethodPatch, "/api/deployments/sandbox/courier/labels", `{"remove":["app"]}`); rec.Code != http.StatusBadRequest {
+		t.Errorf("selector label removal: %d, want 400", rec.Code)
+	}
+	if rec = do(http.MethodPatch, "/api/pods/sandbox/nope/labels", `{"set":{"a":"b"}}`); rec.Code != http.StatusNotFound {
+		t.Errorf("pod labels on missing pod: %d, want 404", rec.Code)
+	}
+}

@@ -345,6 +345,12 @@ func ConvertDeployment(d *appsv1.Deployment) gen.Deployment {
 		out.Orders = &o
 	}
 	out.Strategy = optString(strategySummary(d.Spec.Strategy))
+	if m := managersOfMeta(d.ObjectMeta); len(m) > 0 {
+		out.Managers = &m
+	}
+	if tl := d.Spec.Template.Labels; len(tl) > 0 {
+		out.TemplateLabels = &tl
+	}
 	if rev, err := strconv.Atoi(d.Annotations[revisionAnnotation]); err == nil {
 		out.Revision = &rev
 	}
@@ -478,6 +484,9 @@ func ConvertPod(p *corev1.Pod, deployment string) gen.Pod {
 		OwnerRS:    optString(OwnerOfKind(p.OwnerReferences, "ReplicaSet")),
 	}
 	out.Deployment = optString(deployment)
+	if m := managersOfMeta(p.ObjectMeta); len(m) > 0 {
+		out.Managers = &m
+	}
 	// Direct controller, with ReplicaSets collapsed to their Deployment.
 	if deployment != "" {
 		out.OwnerKind, out.OwnerName = optString("Deployment"), optString(deployment)

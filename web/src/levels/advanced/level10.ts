@@ -15,11 +15,12 @@ const REAL_FIXED = 'nginx:1.26-alpine';
 
 /** Level 10: rolling updates and rollback. */
 export const level10: Level = {
-  id: 'academy/10',
+  id: 'advanced/10',
   number: 10,
   title: 'Refit at sea',
   concept: 'Rolling updates and rollback',
   terms: ['refit', 'rollback', 'launch-queue', 'burning'],
+  practises: 'Labels not references',
   parSeconds: 240,
   fixture: () => {
     const y = shipyard('courier', 3, { image: OLD, currentRS: 'courier-1', revision: 1, strategy: 'RollingUpdate maxUnavailable=25% maxSurge=25%' });

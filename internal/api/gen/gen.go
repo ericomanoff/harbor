@@ -15,6 +15,27 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ApplyItemAction.
+const (
+	Configured ApplyItemAction = "configured"
+	Created    ApplyItemAction = "created"
+	Unchanged  ApplyItemAction = "unchanged"
+)
+
+// Valid indicates whether the value is a known member of the ApplyItemAction enum.
+func (e ApplyItemAction) Valid() bool {
+	switch e {
+	case Configured:
+		return true
+	case Created:
+		return true
+	case Unchanged:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CampaignGoalKind.
 const (
 	DeploymentReady CampaignGoalKind = "deployment-ready"
@@ -258,6 +279,45 @@ func (e WorkloadKindParam) Valid() bool {
 	}
 }
 
+// Defines values for GetObjectParamsKind.
+const (
+	GetObjectParamsKindConfigMap   GetObjectParamsKind = "ConfigMap"
+	GetObjectParamsKindDaemonSet   GetObjectParamsKind = "DaemonSet"
+	GetObjectParamsKindDeployment  GetObjectParamsKind = "Deployment"
+	GetObjectParamsKindIngress     GetObjectParamsKind = "Ingress"
+	GetObjectParamsKindJob         GetObjectParamsKind = "Job"
+	GetObjectParamsKindNamespace   GetObjectParamsKind = "Namespace"
+	GetObjectParamsKindPod         GetObjectParamsKind = "Pod"
+	GetObjectParamsKindService     GetObjectParamsKind = "Service"
+	GetObjectParamsKindStatefulSet GetObjectParamsKind = "StatefulSet"
+)
+
+// Valid indicates whether the value is a known member of the GetObjectParamsKind enum.
+func (e GetObjectParamsKind) Valid() bool {
+	switch e {
+	case GetObjectParamsKindConfigMap:
+		return true
+	case GetObjectParamsKindDaemonSet:
+		return true
+	case GetObjectParamsKindDeployment:
+		return true
+	case GetObjectParamsKindIngress:
+		return true
+	case GetObjectParamsKindJob:
+		return true
+	case GetObjectParamsKindNamespace:
+		return true
+	case GetObjectParamsKindPod:
+		return true
+	case GetObjectParamsKindService:
+		return true
+	case GetObjectParamsKindStatefulSet:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeleteOrdersParamsKind.
 const (
 	DeleteOrdersParamsKindConfigMap DeleteOrdersParamsKind = "ConfigMap"
@@ -364,6 +424,33 @@ func (e ScaleWorkloadParamsKind) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// ApplyItem defines model for ApplyItem.
+type ApplyItem struct {
+	Action ApplyItemAction `json:"action"`
+
+	// Diff Lines of spec that change ("- old" / "+ new"), empty when unchanged.
+	Diff *string `json:"diff,omitempty"`
+	Kind string  `json:"kind"`
+	Name string  `json:"name"`
+	Ns   string  `json:"ns"`
+}
+
+// ApplyItemAction defines model for ApplyItem.Action.
+type ApplyItemAction string
+
+// ApplyRequest defines model for ApplyRequest.
+type ApplyRequest struct {
+	DryRun *bool `json:"dryRun,omitempty"`
+
+	// Manifest One or more YAML documents.
+	Manifest string `json:"manifest"`
+}
+
+// ApplyResult defines model for ApplyResult.
+type ApplyResult struct {
+	Results []ApplyItem `json:"results"`
 }
 
 // Campaign An expedition, data not code; see PLAN-CAMPAIGN.md section 6.
@@ -614,6 +701,9 @@ type Deployment struct {
 	// Liveness Liveness probe of the first container, summarised, if any.
 	Liveness *string `json:"liveness,omitempty"`
 
+	// Managers Field managers that wrote this object, most recent last.
+	Managers *[]string `json:"managers,omitempty"`
+
 	// MapPos Tile coordinates on the map grid.
 	MapPos *MapPos `json:"mapPos,omitempty"`
 	Name   string  `json:"name"`
@@ -637,7 +727,10 @@ type Deployment struct {
 
 	// Strategy Rollout strategy, summarised ("RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate").
 	Strategy *string `json:"strategy,omitempty"`
-	Updated  int     `json:"updated"`
+
+	// TemplateLabels Labels the pod template carries (the ensign painted on new ships).
+	TemplateLabels *map[string]string `json:"templateLabels,omitempty"`
+	Updated        int                `json:"updated"`
 }
 
 // Error defines model for Error.
@@ -775,6 +868,12 @@ type KubeContext struct {
 	User      string  `json:"user"`
 }
 
+// LabelPatch defines model for LabelPatch.
+type LabelPatch struct {
+	Remove *[]string          `json:"remove,omitempty"`
+	Set    *map[string]string `json:"set,omitempty"`
+}
+
 // LevelProgress defines model for LevelProgress.
 type LevelProgress struct {
 	BestSeconds *float64   `json:"bestSeconds,omitempty"`
@@ -813,6 +912,25 @@ type Node struct {
 	Ready  bool   `json:"ready"`
 }
 
+// ObjectPapers defines model for ObjectPapers.
+type ObjectPapers struct {
+	Kind string `json:"kind"`
+
+	// Managers Field managers that wrote this object, most recent last (from managedFields).
+	Managers []string `json:"managers"`
+
+	// Metadata YAML of labels, annotations and ownerReferences (managedFields stripped).
+	Metadata string `json:"metadata"`
+	Name     string `json:"name"`
+	Ns       string `json:"ns"`
+
+	// Spec YAML of spec (data for ConfigMaps; empty for Pods' sensitive kinds).
+	Spec string `json:"spec"`
+
+	// Status YAML of status.
+	Status string `json:"status"`
+}
+
 // Orders A ConfigMap or Secret, keys only (Secret values never leave the backend).
 type Orders struct {
 	Keys []string   `json:"keys"`
@@ -838,7 +956,10 @@ type Pod struct {
 	// Deployment Owning Deployment name resolved through the ReplicaSet.
 	Deployment *string           `json:"deployment,omitempty"`
 	Labels     map[string]string `json:"labels"`
-	Name       string            `json:"name"`
+
+	// Managers Field managers that wrote this pod, most recent last (kubelet, scheduler, controllers, you).
+	Managers *[]string `json:"managers,omitempty"`
+	Name     string    `json:"name"`
 
 	// Node Scheduled node name, empty while Pending.
 	Node string `json:"node"`
@@ -1026,6 +1147,9 @@ type GetHelmChartValuesParams struct {
 	Version *string `form:"version,omitempty" json:"version,omitempty"`
 }
 
+// GetObjectParamsKind defines parameters for GetObject.
+type GetObjectParamsKind string
+
 // ListOrdersParams defines parameters for ListOrders.
 type ListOrdersParams struct {
 	Ns string `form:"ns" json:"ns"`
@@ -1054,11 +1178,17 @@ type SetWorkloadMapPosParamsKind string
 // ScaleWorkloadParamsKind defines parameters for ScaleWorkload.
 type ScaleWorkloadParamsKind string
 
+// ApplyManifestJSONRequestBody defines body for ApplyManifest for application/json ContentType.
+type ApplyManifestJSONRequestBody = ApplyRequest
+
 // RunProbeJSONRequestBody defines body for RunProbe for application/json ContentType.
 type RunProbeJSONRequestBody = ProbeRequest
 
 // CreateDeploymentJSONRequestBody defines body for CreateDeployment for application/json ContentType.
 type CreateDeploymentJSONRequestBody = CreateDeploymentRequest
+
+// PatchDeploymentLabelsJSONRequestBody defines body for PatchDeploymentLabels for application/json ContentType.
+type PatchDeploymentLabelsJSONRequestBody = LabelPatch
 
 // SetDeploymentMapPosJSONRequestBody defines body for SetDeploymentMapPos for application/json ContentType.
 type SetDeploymentMapPosJSONRequestBody = MapPos
@@ -1089,6 +1219,9 @@ type CreateNamespaceJSONRequestBody = CreateNamespaceRequest
 
 // CreateOrdersJSONRequestBody defines body for CreateOrders for application/json ContentType.
 type CreateOrdersJSONRequestBody = CreateOrdersRequest
+
+// PatchPodLabelsJSONRequestBody defines body for PatchPodLabels for application/json ContentType.
+type PatchPodLabelsJSONRequestBody = LabelPatch
 
 // PutLevelProgressJSONRequestBody defines body for PutLevelProgress for application/json ContentType.
 type PutLevelProgressJSONRequestBody = LevelProgress
@@ -1383,6 +1516,9 @@ func (t *WsMessage_Obj) UnmarshalJSON(b []byte) error {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ApplyManifest Server-side apply of one or more manifests (whitelisted kinds); dryRun reports what would change
+	// (POST /api/apply)
+	ApplyManifest(w http.ResponseWriter, r *http.Request)
 	// ListCampaigns Expeditions (vendor campaigns) built in and from ~/.config/harbor/campaigns
 	// (GET /api/campaigns)
 	ListCampaigns(w http.ResponseWriter, r *http.Request)
@@ -1401,6 +1537,9 @@ type ServerInterface interface {
 	// DeleteDeployment Sell a structure (delete the Deployment; its pods follow)
 	// (DELETE /api/deployments/{ns}/{name})
 	DeleteDeployment(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// PatchDeploymentLabels Change the ensign a shipyard paints on new ships (pod template labels; selector labels cannot be removed)
+	// (PATCH /api/deployments/{ns}/{name}/labels)
+	PatchDeploymentLabels(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
 	// SetDeploymentMapPos Persist the building's map tile as an annotation
 	// (PATCH /api/deployments/{ns}/{name}/mappos)
 	SetDeploymentMapPos(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
@@ -1458,6 +1597,9 @@ type ServerInterface interface {
 	// CreateNamespace Found a fleet (create a Namespace)
 	// (POST /api/namespaces)
 	CreateNamespace(w http.ResponseWriter, r *http.Request)
+	// GetObject An object's papers, spec (what you asked for) and status (what the cluster reports), as YAML
+	// (GET /api/objects/{kind}/{ns}/{name})
+	GetObject(w http.ResponseWriter, r *http.Request, kind GetObjectParamsKind, ns NamespaceParam, name NameParam)
 	// ListOrders Sealed orders (ConfigMaps and Secrets) in a namespace, keys only
 	// (GET /api/orders)
 	ListOrders(w http.ResponseWriter, r *http.Request, params ListOrdersParams)
@@ -1470,6 +1612,9 @@ type ServerInterface interface {
 	// DeletePod Repair a unit (delete the pod so its ReplicaSet replaces it)
 	// (DELETE /api/pods/{ns}/{name})
 	DeletePod(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// PatchPodLabels Change a ship's ensign (set or remove pod labels)
+	// (PATCH /api/pods/{ns}/{name}/labels)
+	PatchPodLabels(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
 	// GetPodLogs Recent log lines of a pod's container (default container if unspecified)
 	// (GET /api/pods/{ns}/{name}/logs)
 	GetPodLogs(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam, params GetPodLogsParams)
@@ -1519,6 +1664,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ApplyManifest operation middleware
+func (siw *ServerInterfaceWrapper) ApplyManifest(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplyManifest(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListCampaigns operation middleware
 func (siw *ServerInterfaceWrapper) ListCampaigns(w http.ResponseWriter, r *http.Request) {
@@ -1628,6 +1787,41 @@ func (siw *ServerInterfaceWrapper) DeleteDeployment(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteDeployment(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchDeploymentLabels operation middleware
+func (siw *ServerInterfaceWrapper) PatchDeploymentLabels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchDeploymentLabels(w, r, ns, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2143,6 +2337,50 @@ func (siw *ServerInterfaceWrapper) CreateNamespace(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetObject operation middleware
+func (siw *ServerInterfaceWrapper) GetObject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "kind" -------------
+	var kind GetObjectParamsKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kind", r.PathValue("kind"), &kind, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetObject(w, r, kind, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOrders operation middleware
 func (siw *ServerInterfaceWrapper) ListOrders(w http.ResponseWriter, r *http.Request) {
 
@@ -2260,6 +2498,41 @@ func (siw *ServerInterfaceWrapper) DeletePod(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeletePod(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PatchPodLabels operation middleware
+func (siw *ServerInterfaceWrapper) PatchPodLabels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchPodLabels(w, r, ns, name)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2781,6 +3054,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/orders", wrapper.ListOrders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/orders", wrapper.CreateOrders)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/orders/{kind}/{ns}/{name}", wrapper.DeleteOrders)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/objects/{kind}/{ns}/{name}", wrapper.GetObject)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/apply", wrapper.ApplyManifest)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/pods/{ns}/{name}/labels", wrapper.PatchPodLabels)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/deployments/{ns}/{name}/labels", wrapper.PatchDeploymentLabels)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/campaigns", wrapper.ListCampaigns)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/campaigns/probe", wrapper.RunProbe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/stage/{incident}", wrapper.StageIncident)

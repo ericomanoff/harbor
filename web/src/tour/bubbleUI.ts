@@ -14,6 +14,9 @@ export interface HintedStep extends TourStep {
   hint?: string;
   /** A button in the bubble (campaign checks and forms); the result line shows what it did. */
   action?: { label: string; run: () => Promise<{ ok: boolean; message: string } | void> };
+  /** A prediction to make: pills, one correct; a wrong pick counts like a hint. */
+  choices?: { text: string; correct: boolean; explain?: string }[];
+  onChoice?: (correct: boolean) => void;
 }
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T => {
@@ -90,10 +93,35 @@ export class BubbleUI {
     actBtn.disabled = false;
     actBtn.textContent = step.action?.label ?? '';
     $('.result', this.bubble).hidden = true;
+    const choices = $('.choices', this.bubble);
+    choices.replaceChildren(...(step.choices ?? []).map((c) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pill secondary';
+      b.textContent = c.text;
+      b.onclick = () => this.pick(c, choices);
+      return b;
+    }));
+    choices.hidden = !step.choices?.length;
     $('.dots', this.bubble).replaceChildren(...Array.from({ length: n }, (_, k) => Object.assign(document.createElement('span'), { className: k === i ? 'dot on' : 'dot' })));
     $<HTMLButtonElement>('[data-tour=back]', this.root).disabled = i === 0;
     $('[data-tour=next]', this.root).textContent = i === n - 1 ? 'Finish' : step.waitFor ? 'Skip step' : 'Next';
     if (step.anchor?.kind === 'map') this.map.focusKey(step.anchor.key);
+    this.position();
+  }
+
+  private pick(c: NonNullable<HintedStep['choices']>[number], choices: HTMLElement): void {
+    const out = $('.result', this.bubble);
+    out.hidden = false;
+    out.className = `result ${c.correct ? 'ok' : 'fail'}`;
+    out.textContent = `${c.correct ? '✓' : '✗'} ${c.explain ?? (c.correct ? 'Right.' : 'Not quite; try another.')}`;
+    if (c.correct) {
+      choices.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+      this.step?.onChoice?.(true);
+    } else {
+      this.handlers.onHint?.();
+      this.step?.onChoice?.(false);
+    }
     this.position();
   }
 

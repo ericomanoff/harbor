@@ -9,11 +9,12 @@ const overlayOpen = (id: string): boolean => document.getElementById(id)?.hidden
 
 /** Level 2: a Deployment keeps the ships you asked for afloat. */
 export const level2: Level = {
-  id: 'academy/2',
+  id: 'advanced/2',
   number: 2,
   title: 'The shipyard',
   concept: 'Deployments and ReplicaSets',
   terms: ['shipyard', 'launch-queue', 'ship', 'sunk'],
+  practises: 'Desired state, Reconcile',
   parSeconds: 180,
   fixture: () => academyHarbor({ pods: [loneShip('courier')] }),
   real: {

@@ -443,6 +443,87 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/objects/{kind}/{ns}/{name}:
+    get:
+      operationId: getObject
+      summary: An object's papers, spec (what you asked for) and status (what the cluster reports), as YAML
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [Deployment, Pod, Service, Ingress, StatefulSet, DaemonSet, Job, ConfigMap, Namespace]
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObjectPapers"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/apply:
+    post:
+      operationId: applyManifest
+      summary: Server-side apply of one or more manifests (whitelisted kinds); dryRun reports what would change
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyRequest"
+      responses:
+        "200":
+          description: Applied (or dry-run)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplyResult"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/pods/{ns}/{name}/labels:
+    patch:
+      operationId: patchPodLabels
+      summary: Change a ship's ensign (set or remove pod labels)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LabelPatch"
+      responses:
+        "204":
+          description: Patched
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/deployments/{ns}/{name}/labels:
+    patch:
+      operationId: patchDeploymentLabels
+      summary: Change the ensign a shipyard paints on new ships (pod template labels; selector labels cannot be removed)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LabelPatch"
+      responses:
+        "204":
+          description: Patched
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/campaigns:
     get:
       operationId: listCampaigns
@@ -925,6 +1006,16 @@ components:
         release:
           type: string
           description: Helm release that owns this Deployment (meta.helm.sh/release-name), if any.
+        managers:
+          type: array
+          description: Field managers that wrote this object, most recent last.
+          items:
+            type: string
+        templateLabels:
+          type: object
+          description: Labels the pod template carries (the ensign painted on new ships).
+          additionalProperties:
+            type: string
         strategy:
           type: string
           description: Rollout strategy, summarised ("RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate").
@@ -990,6 +1081,11 @@ components:
           type: string
         ownerRS:
           type: string
+        managers:
+          type: array
+          description: Field managers that wrote this pod, most recent last (kubelet, scheduler, controllers, you).
+          items:
+            type: string
         deployment:
           type: string
           description: Owning Deployment name resolved through the ReplicaSet.
@@ -1382,6 +1478,79 @@ components:
         tlsSecret:
           type: string
           description: TLS secret name, optional even when tls is true.
+
+    ObjectPapers:
+      type: object
+      required: [kind, ns, name, metadata, spec, status, managers]
+      properties:
+        kind:
+          type: string
+        ns:
+          type: string
+        name:
+          type: string
+        metadata:
+          type: string
+          description: YAML of labels, annotations and ownerReferences (managedFields stripped).
+        spec:
+          type: string
+          description: YAML of spec (data for ConfigMaps; empty for Pods' sensitive kinds).
+        status:
+          type: string
+          description: YAML of status.
+        managers:
+          type: array
+          description: Field managers that wrote this object, most recent last (from managedFields).
+          items:
+            type: string
+
+    ApplyRequest:
+      type: object
+      required: [manifest]
+      properties:
+        manifest:
+          type: string
+          description: One or more YAML documents.
+        dryRun:
+          type: boolean
+
+    ApplyResult:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApplyItem"
+
+    ApplyItem:
+      type: object
+      required: [kind, ns, name, action]
+      properties:
+        kind:
+          type: string
+        ns:
+          type: string
+        name:
+          type: string
+        action:
+          type: string
+          enum: [created, configured, unchanged]
+        diff:
+          type: string
+          description: Lines of spec that change ("- old" / "+ new"), empty when unchanged.
+
+    LabelPatch:
+      type: object
+      properties:
+        set:
+          type: object
+          additionalProperties:
+            type: string
+        remove:
+          type: array
+          items:
+            type: string
 
     Campaign:
       type: object

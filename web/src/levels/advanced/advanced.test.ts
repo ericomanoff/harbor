@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ClusterStore } from '../../store/cluster';
 import { termById } from '../../glossary/terms';
-import { ACADEMY, levelById, nextLevel } from './index';
+import { ADVANCED, levelById, nextLevel } from './index';
 
-describe('academy levels', () => {
+describe('advanced levels', () => {
   it('are numbered in order with glossary-backed terms and loadable fixtures', () => {
-    ACADEMY.forEach((l, i) => {
+    ADVANCED.forEach((l, i) => {
       expect(l.number).toBe(i + 1);
       for (const t of l.terms) expect(termById(t), `${l.id} term ${t}`).toBeDefined();
       const store = new ClusterStore();
@@ -20,11 +20,11 @@ describe('academy levels', () => {
     });
   });
   it('links levels', () => {
-    expect(levelById('academy/1')?.title).toBe('A ship and its cargo');
-    expect(nextLevel('academy/1')?.id).toBe('academy/2');
-    expect(nextLevel('academy/2')?.id).toBe('academy/3');
-    expect(nextLevel('academy/5')?.id).toBe('academy/6');
-    expect(nextLevel('academy/8')?.id).toBe('academy/9');
-    expect(nextLevel('academy/10')).toBeUndefined();
+    expect(levelById('advanced/1')?.title).toBe('A ship and its cargo');
+    expect(nextLevel('advanced/1')?.id).toBe('advanced/2');
+    expect(nextLevel('advanced/2')?.id).toBe('advanced/3');
+    expect(nextLevel('advanced/5')?.id).toBe('advanced/6');
+    expect(nextLevel('advanced/8')?.id).toBe('advanced/9');
+    expect(nextLevel('advanced/10')).toBeUndefined();
   });
 });

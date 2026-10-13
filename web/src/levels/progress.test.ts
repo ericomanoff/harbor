@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { better, loadProgress, recordProgress } from './progress';
+import { better, loadProgress, migrateKeys, recordProgress } from './progress';
 
 // Vitest runs in node here; a map-backed localStorage is enough for the mirror.
 const mem = new Map<string, string>();
@@ -22,19 +22,23 @@ describe('progress client', () => {
     const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       calls.push({ url: String(url), ...(init ? { init } : {}) });
       if (init?.method === 'PUT') return okJson({ levels: {} });
-      return okJson({ levels: { 'academy/1': { stars: 3, bestSeconds: 20 } } });
+      return okJson({ levels: { 'advanced/1': { stars: 3, bestSeconds: 20 } } });
     }) as unknown as typeof fetch;
-    await recordProgress('academy/1', { stars: 2, bestSeconds: 30 }, fetchFn);
-    await recordProgress('academy/2', { stars: 1, bestSeconds: 99 }, fetchFn);
-    expect(calls[0]?.url).toBe('/api/progress/academy%2F1');
+    await recordProgress('advanced/1', { stars: 2, bestSeconds: 30 }, fetchFn);
+    await recordProgress('advanced/2', { stars: 1, bestSeconds: 99 }, fetchFn);
+    expect(calls[0]?.url).toBe('/api/progress/advanced%2F1');
     const p = await loadProgress(fetchFn);
-    expect(p['academy/1']?.stars).toBe(3);
-    expect(p['academy/2']?.stars).toBe(1);
+    expect(p['advanced/1']?.stars).toBe(3);
+    expect(p['advanced/2']?.stars).toBe(1);
+  });
+
+  it('migrates academy keys to advanced, keeping the best', () => {
+    expect(migrateKeys({ 'academy/1': { stars: 2 }, 'advanced/1': { stars: 1 }, 'academy/2': { stars: 3 }, 'fortiaigate/validate': { stars: 1 } })).toEqual({ 'advanced/1': { stars: 2 }, 'advanced/2': { stars: 3 }, 'fortiaigate/validate': { stars: 1 } });
   });
 
   it('falls back to localStorage when the backend is away', async () => {
     const dead = vi.fn(async () => { throw new Error('offline'); }) as unknown as typeof fetch;
-    await recordProgress('academy/1', { stars: 2 }, dead);
-    expect((await loadProgress(dead))['academy/1']?.stars).toBe(2);
+    await recordProgress('advanced/1', { stars: 2 }, dead);
+    expect((await loadProgress(dead))['advanced/1']?.stars).toBe(2);
   });
 });

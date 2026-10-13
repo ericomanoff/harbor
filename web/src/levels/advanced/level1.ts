@@ -8,11 +8,12 @@ const overlayOpen = (id: string): boolean => document.getElementById(id)?.hidden
 
 /** Level 1: a pod is a ship; its containers are the cargo; pods are mortal. */
 export const level1: Level = {
-  id: 'academy/1',
+  id: 'advanced/1',
   number: 1,
   title: 'A ship and its cargo',
   concept: 'Pods and containers',
   terms: ['ship', 'cargo-crate', 'ships-log', 'sunk'],
+  practises: 'Desired state',
   parSeconds: 120,
   fixture: () => academyHarbor({ pods: [loneShip('courier')] }),
   steps: (ctx) => {
@@ -21,8 +22,8 @@ export const level1: Level = {
     return [
       {
         id: 'intro',
-        title: 'Welcome to the academy',
-        text: 'This small harbor is yours to learn in. One lone ship is moored at the harbor-worker island. In Kubernetes a ship is a pod: the smallest thing the cluster runs. Nothing you do here touches a real cluster.',
+        title: 'Welcome aboard',
+        text: 'This small harbor is yours to learn in: the Advanced K8s expedition, one hands-on idea per level. One lone ship is moored at the harbor-worker island. In Kubernetes a ship is a pod: the smallest thing the cluster runs. Nothing you do here touches a real cluster.',
         anchor: { kind: 'dom', selector: '#hud [data-badge]', placement: 'bottom' },
       },
       {

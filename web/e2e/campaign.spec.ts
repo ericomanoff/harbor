@@ -27,11 +27,11 @@ test('the FortiAIGate expedition: survey the harbor, then load the cargo', async
   await page.setViewportSize({ width: 1280, height: 760 });
   await page.addInitScript(() => localStorage.setItem('harbor.tour.v1', 'done'));
   await page.request.delete('/api/progress');
-  await page.goto('/?academy');
+  await page.goto('/?expeditions');
   await page.waitForFunction(() => window.harbor?.store.context === 'kind-harbor', null, { timeout: 30_000 })
     .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
 
-  const select = page.locator('#academy');
+  const select = page.locator('#expeditions');
   await expect(select).toBeVisible({ timeout: 15_000 });
   const exp = select.locator('.expedition[data-campaign=fortiaigate]');
   await expect(exp).toBeVisible({ timeout: 15_000 });

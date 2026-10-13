@@ -47,17 +47,17 @@ test.beforeEach(async ({ page }) => {
   await page.request.delete('/api/progress');
 });
 
-test('Harbor Select lists the academy with level 2 locked', async ({ page }) => {
+test('Harbor Select lists the expeditions with level 2 locked', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 });
-  await page.goto('/?demo&academy');
-  const select = page.locator('#academy');
+  await page.goto('/?demo&expeditions');
+  const select = page.locator('#expeditions');
   await expect(select).toBeVisible({ timeout: 15_000 });
   await expect(select.locator('.row.level')).toHaveCount(10);
-  await expect(select.locator('.row.level[data-level="academy/2"]')).toHaveClass(/locked/);
-  await expect(select.locator('.row.level[data-level="academy/2"] button')).toBeDisabled();
-  await select.locator('.row.level[data-level="academy/1"] button').click();
+  await expect(select.locator('.row.level[data-level="advanced/2"]')).toHaveClass(/locked/);
+  await expect(select.locator('.row.level[data-level="advanced/2"] button')).toBeDisabled();
+  await select.locator('.row.level[data-level="advanced/1"] button').click();
   await expect(select).toBeHidden();
-  await expect(title(page)).toHaveText('Welcome to the academy');
+  await expect(title(page)).toHaveText('Welcome aboard');
   await page.locator('[data-tour=skip]').click(); // Leave level
   await expect(page.locator('#tour')).toBeHidden();
   await expect(select).toBeVisible();
@@ -65,10 +65,10 @@ test('Harbor Select lists the academy with level 2 locked', async ({ page }) => 
 
 test('levels 1 and 2 play through, award stars and unlock the next', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 });
-  await page.goto('/?demo&level=academy/1');
+  await page.goto('/?demo&level=advanced/1');
   const tour = page.locator('#tour');
   await expect(tour).toBeVisible({ timeout: 15_000 });
-  await expect(title(page)).toHaveText('Welcome to the academy');
+  await expect(title(page)).toHaveText('Welcome aboard');
   await expect(page.locator('#hud [data-chip=link]')).toHaveText('demo');
 
   // Level 1: inspect the lone ship, read its log, watch it sink twice.
@@ -122,14 +122,14 @@ test('levels 1 and 2 play through, award stars and unlock the next', async ({ pa
   await summary.locator('[data-select]').click();
 
   // Back at Harbor Select: both levels completed, stars kept, level 3 open and the rest locked.
-  const select = page.locator('#academy');
+  const select = page.locator('#expeditions');
   await expect(select).toBeVisible();
-  await expect(select.locator('.row.level[data-level="academy/1"] .stars')).toHaveText('★★★');
-  await expect(select.locator('.row.level[data-level="academy/2"] .stars')).toHaveText('★★☆');
-  await expect(select.locator('.row.level[data-level="academy/3"] button')).toBeEnabled();
+  await expect(select.locator('.row.level[data-level="advanced/1"] .stars')).toHaveText('★★★');
+  await expect(select.locator('.row.level[data-level="advanced/2"] .stars')).toHaveText('★★☆');
+  await expect(select.locator('.row.level[data-level="advanced/3"] button')).toBeEnabled();
   await expect(select.locator('.row.level.locked')).toHaveCount(7);
-  await expect(select.locator('.row.level[data-level="academy/2"] button').first()).toHaveText('REPLAY');
-  expect(await page.evaluate(() => fetch('/api/progress').then((r) => r.json()))).toMatchObject({ levels: { 'academy/1': { stars: 3 }, 'academy/2': { stars: 2 } } });
+  await expect(select.locator('.row.level[data-level="advanced/2"] button').first()).toHaveText('REPLAY');
+  expect(await page.evaluate(() => fetch('/api/progress').then((r) => r.json()))).toMatchObject({ levels: { 'advanced/1': { stars: 3 }, 'advanced/2': { stars: 2 } } });
 });
 
 /** The map scene exposes `layout.plateaus`; a free structure cell is one tile in from the island corner. */
@@ -146,7 +146,7 @@ test('levels 3 to 5: scaling, lookouts and the lighthouse', async ({ page }) => 
   await page.setViewportSize({ width: 1280, height: 760 });
 
   // Level 3: ride out the storm with three ships.
-  await page.goto('/?demo&level=academy/3');
+  await page.goto('/?demo&level=advanced/3');
   await expect(title(page)).toHaveText('A lighthouse for the fleet', { timeout: 15_000 });
   await next(page).click();
   await expect(title(page)).toHaveText('Storm season');
@@ -206,10 +206,10 @@ test('levels 3 to 5: scaling, lookouts and the lighthouse', async ({ page }) => 
   await expect(page.locator('#summary pre.kubectl')).toContainText('kubectl expose deployment courier');
   await expect(page.locator('#summary [data-next]')).toBeVisible();
   await page.locator('#summary [data-select]').click();
-  const select = page.locator('#academy');
+  const select = page.locator('#expeditions');
   await expect(select).toBeVisible();
   await expect(select.locator('.row.level')).toHaveCount(10);
-  await expect(select.locator('.row.level[data-level="academy/5"] .stars')).toHaveText('★★★');
+  await expect(select.locator('.row.level[data-level="advanced/5"] .stars')).toHaveText('★★★');
 });
 
 test('levels 6 to 8: the gate, sealed orders, berths and cargo', async ({ page }) => {
@@ -217,7 +217,7 @@ test('levels 6 to 8: the gate, sealed orders, berths and cargo', async ({ page }
   await page.setViewportSize({ width: 1280, height: 760 });
 
   // Level 6: open a gate to the courier lighthouse.
-  await page.goto('/?demo&level=academy/6');
+  await page.goto('/?demo&level=advanced/6');
   await expect(title(page)).toHaveText('Traders outside the breakwater', { timeout: 15_000 });
   await next(page).click();
   await expect(title(page)).toHaveText('Open a gate');
@@ -300,10 +300,10 @@ test('levels 6 to 8: the gate, sealed orders, berths and cargo', async ({ page }
   await expect(page.locator('#summary pre.kubectl')).toContainText('kubectl set resources deployment/hog');
   await expect(page.locator('#summary [data-next]')).toBeVisible();
   await page.locator('#summary [data-select]').click();
-  const select = page.locator('#academy');
+  const select = page.locator('#expeditions');
   await expect(select).toBeVisible();
   await expect(select.locator('.row.level')).toHaveCount(10);
-  await expect(select.locator('.row.level[data-level="academy/8"] .stars')).toHaveText('★★★');
+  await expect(select.locator('.row.level[data-level="advanced/8"] .stars')).toHaveText('★★★');
 });
 
 test('levels 9 and 10: fleets and ensigns, refit at sea', async ({ page }) => {
@@ -311,7 +311,7 @@ test('levels 9 and 10: fleets and ensigns, refit at sea', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 });
 
   // Level 9: found the ferry fleet, move the crew, light its lighthouse, retire the impostor.
-  await page.goto('/?demo&level=academy/9');
+  await page.goto('/?demo&level=advanced/9');
   await expect(title(page)).toHaveText('Two crews, one basin', { timeout: 15_000 });
   await next(page).click();
   await expect(title(page)).toHaveText('Found a fleet');
@@ -375,15 +375,15 @@ test('levels 9 and 10: fleets and ensigns, refit at sea', async ({ page }) => {
   await expect(page.locator('#summary pre.kubectl')).toContainText('kubectl rollout undo deployment/courier');
   await expect(page.locator('#summary [data-next]')).toBeHidden();
   await page.locator('#summary [data-select]').click();
-  const select = page.locator('#academy');
+  const select = page.locator('#expeditions');
   await expect(select).toBeVisible();
   await expect(select.locator('.row.level')).toHaveCount(10);
-  await expect(select.locator('.row.level[data-level="academy/10"] .stars')).toHaveText('★★★');
+  await expect(select.locator('.row.level[data-level="advanced/10"] .stars')).toHaveText('★★★');
 });
 
 test('challenge mode: level 2 with objectives and the clock, no bubbles', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 });
-  await page.goto('/?demo&level=academy/2&challenge');
+  await page.goto('/?demo&level=advanced/2&challenge');
   const bar = page.locator('#challenge');
   await expect(bar).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('#tour')).toBeHidden();
@@ -405,7 +405,7 @@ test('challenge mode: level 2 with objectives and the clock, no bubbles', async 
   await expect(bar).toBeHidden();
   await success.locator('[data-continue]').click();
   await page.locator('#summary [data-select]').click();
-  const row = page.locator('#academy .row.level[data-level="academy/2"]');
+  const row = page.locator('#expeditions .row.level[data-level="advanced/2"]');
   await expect(row.locator('.best')).toContainText('best 0:');
   await expect(row.locator('button[data-challenge]')).toBeVisible();
   await expect(row.locator('button[data-real]')).toHaveCount(0); // demo harbor: nothing to do it for real on

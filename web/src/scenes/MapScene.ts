@@ -13,6 +13,7 @@ import { Sea } from '../world/Sea';
 import { floatText, splash } from '../world/fx';
 import { maybeAutoStartTour, startTour } from '../tour/tour';
 import { openHarborSelect, playLevelById } from '../screens/harborSelect';
+import { startLedgerFeed } from '../game/ledgerFeed';
 import { openGlossary } from '../glossary';
 import { splash as loadingSplash } from '../boot/splash';
 import { ingressesForService, podsForService, servicesForIngress, servicesForPod } from '../game/selector';
@@ -168,14 +169,15 @@ export class MapScene extends Phaser.Scene implements MapApi {
     this.rebuild();
     this.homeCamera();
     new Hud(this);
+    startLedgerFeed();
     document.querySelector<HTMLButtonElement>('#hud [data-rail=help]')?.addEventListener('click', () => startTour(this));
-    document.querySelector<HTMLButtonElement>('#hud [data-rail=academy]')?.addEventListener('click', () => openHarborSelect(this));
+    document.querySelector<HTMLButtonElement>('#hud [data-rail=expeditions]')?.addEventListener('click', () => openHarborSelect(this));
     void loadingSplash().done().then(() => {
-      // Deep links: ?level=academy/2 plays a level; ?academy opens Harbor Select.
+      // Deep links: ?level=advanced/2 plays a level; ?expeditions opens Harbor Select.
       const params = new URLSearchParams(location.search);
       const level = params.get('level');
       if (level && playLevelById(level, this, { challenge: params.has('challenge'), mode: params.has('real') ? 'real' : 'sim' })) return;
-      if (params.has('academy')) {
+      if ((params.has('expeditions') || params.has('academy'))) {
         openHarborSelect(this);
         return;
       }

@@ -8,11 +8,12 @@ const overlayOpen = (id: string): boolean => document.getElementById(id)?.hidden
 
 /** Level 9: namespaces separate crews; labels are the ensigns selectors read. */
 export const level9: Level = {
-  id: 'academy/9',
+  id: 'advanced/9',
   number: 9,
   title: 'Fleets and ensigns',
   concept: 'Namespaces and labels',
   terms: ['namespace', 'label', 'lighthouse', 'beam', 'system-fleets'],
+  practises: 'Labels not references, Two crews',
   parSeconds: 300,
   fixture: () => {
     const courier = shipyard('courier', 2);

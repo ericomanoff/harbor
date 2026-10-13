@@ -397,9 +397,9 @@ test('light a lighthouse from the shop and put it out from its card', async ({ p
   }, key);
   await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
   await expect.poll(() => page.evaluate(() => [...window.harbor.selection.keys])).toEqual([key]);
-  await page.locator(action(0)).click();
-  await expect(page.locator(action(0))).toHaveText(/Confirm/);
-  await page.locator(action(0)).click();
+  const putOut = page.locator('#hud .selection button', { hasText: 'Put out lighthouse' });
+  await putOut.click();
+  await page.locator('#hud .selection button', { hasText: 'Confirm' }).click();
   await page.waitForFunction((k) => !(window.harbor.store as unknown as { services: Map<string, unknown> }).services.has(k), `${NS}/${NAME}-light`, { timeout: 60_000 });
   expect(() => kubectl('get', 'service', `${NAME}-light`, '-n', NS)).toThrow();
 });

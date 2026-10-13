@@ -166,6 +166,78 @@ func (s *Server) RunProbe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+// GetObject: an object's papers (spec, status, metadata, managers).
+func (s *Server) GetObject(w http.ResponseWriter, r *http.Request, kind gen.GetObjectParamsKind, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	out, err := kube.Papers(ctx, cur.Client(), string(kind), ns, name)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// ApplyManifest: server-side apply of whitelisted kinds, dry-run for the diff.
+func (s *Server) ApplyManifest(w http.ResponseWriter, r *http.Request) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.ApplyRequest
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	out, err := kube.Apply(ctx, cur.Client(), req)
+	if err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) PatchPodLabels(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.LabelPatch
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.PatchPodLabels(ctx, cur.Client(), ns, name, req); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) PatchDeploymentLabels(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.LabelPatch
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.PatchDeploymentLabels(ctx, cur.Client(), ns, name, req); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // StageIncident performs one whitelisted academy incident on the real cluster.
 func (s *Server) StageIncident(w http.ResponseWriter, r *http.Request, incident gen.StageIncidentParamsIncident) {
 	cur, ok := s.clientOr409(w)

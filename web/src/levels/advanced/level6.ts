@@ -11,11 +11,12 @@ const svcEvent = (ns: string, type: 'Warning' | 'Normal', reason: string, messag
 
 /** Level 6: an Ingress lets traffic from outside the cluster reach a Service. */
 export const level6: Level = {
-  id: 'academy/6',
+  id: 'advanced/6',
   number: 6,
   title: 'The harbor mouth',
   concept: 'Ingress (host and path routing from outside)',
   terms: ['gate', 'chain', 'lighthouse', 'breakwater'],
+  practises: 'Two crews',
   parSeconds: 180,
   fixture: () => {
     const y = shipyard('courier', 2);

@@ -2,7 +2,10 @@ import { eva, link, source, store } from '../app';
 import { demoSnapshot } from '../demo/demo';
 import { connectWebSocket } from '../store/source';
 import { startDemo } from '../demo/demo';
+import { loadAll } from 'js-yaml';
+import { ledger } from '../game/ledger';
 import { nsKey, type Deployment, type Pod, type Snapshot, type Workload } from '../store/cluster';
+import { simulatedPapers, simulatedSpecYaml } from './papers';
 
 /**
  * Training harbor: the tour runs on demo data, and every API call the HUD
@@ -57,19 +60,38 @@ const podOf = (ns: string, name: string, deployment: string, nodeName: string, p
 });
 
 const nodes = (): string[] => [...store.nodes.values()].filter((n) => n.ready).map((n) => n.name);
+
+/** Runs fn with the ledger attributing the stream changes to `who` (the simulator's controllers and kubelets). */
+function as(who: string, fn: () => void): void {
+  const prev = ledger.actor;
+  ledger.actor = who;
+  try {
+    fn();
+  } finally {
+    ledger.actor = prev;
+  }
+}
 let seq = 0;
 
 function launch(dep: Deployment, count: number, onReady?: (name: string) => void, delay = 0): void {
   for (let i = 0; i < count; i++) {
     const name = `${dep.name}-trn-${(++seq).toString(36)}`;
-    const rs = store.deployments.get(nsKey(dep.ns, dep.name))?.currentRS;
-    later(delay, () => store.apply({ type: 'modified', kind: 'Pod', obj: podOf(dep.ns, name, dep.name, '', 'Pending', rs) }));
-    later(delay + 1200 + i * 400, () => {
+    const cur0 = store.deployments.get(nsKey(dep.ns, dep.name));
+    const rs = cur0?.currentRS;
+    const extra = cur0?.templateLabels ?? {};
+    const withLabels = (p: Pod): Pod => ({ ...p, labels: { ...p.labels, ...extra } });
+    later(delay, () => as('the Deployment controller', () => store.apply({ type: 'modified', kind: 'Pod', obj: withLabels(podOf(dep.ns, name, dep.name, '', 'Pending', rs)) })));
+    later(delay + 700 + i * 400, () => {
       const ns = nodes();
       const node = ns[seq % Math.max(1, ns.length)] ?? '';
-      store.apply({ type: 'modified', kind: 'Pod', obj: podOf(dep.ns, name, dep.name, node, 'Running', rs) });
+      as('the scheduler', () => store.apply({ type: 'modified', kind: 'Pod', obj: withLabels(podOf(dep.ns, name, dep.name, node, 'Pending', rs)) }));
+    });
+    later(delay + 1200 + i * 400, () => {
+      const p = store.pods.get(nsKey(dep.ns, name));
+      const node = p?.node || nodes()[0] || '';
+      as('the kubelet', () => store.apply({ type: 'modified', kind: 'Pod', obj: withLabels(podOf(dep.ns, name, dep.name, node, 'Running', rs)) }));
       const cur = store.deployments.get(nsKey(dep.ns, dep.name));
-      if (cur) store.apply({ type: 'modified', kind: 'Deployment', obj: { ...cur, available: Math.min(cur.replicas, cur.available + 1), updated: Math.min(cur.replicas, cur.updated + 1) } });
+      if (cur) as('the Deployment controller', () => store.apply({ type: 'modified', kind: 'Deployment', obj: { ...cur, available: Math.min(cur.replicas, cur.available + 1), updated: Math.min(cur.replicas, cur.updated + 1) } }));
       onReady?.(name);
     });
   }
@@ -99,14 +121,152 @@ function roll(key: string, newImage: string, strategy: string, safe: boolean): v
 function scrap(dep: Deployment, names: string[]): void {
   for (const n of names) {
     const p = store.pods.get(nsKey(dep.ns, n));
-    if (p) store.apply({ type: 'deleted', kind: 'Pod', obj: p });
+    if (p) as('the Deployment controller', () => store.apply({ type: 'deleted', kind: 'Pod', obj: p }));
   }
+}
+
+/** A pod's ensign changed: selectors re-evaluate. A ship that no longer flies its shipyard's label is orphaned and replaced. */
+function relabelPod(p: Pod, labels: Record<string, string>): void {
+  const dep = p.deployment ? store.deployments.get(nsKey(p.ns, p.deployment)) : undefined;
+  const stillOwned = !!dep && labels['app'] === dep.name;
+  const next: Pod = { ...p, labels };
+  if (dep && !stillOwned) {
+    delete next.deployment;
+    delete next.ownerRS;
+    delete next.ownerKind;
+    delete next.ownerName;
+  }
+  store.apply({ type: 'modified', kind: 'Pod', obj: next });
+  if (dep && !stillOwned) {
+    later(400, () => {
+      const cur = store.deployments.get(nsKey(dep.ns, dep.name));
+      if (cur) as('the Deployment controller', () => store.apply({ type: 'modified', kind: 'Deployment', obj: { ...cur, available: Math.max(0, cur.available - 1) } }));
+      launch(dep, 1);
+    });
+  }
+}
+
+/** Lines only on one side, "- old" / "+ new": the simulator's apply diff. */
+function lineDiff(a: string, b: string): string {
+  const al = a.split('\n');
+  const bl = b.split('\n');
+  const out: string[] = [];
+  for (const l of al) if (!bl.includes(l)) out.push(`- ${l}`);
+  for (const l of bl) if (!al.includes(l)) out.push(`+ ${l}`);
+  return out.join('\n');
+}
+
+type Doc = { apiVersion?: string; kind?: string; metadata?: { name?: string; namespace?: string; labels?: Record<string, string> }; spec?: Record<string, unknown>; data?: Record<string, string>; stringData?: Record<string, string> };
+
+/** Server-side apply, the training harbor's way: whitelisted kinds into the store. */
+function applyDocs(manifest: string, dryRun: boolean): { results: { kind: string; ns: string; name: string; action: 'created' | 'configured' | 'unchanged'; diff?: string }[] } {
+  const docs = loadAll(manifest).filter((d): d is Doc => !!d && typeof d === 'object');
+  if (docs.length === 0) throw new Error('the manifest is empty');
+  const allowed = ['apps/v1/Deployment', 'v1/Service', 'v1/ConfigMap', 'v1/Secret', 'v1/Namespace', 'networking.k8s.io/v1/Ingress'];
+  for (const d of docs) {
+    const key = `${d.apiVersion}/${d.kind}`;
+    if (!allowed.includes(key)) throw new Error(`${key} is not something the harbor applies (allowed: Deployment, Service, ConfigMap, Secret, Namespace, Ingress)`);
+    if (!d.metadata?.name) throw new Error(`${d.kind} needs metadata.name`);
+    if (d.kind !== 'Namespace' && !d.metadata.namespace) throw new Error(`${d.kind} ${d.metadata.name} needs metadata.namespace`);
+  }
+  const results: { kind: string; ns: string; name: string; action: 'created' | 'configured' | 'unchanged'; diff?: string }[] = [];
+  for (const d of docs) {
+    const kind = d.kind!;
+    const name = d.metadata!.name!;
+    const ns = d.metadata!.namespace ?? '';
+    const spec = d.spec ?? {};
+    const item = (action: 'created' | 'configured' | 'unchanged', diff?: string) => results.push({ kind, ns, name, action, ...(diff ? { diff } : {}) });
+    if (kind === 'Deployment') {
+      const cur = store.deployments.get(nsKey(ns, name));
+      const tmpl = spec['template'] as { metadata?: { labels?: Record<string, string> }; spec?: { containers?: { image?: string }[] } } | undefined;
+      const image = tmpl?.spec?.containers?.[0]?.image ?? cur?.image ?? 'nginx:1.27-alpine';
+      const replicas = typeof spec['replicas'] === 'number' ? spec['replicas'] : cur?.replicas ?? 1;
+      if (!cur) {
+        if (!dryRun) simulate('POST', '/api/deployments', { ns, name, image, replicas });
+        item('created');
+        continue;
+      }
+      const before = simulatedSpecYaml(store, 'Deployment', ns, name) ?? '';
+      const changedImage = image !== cur.image;
+      const changedReplicas = replicas !== cur.replicas;
+      if (!changedImage && !changedReplicas) {
+        item('unchanged');
+        continue;
+      }
+      if (!dryRun) {
+        if (changedReplicas) simulate('PATCH', `/api/deployments/${ns}/${name}/scale`, { replicas });
+        if (changedImage) simulate('PATCH', `/api/deployments/${ns}/${name}/refit`, { image });
+      }
+      const after = before.replace(/replicas: \d+/, `replicas: ${replicas}`).replace(cur.image, image);
+      item('configured', lineDiff(before, after));
+    } else if (kind === 'Service') {
+      const exists = store.services.has(nsKey(ns, name));
+      const ports = (spec['ports'] as { port?: number; targetPort?: number }[] | undefined) ?? [];
+      if (!dryRun && !exists) simulate('POST', '/api/services', { ns, name, selector: (spec['selector'] as Record<string, string>) ?? {}, port: ports[0]?.port ?? 80, targetPort: ports[0]?.targetPort, type: spec['type'] });
+      item(exists ? 'unchanged' : 'created');
+    } else if (kind === 'ConfigMap' || kind === 'Secret') {
+      const exists = trainingOrders.has(nsKey(ns, name));
+      if (!dryRun && !exists) simulate('POST', '/api/orders', { ns, name, kind, data: d.data ?? d.stringData ?? {} });
+      item(exists ? 'unchanged' : 'created');
+    } else if (kind === 'Namespace') {
+      const exists = store.namespaces.has(name);
+      if (!dryRun && !exists) simulate('POST', '/api/namespaces', { name });
+      item(exists ? 'unchanged' : 'created');
+    } else if (kind === 'Ingress') {
+      const exists = store.ingresses.has(nsKey(ns, name));
+      const rule = (spec['rules'] as { host?: string; http?: { paths?: { path?: string; backend?: { service?: { name?: string; port?: { number?: number; name?: string } } } }[] } }[] | undefined)?.[0];
+      const path0 = rule?.http?.paths?.[0];
+      if (!dryRun && !exists) simulate('POST', '/api/ingresses', { ns, name, host: rule?.host, path: path0?.path, service: path0?.backend?.service?.name ?? '', port: String(path0?.backend?.service?.port?.number ?? path0?.backend?.service?.port?.name ?? '80'), class: spec['ingressClassName'] });
+      item(exists ? 'unchanged' : 'created');
+    }
+  }
+  return { results };
 }
 
 /** Answers an API call as the training harbor would. Returns the response body. */
 export function simulate(method: string, path: string, body: unknown): unknown {
+  // Changes the simulator makes right away in answer to a call are yours; its controllers stamp their own later.
+  const prevActor = ledger.actor;
+  ledger.actor = 'you';
+  try {
+    return simulateNow(method, path, body);
+  } finally {
+    ledger.actor = prevActor;
+  }
+}
+
+function simulateNow(method: string, path: string, body: unknown): unknown {
   const b = (body ?? {}) as Record<string, unknown>;
   let m: RegExpExecArray | null;
+  if ((m = /^\/api\/objects\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'GET') {
+    const p = simulatedPapers(store, decodeURIComponent(m[1]!), decodeURIComponent(m[2]!) === '-' ? '' : decodeURIComponent(m[2]!), decodeURIComponent(m[3]!));
+    if (!p) throw new Error('no such object in the training harbor');
+    return p;
+  }
+  if (method === 'POST' && path === '/api/apply') {
+    const req = b as { manifest: string; dryRun?: boolean };
+    return applyDocs(req.manifest ?? '', !!req.dryRun);
+  }
+  if ((m = /^\/api\/pods\/([^/]+)\/([^/]+)\/labels$/.exec(path)) && method === 'PATCH') {
+    const p = store.pods.get(nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)));
+    if (!p) throw new Error('no such ship');
+    const req = b as { set?: Record<string, string>; remove?: string[] };
+    const labels = { ...p.labels, ...(req.set ?? {}) };
+    for (const k of req.remove ?? []) delete labels[k];
+    relabelPod(p, labels);
+    return undefined;
+  }
+  if ((m = /^\/api\/deployments\/([^/]+)\/([^/]+)\/labels$/.exec(path)) && method === 'PATCH') {
+    const dep = store.deployments.get(nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)));
+    if (!dep) throw new Error('no such shipyard');
+    const req = b as { set?: Record<string, string>; remove?: string[] };
+    if (req.remove?.includes('app') || (req.set && 'app' in req.set && req.set['app'] !== dep.name)) throw new Error('label app is part of the selector and cannot change on the template');
+    const tl = { ...(dep.templateLabels ?? {}), ...(req.set ?? {}) };
+    delete tl['app'];
+    for (const k of req.remove ?? []) delete tl[k];
+    store.apply({ type: 'modified', kind: 'Deployment', obj: { ...dep, templateLabels: tl } });
+    return undefined;
+  }
   if (method === 'POST' && path === '/api/workloads/statefulsets') {
     const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number } };
     const wl: Workload = { kind: 'StatefulSet', ns: req.ns, name: req.name, image: req.image, desired: req.replicas, ready: 0, conditions: [], ...(req.mapPos ? { mapPos: req.mapPos } : {}) };

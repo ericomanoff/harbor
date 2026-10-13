@@ -7,11 +7,12 @@ import { academyHarbor, lighthouse, podEvent, shipyard } from './fixture';
 
 /** Level 3: one ship cannot ride out a storm; three can. Scaling. */
 export const level3: Level = {
-  id: 'academy/3',
+  id: 'advanced/3',
   number: 3,
   title: 'Storm season',
   concept: 'Scaling (replicas)',
   terms: ['launch', 'shipyard', 'lighthouse', 'storm'],
+  practises: 'Reconcile',
   parSeconds: 150,
   fixture: () => {
     const y = shipyard('courier', 1);

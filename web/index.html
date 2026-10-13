@@ -42,7 +42,8 @@
         <button class="rail-btn" data-rail="locate" title="Locate (/)"><span class="glyph">🔭</span>Find</button>
         <button class="rail-btn" data-rail="fleets" title="Fleets filter (F)"><span class="glyph">⚑</span>Fleets</button>
         <button class="rail-btn" data-rail="help" title="Welcome tour"><span class="glyph">🧭</span>Help</button>
-        <button class="rail-btn" data-rail="academy" title="Harbor Select: Open Harbor, your cluster, the Academy"><span class="glyph">🎓</span>Academy</button>
+        <button class="rail-btn" data-rail="expeditions" title="Harbor Select: Open Harbor, your cluster, the Expeditions"><span class="glyph">⛵</span>Expeditions</button>
+        <button class="rail-btn" data-rail="ledger" title="The ledger: who wrote what to the API server"><span class="glyph">📒</span>Ledger</button>
         <button class="rail-btn" data-rail="glossary" title="Glossary (G)"><span class="glyph">📖</span>Terms</button>
       </div>
       <div class="hud-right-rail">
@@ -73,6 +74,7 @@
         <div class="cta" hidden></div>
         <div class="hint" hidden></div>
         <div class="result" hidden></div>
+        <div class="choices" hidden></div>
         <div class="foot">
           <div class="dots"></div>
           <div class="btns">
@@ -380,8 +382,8 @@
         <pre class="log"></pre>
       </div>
     </div>
-    <div id="academy" class="overlay" hidden>
-      <div class="panel wide academy">
+    <div id="expeditions" class="overlay" hidden>
+      <div class="panel wide expeditions">
         <h2>HARBOR SELECT <span class="where" data-where></span></h2>
         <div class="harbors">
           <div class="harbor-card">
@@ -397,10 +399,8 @@
             <button type="button" data-your-cluster>SAIL</button>
           </div>
         </div>
-        <h3>Harbor Academy <span class="where">one Kubernetes idea per level, in the training harbor</span></h3>
-        <div class="levels"></div>
-        <h3>Expeditions <span class="where">vendor deployment guides, on your own cluster</span></h3>
-        <div class="expeditions"></div>
+        <h3>Expeditions <span class="where">a growing library of trainings; stars and best times are yours</span></h3>
+        <div class="library"></div>
         <div class="actions"><button type="button" data-close>CLOSE</button></div>
       </div>
     </div>
@@ -440,6 +440,53 @@
           <button type="button" data-leave>BACK TO THE HARBOR</button>
         </div>
       </div>
+    </div>
+    <div id="ledger" class="overlay" hidden>
+      <div class="panel wide ledger" data-no-terms>
+        <h2>THE LEDGER <span class="where">every write to the API server, and who made it</span></h2>
+        <div class="actors"></div>
+        <div class="rows"></div>
+        <div class="actions"><button type="button" data-clear>CLEAR</button><button type="button" data-close>CLOSE</button></div>
+      </div>
+    </div>
+    <div id="papers" class="overlay" hidden>
+      <div class="panel wide papers" data-no-terms>
+        <h2>PAPERS <span class="obj"></span></h2>
+        <div class="columns">
+          <div><h4>spec <span class="sub">what you asked for</span></h4><pre class="spec"></pre></div>
+          <div><h4>status <span class="sub">what the cluster reports</span></h4><pre class="status"></pre></div>
+        </div>
+        <h4>metadata <span class="sub">labels, annotations, owners</span></h4>
+        <pre class="meta"></pre>
+        <p class="managers muted"></p>
+        <p class="err" hidden></p>
+        <div class="actions"><button type="button" data-close>CLOSE</button></div>
+      </div>
+    </div>
+    <div id="apply-form" class="overlay" hidden>
+      <form class="panel wide apply" autocomplete="off" data-no-terms>
+        <h2>APPLY A MANIFEST <span class="where">declare what should exist; the harbor master records it</span></h2>
+        <textarea name="manifest" rows="14" spellcheck="false"></textarea>
+        <div class="results"></div>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="button" data-preview>PREVIEW (dry run)</button>
+          <button type="submit">APPLY</button>
+          <button type="button" data-cancel>CANCEL</button>
+        </div>
+      </form>
+    </div>
+    <div id="ensign-form" class="overlay" hidden>
+      <form class="panel" autocomplete="off">
+        <h2>CHANGE ENSIGN <span class="where"></span></h2>
+        <label><span>LABELS (key=value, comma separated)</span> <input name="labels" placeholder="app=courier, track=canary" /></label>
+        <p class="muted locked"></p>
+        <p class="err" hidden></p>
+        <div class="actions">
+          <button type="submit">HOIST</button>
+          <button type="button" data-cancel>CANCEL</button>
+        </div>
+      </form>
     </div>
     <div id="mission" class="overlay" hidden>
       <div class="panel wide">

@@ -1,6 +1,5 @@
-import { campaigns as campaignApi, type Campaign } from '../api/client';
-import { ACADEMY, levelById } from '../levels/academy';
-import { campaignLevels } from '../levels/campaign';
+import { ADVANCED } from '../levels/advanced';
+import { expeditions, levelById, nextLevel, type Expedition } from '../levels/library';
 import { loadProgress, type ProgressMap } from '../levels/progress';
 import { startLevel, type RunOptions } from '../levels/runner';
 import type { Level } from '../levels/types';
@@ -15,72 +14,89 @@ const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T =
 };
 
 const stars = (n: number | undefined): string => (n === undefined ? '' : '★'.repeat(n) + '☆'.repeat(3 - n));
+const fmt = (s: number): string => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
-/** A level is open when it is the first or the one before it has been completed (deep links ignore this). */
-export function unlocked(level: Level, progress: ProgressMap): boolean {
-  const prev = ACADEMY[ACADEMY.indexOf(level) - 1];
+/** A level is open when it is the first of its expedition or the one before it has been completed (deep links ignore this). */
+export function unlocked(level: Level, progress: ProgressMap, levels: Level[] = ADVANCED): boolean {
+  const prev = levels[levels.indexOf(level) - 1];
   return !prev || (progress[prev.id]?.stars ?? 0) > 0;
 }
 
-/** Starts a level from anywhere (the select screen, a deep link, the summary's Next). */
+/** Starts a level from anywhere (the library, a deep link, the summary's Next). */
 export function playLevel(level: Level, map: MapApi, opts: RunOptions = {}): void {
   startLevel(level, map, {
-    nextLevel: (id) => ACADEMY[ACADEMY.findIndex((l) => l.id === id) + 1],
+    nextLevel: (id) => nextLevel(id),
     onExit: (where) => {
       if (where === 'select') openHarborSelect(map);
     },
   }, opts);
 }
 
-/** Expeditions, cached once the backend answered. */
-let expeditions: Campaign[] | undefined;
-async function loadExpeditions(): Promise<Campaign[]> {
-  if (expeditions) return expeditions;
-  if (training.active || new URLSearchParams(location.search).has('demo')) return [];
-  try {
-    expeditions = await campaignApi.list();
-  } catch {
-    expeditions = [];
-  }
-  return expeditions;
-}
-
-/** Plays an expedition level ("<campaign>/<level>"); Next walks the campaign's own levels. */
-function playExpeditionLevel(c: Campaign, level: Level, map: MapApi): void {
-  const levels = campaignLevels(c);
-  startLevel(level, map, {
-    nextLevel: (id) => levels[levels.findIndex((l) => l.id === id) + 1],
-    onExit: (where) => {
-      if (where === 'select') openHarborSelect(map);
-    },
-  });
-}
-
 export function playLevelById(id: string, map: MapApi, opts: RunOptions = {}): boolean {
-  const level = levelById(id);
-  if (level) {
-    playLevel(level, map, opts);
+  const known = levelById(id);
+  if (known) {
+    playLevel(known, map, opts);
     return true;
   }
-  if (!id.includes('/') || id.startsWith('academy/')) return false;
-  void loadExpeditions().then((cs) => {
-    for (const c of cs) {
-      const l = campaignLevels(c).find((x) => x.id === id);
-      if (l) playExpeditionLevel(c, l, map);
-    }
+  if (!id.includes('/')) return false;
+  // A YAML expedition the library has not fetched yet.
+  void expeditions({ demo: new URLSearchParams(location.search).has('demo') }).then(() => {
+    const l = levelById(id);
+    if (l) playLevel(l, map, opts);
   });
   return true;
 }
 
-const fmt = (s: number): string => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+function levelRow(e: Expedition, l: Level, progress: ProgressMap, map: MapApi, close: () => void, inDemo: boolean): HTMLElement {
+  const row = document.createElement('div');
+  row.className = 'row level';
+  row.dataset['level'] = l.id;
+  const open = e.simulated ? unlocked(l, progress, e.levels) : true;
+  const p = progress[l.id];
+  const num = Object.assign(document.createElement('span'), { className: 'num', textContent: open ? String(l.number) : '🔒' });
+  const info = document.createElement('div');
+  info.className = 'info';
+  info.append(Object.assign(document.createElement('b'), { textContent: l.title }), Object.assign(document.createElement('span'), { className: 'desc', textContent: l.concept + (l.practises ? ` · practises: ${l.practises}` : '') }));
+  const st = Object.assign(document.createElement('span'), { className: 'stars', textContent: open ? stars(p?.stars ?? 0) : '' });
+  const best = Object.assign(document.createElement('span'), { className: 'best', textContent: p?.bestSeconds ? `best ${fmt(p.bestSeconds)} · par ${fmt(l.parSeconds)}` : `par ${fmt(l.parSeconds)}` });
+  const btns = document.createElement('div');
+  btns.className = 'btns';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = p ? 'REPLAY' : 'PLAY';
+  btn.disabled = !open;
+  btn.onclick = () => { close(); playLevel(l, map); };
+  btns.append(btn);
+  if (p && e.simulated) {
+    const ch = document.createElement('button');
+    ch.type = 'button';
+    ch.textContent = 'CHALLENGE';
+    ch.title = 'No bubbles, just the objectives and the clock';
+    ch.dataset['challenge'] = '';
+    ch.onclick = () => { close(); playLevel(l, map, { challenge: true }); };
+    btns.append(ch);
+    if (l.real && !inDemo) {
+      const real = document.createElement('button');
+      real.type = 'button';
+      real.textContent = 'FOR REAL';
+      real.title = 'Play it on your connected cluster, in a harbor-academy namespace that is cleaned up afterwards';
+      real.dataset['real'] = '';
+      real.onclick = () => { close(); playLevel(l, map, { mode: 'real' }); };
+      btns.append(real);
+    }
+  }
+  row.append(num, info, st, best, btns);
+  if (!open) row.classList.add('locked');
+  return row;
+}
 
 /**
- * Harbor Select: Open Harbor (the demo), your own cluster, and the academy's
- * levels with their stars and locks.
+ * Harbor Select: the GUI's entry points (Open Harbor, your cluster) and the
+ * Expeditions library with stars, locks, best times and modes per level.
  */
 export function openHarborSelect(map: MapApi): void {
-  const root = $<HTMLDivElement>('#academy');
-  const close = openOverlay('academy');
+  const root = $<HTMLDivElement>('#expeditions');
+  const close = openOverlay('expeditions');
   $('[data-close]', root).onclick = close;
   const inDemo = new URLSearchParams(location.search).has('demo');
   $('[data-open-harbor]', root).onclick = () => {
@@ -93,84 +109,27 @@ export function openHarborSelect(map: MapApi): void {
     if (inDemo) location.search = '';
     else leaveTraining();
   };
-  const where = $('[data-where]', root);
-  where.textContent = training.active ? 'in the training harbor' : inDemo ? 'in Open Harbor' : 'in your cluster';
-  const list = $<HTMLDivElement>('.levels', root);
-  list.replaceChildren(Object.assign(document.createElement('p'), { className: 'muted', textContent: 'reading the logbook…' }));
-  const exp = $<HTMLDivElement>('.expeditions', root);
-  exp.replaceChildren(Object.assign(document.createElement('p'), { className: 'muted', textContent: inDemo || training.active ? 'Expeditions sail on a connected cluster: open Harbor from a running backend to see them.' : 'charting expeditions…' }));
-  void Promise.all([loadProgress(), loadExpeditions()]).then(([progress, cs]) => {
-    if (!inDemo && !training.active) {
-      exp.replaceChildren(...cs.map((c) => {
-        const box = document.createElement('div');
-        box.className = 'expedition';
-        box.dataset['campaign'] = c.id;
-        const title = document.createElement('div');
-        title.className = 'title';
-        title.append(Object.assign(document.createElement('b'), { textContent: c.title }));
-        if (c.source) title.append(Object.assign(document.createElement('a'), { href: c.source, target: '_blank', rel: 'noopener', textContent: 'the guide ↗' }));
-        box.append(title);
-        if (c.tagline) box.append(Object.assign(document.createElement('div'), { className: 'tagline', textContent: c.tagline }));
-        campaignLevels(c).forEach((l) => {
-          const row = document.createElement('div');
-          row.className = 'row level';
-          row.dataset['level'] = l.id;
-          const p = progress[l.id];
-          const info = document.createElement('div');
-          info.className = 'info';
-          info.append(Object.assign(document.createElement('b'), { textContent: l.title }), Object.assign(document.createElement('span'), { className: 'desc', textContent: l.concept }));
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.textContent = p ? 'REPLAY' : 'PLAY';
-          btn.onclick = () => { close(); playExpeditionLevel(c, l, map); };
-          row.append(Object.assign(document.createElement('span'), { className: 'num', textContent: String(l.number) }), info, Object.assign(document.createElement('span'), { className: 'stars', textContent: stars(p?.stars ?? 0) }), Object.assign(document.createElement('span'), { className: 'best', textContent: `par ${fmt(l.parSeconds)}` }), btn);
-          box.append(row);
-        });
-        return box;
-      }));
-      if (cs.length === 0) exp.replaceChildren(Object.assign(document.createElement('p'), { className: 'muted', textContent: 'No expeditions found. Drop a campaign.yaml under ~/.config/harbor/campaigns/<id>/ to add one.' }));
-    }
-    list.replaceChildren(...ACADEMY.map((l) => {
-      const row = document.createElement('div');
-      row.className = 'row level';
-      row.dataset['level'] = l.id;
-      const open = unlocked(l, progress);
-      const p = progress[l.id];
-      const num = Object.assign(document.createElement('span'), { className: 'num', textContent: open ? String(l.number) : '🔒' });
-      const info = document.createElement('div');
-      info.className = 'info';
-      info.append(Object.assign(document.createElement('b'), { textContent: l.title }), Object.assign(document.createElement('span'), { className: 'desc', textContent: l.concept }));
-      const st = Object.assign(document.createElement('span'), { className: 'stars', textContent: open ? stars(p?.stars ?? 0) : '' });
-      const best = Object.assign(document.createElement('span'), { className: 'best', textContent: p?.bestSeconds ? `best ${fmt(p.bestSeconds)} · par ${fmt(l.parSeconds)}` : `par ${fmt(l.parSeconds)}` });
-      const btns = document.createElement('div');
-      btns.className = 'btns';
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = p ? 'REPLAY' : 'PLAY';
-      btn.disabled = !open;
-      btn.onclick = () => { close(); playLevel(l, map); };
-      btns.append(btn);
-      if (p) {
-        const ch = document.createElement('button');
-        ch.type = 'button';
-        ch.textContent = 'CHALLENGE';
-        ch.title = 'No bubbles, just the objectives and the clock';
-        ch.dataset['challenge'] = '';
-        ch.onclick = () => { close(); playLevel(l, map, { challenge: true }); };
-        btns.append(ch);
-        if (l.real && !inDemo) {
-          const real = document.createElement('button');
-          real.type = 'button';
-          real.textContent = 'FOR REAL';
-          real.title = 'Play it on your connected cluster, in a harbor-academy namespace that is cleaned up afterwards';
-          real.dataset['real'] = '';
-          real.onclick = () => { close(); playLevel(l, map, { mode: 'real' }); };
-          btns.append(real);
-        }
-      }
-      row.append(num, info, st, best, btns);
-      if (!open) row.classList.add('locked');
-      return row;
+  $('[data-where]', root).textContent = training.active ? 'in the training harbor' : inDemo ? 'in Open Harbor' : 'in your cluster';
+  const lib = $<HTMLDivElement>('.library', root);
+  lib.replaceChildren(Object.assign(document.createElement('p'), { className: 'muted', textContent: 'reading the logbook…' }));
+  void Promise.all([loadProgress(), expeditions({ demo: inDemo || training.active })]).then(([progress, list]) => {
+    lib.replaceChildren(...list.map((e) => {
+      const box = document.createElement('div');
+      box.className = `expedition ${e.simulated ? 'sim' : 'live'}`;
+      box.dataset['campaign'] = e.id;
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.append(Object.assign(document.createElement('b'), { textContent: e.title }));
+      title.append(Object.assign(document.createElement('span'), { className: 'origin', textContent: e.simulated ? 'training harbor, or for real' : 'on your cluster' }));
+      if (e.source) title.append(Object.assign(document.createElement('a'), { href: e.source, target: '_blank', rel: 'noopener', textContent: 'the guide ↗' }));
+      box.append(title);
+      if (e.tagline) box.append(Object.assign(document.createElement('div'), { className: 'tagline', textContent: e.tagline }));
+      const rows = document.createElement('div');
+      rows.className = 'levels';
+      rows.append(...e.levels.map((l) => levelRow(e, l, progress, map, close, inDemo)));
+      box.append(rows);
+      return box;
     }));
+    if (inDemo || training.active) lib.append(Object.assign(document.createElement('p'), { className: 'muted', textContent: 'Expeditions that run on a cluster (such as FortiAIGate on K8s) appear when the harbor is connected to one.' }));
   });
 }

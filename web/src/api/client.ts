@@ -1,4 +1,5 @@
 import type { components } from './schema';
+import { ledger } from '../game/ledger';
 import { simulate, training } from '../tour/training';
 
 export type Health = components['schemas']['Health'];
@@ -33,8 +34,12 @@ export class ApiError extends Error {
   }
 }
 
+/** Open Harbor (?demo) is a built-in cluster: nothing done in it may reach a real one. */
+export const inDemoHarbor = (): boolean => typeof location !== 'undefined' && new URLSearchParams(location.search).has('demo');
+
 async function request<T>(method: string, path: string, body?: unknown, fetchFn: typeof fetch = fetch): Promise<T> {
-  if (training.active) return simulate(method, path, body) as T;
+  if (method !== 'GET') ledger.add({ who: 'you', what: `${method} ${path.replace(/\?.*$/, '')}`, dir: 'request' });
+  if (training.active || (inDemoHarbor() && !path.startsWith('/api/progress') && !path.startsWith('/api/campaigns') && path !== '/api/healthz')) return simulate(method, path, body) as T;
   const res = await fetchFn(path, {
     method,
     headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
@@ -88,6 +93,27 @@ export function rollbackDeployment(ns: string, name: string, fetchFn: typeof fet
 }
 
 export type StageResult = components['schemas']['StageResult'];
+export type ObjectPapers = components['schemas']['ObjectPapers'];
+export type ApplyResult = components['schemas']['ApplyResult'];
+export type LabelPatch = components['schemas']['LabelPatch'];
+
+/** An object's papers: spec, status, metadata and who wrote it. */
+export function getPapers(kind: string, ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<ObjectPapers> {
+  return request<ObjectPapers>('GET', `/api/objects/${kind}/${enc(ns || '-')}/${enc(name)}`, undefined, fetchFn);
+}
+
+/** Server-side apply of one or more manifests; dryRun reports what would change. */
+export function applyManifest(manifest: string, dryRun: boolean, fetchFn: typeof fetch = fetch): Promise<ApplyResult> {
+  return request<ApplyResult>('POST', '/api/apply', { manifest, dryRun }, fetchFn);
+}
+
+export function patchPodLabels(ns: string, name: string, patch: LabelPatch, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('PATCH', `/api/pods/${enc(ns)}/${enc(name)}/labels`, patch, fetchFn);
+}
+
+export function patchDeploymentLabels(ns: string, name: string, patch: LabelPatch, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('PATCH', `/api/deployments/${enc(ns)}/${enc(name)}/labels`, patch, fetchFn);
+}
 export type Campaign = components['schemas']['Campaign'];
 export type CampaignLevel = components['schemas']['CampaignLevel'];
 export type CampaignStep = components['schemas']['CampaignStep'];

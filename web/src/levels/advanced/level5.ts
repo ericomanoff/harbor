@@ -10,11 +10,12 @@ const overlayOpen = (id: string): boolean => document.getElementById(id)?.hidden
 
 /** Level 5: a Service gives a fleet one stable address. */
 export const level5: Level = {
-  id: 'academy/5',
+  id: 'advanced/5',
   number: 5,
   title: 'The lighthouse',
   concept: 'Services (a stable address and a selector)',
   terms: ['lighthouse', 'beam', 'label', 'trader'],
+  practises: 'Labels not references, Cattle not pets',
   parSeconds: 180,
   fixture: () => {
     const y = shipyard('courier', 2);

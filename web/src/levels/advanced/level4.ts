@@ -9,11 +9,12 @@ const overlayOpen = (id: string): boolean => document.getElementById(id)?.hidden
 
 /** Level 4: readiness and liveness probes, the lookouts. */
 export const level4: Level = {
-  id: 'academy/4',
+  id: 'advanced/4',
   number: 4,
   title: 'Lookouts',
   concept: 'Health probes (readiness and liveness)',
   terms: ['lookouts', 'shipyard', 'ship', 'refit'],
+  practises: 'Reconcile, Cattle not pets',
   parSeconds: 240,
   fixture: () => {
     const y = shipyard('courier', 1);

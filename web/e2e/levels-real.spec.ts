@@ -51,7 +51,7 @@ test('level 2 for real: a staged reef on kind and a Deployment that relaunches',
   test.setTimeout(420_000);
   await page.setViewportSize({ width: 1280, height: 760 });
   await page.addInitScript(() => localStorage.setItem('harbor.tour.v1', 'done'));
-  await page.goto('/?level=academy/2&real');
+  await page.goto('/?level=advanced/2&real');
   await page.waitForFunction(() => window.harbor?.store.context === 'kind-harbor', null, { timeout: 30_000 })
     .catch(() => test.skip(true, 'backend is not connected to kind-harbor'));
 

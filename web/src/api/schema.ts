@@ -413,6 +413,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/objects/{kind}/{ns}/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An object's papers, spec (what you asked for) and status (what the cluster reports), as YAML */
+        get: operations["getObject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Server-side apply of one or more manifests (whitelisted kinds); dryRun reports what would change */
+        post: operations["applyManifest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pods/{ns}/{name}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a ship's ensign (set or remove pod labels) */
+        patch: operations["patchPodLabels"];
+        trace?: never;
+    };
+    "/api/deployments/{ns}/{name}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the ensign a shipyard paints on new ships (pod template labels; selector labels cannot be removed) */
+        patch: operations["patchDeploymentLabels"];
+        trace?: never;
+    };
     "/api/campaigns": {
         parameters: {
             query?: never;
@@ -729,6 +797,12 @@ export interface components {
             currentRS?: string;
             /** @description Helm release that owns this Deployment (meta.helm.sh/release-name), if any. */
             release?: string;
+            /** @description Field managers that wrote this object, most recent last. */
+            managers?: string[];
+            /** @description Labels the pod template carries (the ensign painted on new ships). */
+            templateLabels?: {
+                [key: string]: string;
+            };
             /** @description Rollout strategy, summarised ("RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate"). */
             strategy?: string;
             /** @description Current rollout revision (deployment.kubernetes.io/revision), if known. */
@@ -764,6 +838,8 @@ export interface components {
             ownerKind?: string;
             ownerName?: string;
             ownerRS?: string;
+            /** @description Field managers that wrote this pod, most recent last (kubelet, scheduler, controllers, you). */
+            managers?: string[];
             /** @description Owning Deployment name resolved through the ReplicaSet. */
             deployment?: string;
             /** Format: date-time */
@@ -957,6 +1033,42 @@ export interface components {
             tls?: boolean;
             /** @description TLS secret name, optional even when tls is true. */
             tlsSecret?: string;
+        };
+        ObjectPapers: {
+            kind: string;
+            ns: string;
+            name: string;
+            /** @description YAML of labels, annotations and ownerReferences (managedFields stripped). */
+            metadata: string;
+            /** @description YAML of spec (data for ConfigMaps; empty for Pods' sensitive kinds). */
+            spec: string;
+            /** @description YAML of status. */
+            status: string;
+            /** @description Field managers that wrote this object, most recent last (from managedFields). */
+            managers: string[];
+        };
+        ApplyRequest: {
+            /** @description One or more YAML documents. */
+            manifest: string;
+            dryRun?: boolean;
+        };
+        ApplyResult: {
+            results: components["schemas"]["ApplyItem"][];
+        };
+        ApplyItem: {
+            kind: string;
+            ns: string;
+            name: string;
+            /** @enum {string} */
+            action: "created" | "configured" | "unchanged";
+            /** @description Lines of spec that change ("- old" / "+ new"), empty when unchanged. */
+            diff?: string;
+        };
+        LabelPatch: {
+            set?: {
+                [key: string]: string;
+            };
+            remove?: string[];
         };
         /** @description An expedition, data not code; see PLAN-CAMPAIGN.md section 6. */
         Campaign: {
@@ -1753,6 +1865,108 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getObject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "Deployment" | "Pod" | "Service" | "Ingress" | "StatefulSet" | "DaemonSet" | "Job" | "ConfigMap" | "Namespace";
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObjectPapers"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    applyManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Applied (or dry-run) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplyResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchPodLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelPatch"];
+            };
+        };
+        responses: {
+            /** @description Patched */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchDeploymentLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LabelPatch"];
+            };
+        };
+        responses: {
+            /** @description Patched */
             204: {
                 headers: {
                     [name: string]: unknown;

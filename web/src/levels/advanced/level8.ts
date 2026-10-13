@@ -9,11 +9,12 @@ const overlayOpen = (id: string): boolean => document.getElementById(id)?.hidden
 
 /** Level 8: requests reserve a berth, limits cap the cargo. */
 export const level8: Level = {
-  id: 'academy/8',
+  id: 'advanced/8',
   number: 8,
   title: 'Berths and cargo',
   concept: 'Resource requests and limits',
   terms: ['berths', 'cargo-bar', 'limits', 'greedy', 'pending'],
+  practises: 'Cattle not pets',
   parSeconds: 240,
   fixture: () => {
     const hog = shipyard('hog', 1, { image: 'ghcr.io/example/miner:latest' });

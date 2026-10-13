@@ -41,6 +41,8 @@ export interface Level {
   concept: string;
   /** Glossary ids this level teaches; linked from the summary. */
   terms: string[];
+  /** The principle(s) a hands-on level practises, shown on Harbor Select. */
+  practises?: string;
   parSeconds: number;
   /** The harbor the level starts in. */
   fixture: () => Snapshot;

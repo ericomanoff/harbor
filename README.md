@@ -41,14 +41,15 @@ Retry or the demo harbor. The first visit starts a welcome tour in a training ha
 your cluster); replay it any time with the Help button, or add `?notour` to
 the URL to suppress it.
 
-Harbor Academy (the Academy button, or `?academy`) teaches Kubernetes one
+The Expeditions button (or `?expeditions`) opens Harbor Select: Open Harbor,
+your cluster, and the Expeditions library. Advanced K8s teaches Kubernetes one
 idea per level in the training harbor: something goes wrong, the harbor
 master guides you through the fix with the normal forms, the same thing
 happens again and is handled, fireworks, then a summary card that maps the
 harbor words to Kubernetes and to a real on-call situation, with the YAML and
 kubectl equivalent. Levels award up to three stars (finished, no hints, under
 par); progress is kept in `~/.config/harbor/progress.json` (`-progress` to
-move it). `?level=academy/2` opens a level directly. Levels so far: 1 "A ship
+move it). `?level=advanced/2` opens a level directly. Levels so far: 1 "A ship
 and its cargo" (pods and containers), 2 "The shipyard" (Deployments), 3 "Storm
 season" (scaling), 4 "Lookouts" (readiness and liveness probes), 5 "The
 lighthouse" (Services), 6 "The harbor mouth" (Ingress), 7 "Sealed orders"
@@ -86,10 +87,18 @@ catches, boats at sea, retries). The Harbor tab opens a gate (an Ingress with
 one host and path pointing at a lighthouse), lights a lighthouse (a Service
 whose selector follows a fleet's labels), seals orders (a ConfigMap or
 Secret from KEY=value lines; Secret values never come back to the browser)
-or founds a new fleet (a Namespace). Select the shipyard
+or founds a new fleet (a Namespace). Apply manifest takes YAML the way
+kubectl apply does: preview the diff (a dry run), apply, and applying the
+same manifest again reports "unchanged"; the kinds are whitelisted. The
+Ledger on the left rail lists every write the harbor made and every change
+the stream delivered, attributed to you, kubectl, a controller, the
+scheduler, the kubelet or Helm from the object's field managers. Nothing
+done in Open Harbor reaches a real cluster. Select the shipyard
 to Launch or Scrap ships (scale replicas), Sell it (confirm twice), Refit it
-(a rollout to a new image, with max unavailable and max surge) or Roll back
-the last refit (rollout undo). Select
+(a rollout to a new image, with max unavailable and max surge), Roll back
+the last refit (rollout undo), read its Papers (spec beside status, live,
+with the lagging status lines marked, and who wrote the object) or Change
+ensign (edit the labels its template paints on new ships). Select
 ships to Scrap exactly those pods, Refit them (delete so the ReplicaSet
 replaces them), or read the Ship's log. Ships from an old rollout look
 weathered; crash-looping ships burn; Warning events flash their ship or
@@ -125,7 +134,7 @@ make test      # go vet + go test + tsc + vitest
 make test-kind # integration test against the kind cluster (~5 s)
 make test-e2e  # Playwright plays a round in the real game against kind (~20 s)
 make test-visual # screenshot regression of ?style and ?demo (baselines per machine)
-cd web && npx playwright test tour.spec.ts levels.spec.ts  # the welcome tour and the academy levels (no cluster needed)
+cd web && npx playwright test tour.spec.ts levels.spec.ts  # the welcome tour and the Advanced K8s levels (no cluster needed)
 make dist      # single binaries for macOS, Linux and Windows in dist/
 make kind-down
 ```

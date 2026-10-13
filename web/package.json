@@ -13,6 +13,8 @@
     "gen": "openapi-typescript ../api/openapi.yaml -o src/api/schema.ts"
   },
   "dependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "js-yaml": "^4.3.2",
     "phaser": "^3.90.0"
   },
   "devDependencies": {

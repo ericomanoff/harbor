@@ -1,5 +1,8 @@
 import { deleteDeployment, deleteIngress, deletePod, helm, rollbackDeployment, scaleDeployment, workloads as workloadApi, type HelmRelease, deleteService } from '../api/client';
 import { openRefitForm } from '../ui/refitForm';
+import { openEnsignForm } from '../ui/ensignForm';
+import { openLedger } from '../ui/ledgerPanel';
+import { openPapers } from '../ui/papersPanel';
 import { hullNumber, shipVariant } from '../entities/Ship';
 import { eva, link, mode, modal, selection, settings, store, type LinkStatus } from '../app';
 import { sfx } from '../game/audio';
@@ -77,6 +80,7 @@ export class Hud {
     $('[data-shop-open]', this.root).onclick = () => openShop();
     $('[data-tech]', this.root).onclick = () => openTechTree();
     $('[data-rail=glossary]', this.root).onclick = () => openGlossary();
+    $('[data-rail=ledger]', this.root).onclick = () => openLedger();
     startGlossary();
     this.map.onHover((key, rect) => this.hoverTip(key, rect));
 
@@ -328,6 +332,8 @@ export class Hud {
         { label: 'Scrap one', kind: 'secondary', enabled: d.replicas > 0, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas - 1); this.announce(`UNIT RETIRED: ${d.name}`); } },
         { label: 'Sell shipyard', kind: 'danger', confirm: 'Confirm: sell and lose its ships?', enabled: true, run: async () => { await deleteDeployment(d.ns, d.name); selection.clear(); } },
         { label: 'Refit shipyard', kind: 'secondary', enabled: true, run: async () => openRefitForm(d) },
+        { label: 'Papers', kind: 'secondary', enabled: true, run: async () => openPapers('Deployment', d.ns, d.name) },
+        { label: 'Change ensign', kind: 'secondary', enabled: true, run: async () => openEnsignForm({ kind: 'Deployment', ns: d.ns, name: d.name, labels: { app: d.name, ...(d.templateLabels ?? {}) }, locked: ['app'] }) },
         { label: 'Roll back refit', kind: 'secondary', confirm: 'Confirm: return to the previous refit?', enabled: (d.revision ?? 1) > 1, run: async () => { await rollbackDeployment(d.ns, d.name); this.announce(`ROLLBACK ORDERED: ${d.name}`); } },
       ], namespaceColor(d.ns));
       return;
@@ -343,6 +349,7 @@ export class Hud {
         ingressesForService(sv, store.ingresses.values()).length ? `reached through gate ${ingressesForService(sv, store.ingresses.values()).map((k) => k.split('/')[1]).join(', ')}` : 'not reachable from outside',
         Object.keys(sv.selector).length ? `selector ${Object.entries(sv.selector).map(([k, v]) => `${k}=${v}`).join(',')}` : 'no selector',
       ], [
+        { label: 'Papers', kind: 'secondary', enabled: true, run: async () => openPapers('Service', sv.ns, sv.name) },
         { label: 'Put out lighthouse', kind: 'danger', confirm: 'Confirm: delete the Service?', enabled: true, run: async () => { await deleteService(sv.ns, sv.name); selection.clear(); } },
       ], namespaceColor(sv.ns));
       return;
@@ -422,6 +429,8 @@ export class Hud {
       if (variant === 'tug' && owner) tail.push({ label: 'Disband tug company', kind: 'danger', confirm: 'Confirm: delete the DaemonSet?', enabled: true, run: async () => { await workloadApi.remove('DaemonSet', owner.ns, owner.name); selection.clear(); } });
       if (variant === 'boat' && owner) tail.push({ label: 'Recall fleet', kind: 'danger', confirm: 'Confirm: delete the Job?', enabled: true, run: async () => { await workloadApi.remove('Job', owner.ns, owner.name); selection.clear(); } });
       tail.unshift({ label: "Ship's log", kind: 'primary', enabled: true, run: async () => openLogs(p) });
+      tail.push({ label: 'Papers', kind: 'secondary', enabled: true, run: async () => openPapers('Pod', p.ns, p.name) });
+      tail.push({ label: 'Change ensign', kind: 'secondary', enabled: true, run: async () => openEnsignForm({ kind: 'Pod', ns: p.ns, name: p.name, labels: p.labels }) });
       this.setCard(title, [
         `${p.ns} · ${p.phase}${p.ready ? ' · ready' : ''} · ${p.restarts} restart${p.restarts === 1 ? '' : 's'}`,
         `dock ${p.node || '(not yet berthed)'} · cargo ${p.containers.join(', ') || 'none'}`,

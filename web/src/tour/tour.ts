@@ -50,6 +50,6 @@ export function startTour(map: MapApi): void {
 /** Auto-start on the first visit unless the URL opts out or a level is requested. */
 export function maybeAutoStartTour(map: MapApi): void {
   const params = new URLSearchParams(location.search);
-  if (params.has('notour') || params.has('style') || params.has('level') || params.has('academy') || tourDone()) return;
+  if (params.has('notour') || params.has('style') || params.has('level') || params.has('expeditions') || params.has('academy') || tourDone()) return;
   setTimeout(() => startTour(map), 900);
 }
