@@ -225,6 +225,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
 
   /** World rectangle of a selectable thing, or undefined. */
   private worldRectOf(key: string): Phaser.Geom.Rectangle | undefined {
+    if (key.startsWith('flag:')) return this.buildings.get(key.slice(5))?.flagRect();
     const id = key.slice(key.indexOf(':') + 1);
     if (key.startsWith('b:')) return this.buildings.get(id)?.rect();
     if (key.startsWith('u:')) return this.units.get(id)?.rect();
@@ -412,8 +413,9 @@ export class MapScene extends Phaser.Scene implements MapApi {
     this.hoverFn = fn;
   }
 
-  /** What is under the pointer, as a selection-style key. */
-  private keyAt(wx: number, wy: number): string | undefined {
+  /** What is under the pointer, as a selection-style key; "flag:<ns/name>" over a shipyard's flag (hover only). */
+  private keyAt(wx: number, wy: number, hover = false): string | undefined {
+    if (hover) for (const b of this.buildings.values()) if (b.flagRect().contains(wx, wy)) return `flag:${b.key}`;
     for (const u of this.units.values()) if (!u.dying && u.rect().contains(wx, wy)) return unitKey(u.key);
     for (const sv of this.services.values()) if (sv.rect().contains(wx, wy)) return serviceKey(sv.key);
     for (const b of this.buildings.values()) if (b.rect().contains(wx, wy)) return buildingKey(b.key);
@@ -428,7 +430,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
       return;
     }
     const w = this.cameras.main.getWorldPoint(p.x, p.y);
-    const key = this.keyAt(w.x, w.y);
+    const key = this.keyAt(w.x, w.y, true);
     if (key === this.hoverKey) return;
     this.hoverKey = key;
     this.hoverFn(key, key ? this.screenRectOf(key) : undefined);

@@ -340,9 +340,12 @@ func (e DeleteOrdersParamsKind) Valid() bool {
 const (
 	BadRefit StageIncidentParamsIncident = "bad-refit"
 	Cleanup  StageIncidentParamsIncident = "cleanup"
+	Drain    StageIncidentParamsIncident = "drain"
 	Found    StageIncidentParamsIncident = "found"
 	LoneShip StageIncidentParamsIncident = "lone-ship"
+	Quota    StageIncidentParamsIncident = "quota"
 	SinkPod  StageIncidentParamsIncident = "sink-pod"
+	Uncordon StageIncidentParamsIncident = "uncordon"
 )
 
 // Valid indicates whether the value is a known member of the StageIncidentParamsIncident enum.
@@ -352,11 +355,17 @@ func (e StageIncidentParamsIncident) Valid() bool {
 		return true
 	case Cleanup:
 		return true
+	case Drain:
+		return true
 	case Found:
 		return true
 	case LoneShip:
 		return true
+	case Quota:
+		return true
 	case SinkPod:
+		return true
+	case Uncordon:
 		return true
 	default:
 		return false
@@ -554,6 +563,9 @@ type CreateDeploymentRequest struct {
 	CpuRequest *string `json:"cpuRequest,omitempty"`
 	Image      string  `json:"image"`
 
+	// Labels Extra labels on the pod template (the ensign painted on new ships) besides app=<name>.
+	Labels *map[string]string `json:"labels,omitempty"`
+
 	// LivenessPath HTTP GET liveness probe path on the container port (a lookout); empty for none.
 	LivenessPath *string `json:"livenessPath,omitempty"`
 
@@ -577,6 +589,9 @@ type CreateDeploymentRequest struct {
 	// ReadinessPath HTTP GET readiness probe path on the container port (a lookout); empty for none.
 	ReadinessPath *string `json:"readinessPath,omitempty"`
 	Replicas      int     `json:"replicas"`
+
+	// TerminationGracePeriodSeconds Seconds a ship gets to stop after SIGTERM before it is killed; default 30.
+	TerminationGracePeriodSeconds *int `json:"terminationGracePeriodSeconds,omitempty"`
 }
 
 // CreateIngressRequest defines model for CreateIngressRequest.
@@ -691,6 +706,9 @@ type Deployment struct {
 
 	// CurrentRS ReplicaSet for the current pod template. Pods whose ownerRS differs belong to an old rollout and are being replaced.
 	CurrentRS *string `json:"currentRS,omitempty"`
+
+	// GracePeriod terminationGracePeriodSeconds of the pod template.
+	GracePeriod *int `json:"gracePeriod,omitempty"`
 
 	// Image Image of the first container.
 	Image string `json:"image"`
@@ -1014,6 +1032,11 @@ type ScaleRequest struct {
 	RetireFirst *[]string `json:"retireFirst,omitempty"`
 }
 
+// SelectorPatch defines model for SelectorPatch.
+type SelectorPatch struct {
+	Selector map[string]string `json:"selector"`
+}
+
 // Service A radar structure; its selector links it to the units it routes to.
 type Service struct {
 	ClusterIP string            `json:"clusterIP"`
@@ -1054,6 +1077,9 @@ type StageRequest struct {
 
 	// Name Pod or Deployment name, depending on the incident.
 	Name *string `json:"name,omitempty"`
+
+	// Node Node to drain or uncordon (drain evicts the academy namespace's pods only).
+	Node *string `json:"node,omitempty"`
 
 	// Ns Academy namespace (created with the academy label by "found"; required by every incident but cleanup).
 	Ns *string `json:"ns,omitempty"`
@@ -1228,6 +1254,9 @@ type PutLevelProgressJSONRequestBody = LevelProgress
 
 // CreateServiceJSONRequestBody defines body for CreateService for application/json ContentType.
 type CreateServiceJSONRequestBody = CreateServiceRequest
+
+// PatchServiceSelectorJSONRequestBody defines body for PatchServiceSelector for application/json ContentType.
+type PatchServiceSelectorJSONRequestBody = SelectorPatch
 
 // StageIncidentJSONRequestBody defines body for StageIncident for application/json ContentType.
 type StageIncidentJSONRequestBody = StageRequest
@@ -1633,6 +1662,9 @@ type ServerInterface interface {
 	// DeleteService Put out a lighthouse (delete the Service)
 	// (DELETE /api/services/{ns}/{name})
 	DeleteService(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
+	// PatchServiceSelector Re-aim a lighthouse (replace the Service's selector)
+	// (PATCH /api/services/{ns}/{name})
+	PatchServiceSelector(w http.ResponseWriter, r *http.Request, ns NamespaceParam, name NameParam)
 	// GetSnapshot Full cluster state for a fresh client
 	// (GET /api/snapshot)
 	GetSnapshot(w http.ResponseWriter, r *http.Request)
@@ -2709,6 +2741,41 @@ func (siw *ServerInterfaceWrapper) DeleteService(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// PatchServiceSelector operation middleware
+func (siw *ServerInterfaceWrapper) PatchServiceSelector(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ns" -------------
+	var ns NamespaceParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ns", r.PathValue("ns"), &ns, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ns", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name NameParam
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PatchServiceSelector(w, r, ns, name)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSnapshot operation middleware
 func (siw *ServerInterfaceWrapper) GetSnapshot(w http.ResponseWriter, r *http.Request) {
 
@@ -3039,6 +3106,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/workloads/jobs", wrapper.CreateJob)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/services", wrapper.CreateService)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/services/{ns}/{name}", wrapper.DeleteService)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/services/{ns}/{name}", wrapper.PatchServiceSelector)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/ingresses", wrapper.CreateIngress)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}", wrapper.DeleteWorkload)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/workloads/{kind}/{ns}/{name}/scale", wrapper.ScaleWorkload)

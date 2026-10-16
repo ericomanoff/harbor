@@ -1,4 +1,4 @@
-import { patchDeploymentLabels, patchPodLabels, type LabelPatch } from '../api/client';
+import { patchDeploymentLabels, patchPodLabels, patchServiceSelector, type LabelPatch } from '../api/client';
 import { eva } from '../app';
 import { openOverlay } from './overlay';
 import { parseLabels } from './lighthouseForm';
@@ -19,7 +19,8 @@ export function labelPatch(before: Record<string, string>, after: Record<string,
 }
 
 export interface EnsignTarget {
-  kind: 'Pod' | 'Deployment';
+  /** A Service target edits the selector (which ensigns the beam reaches) rather than labels. */
+  kind: 'Pod' | 'Deployment' | 'Service';
   ns: string;
   name: string;
   labels: Record<string, string>;
@@ -35,7 +36,9 @@ export function openEnsignForm(t: EnsignTarget): void {
   const err = $<HTMLParagraphElement>(form, '.err');
   const submit = $<HTMLButtonElement>(form, 'button[type=submit]');
   const close = openOverlay('ensign-form');
-  $<HTMLElement>(form, 'h2 .where').textContent = t.kind === 'Pod' ? `ship ${t.name}` : `shipyard ${t.name}: labels on new ships`;
+  $<HTMLElement>(form, 'h2 .where').textContent = t.kind === 'Pod' ? `ship ${t.name}` : t.kind === 'Service' ? `lighthouse ${t.name}: which ensigns the beam reaches` : `shipyard ${t.name}: labels on new ships`;
+  $<HTMLElement>(form, 'h2 .title-word').textContent = t.kind === 'Service' ? 'RE-AIM THE BEAM' : 'CHANGE ENSIGN';
+  $<HTMLButtonElement>(form, 'button[type=submit]').textContent = t.kind === 'Service' ? 'RE-AIM' : 'HOIST';
   $<HTMLElement>(form, '.locked').textContent = t.locked?.length ? `Selector labels stay: ${t.locked.join(', ')}` : '';
   input.value = Object.entries(t.labels).map(([k, v]) => `${k}=${v}`).join(', ');
   err.hidden = true;
@@ -52,8 +55,9 @@ export function openEnsignForm(t: EnsignTarget): void {
     err.hidden = true;
     try {
       if (t.kind === 'Pod') await patchPodLabels(t.ns, t.name, patch);
+      else if (t.kind === 'Service') await patchServiceSelector(t.ns, t.name, after);
       else await patchDeploymentLabels(t.ns, t.name, patch);
-      eva.emit(`ENSIGN CHANGED: ${t.name}`);
+      eva.emit(t.kind === 'Service' ? `BEAM RE-AIMED: ${t.name}` : `ENSIGN CHANGED: ${t.name}`);
       close();
     } catch (e) {
       err.textContent = `UNABLE TO COMPLY: ${e instanceof Error ? e.message : String(e)}`;

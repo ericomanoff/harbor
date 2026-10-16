@@ -46,7 +46,11 @@ your cluster, and the Expeditions library. 1st Principles teaches why
 Kubernetes is built the way it is, one principle per level: declarative
 desired state (Papers and Apply manifest), controllers that reconcile (a
 watch blackout and a prediction), one door through the API server (the
-ledger's writers and a toy operator); more follow. Advanced K8s teaches one
+ledger's writers and a toy operator), composition by labels (an orphaned
+ship, a canary, a blue/green flip by re-aiming a beam), cattle not pets (a
+drained island, a trader that held a pod IP, lookouts, limits and a grace
+period), and two crews (a harbor authority with quota, LimitRange and
+admission, and the platform crew's side). Advanced K8s teaches one
 idea per level in the training harbor: something goes wrong, the harbor
 master guides you through the fix with the normal forms, the same thing
 happens again and is handled, fireworks, then a summary card that maps the
@@ -85,8 +89,10 @@ Playing: open the Shop, Build a shipyard (Deployment) or a tanker terminal
 (StatefulSet with its headless Service and an optional volume per tanker) on
 a free slipway (the land rows of an island) and fill in the form; a shipyard
 form takes readiness and liveness lookouts (HTTP probes), CPU and memory
-limits, sealed orders to inject as environment, and shows the YAML it will
-produce under Ship's manifest. Fishing fleet sends out a Job (command,
+limits, sealed orders to inject as environment, an extra ensign (labels on
+new ships) and a grace period, and shows the YAML it will produce under
+Ship's manifest. Hover a shipyard's flag for the namespace; a lighthouse
+card can Re-aim beam (edit the Service selector). Fishing fleet sends out a Job (command,
 catches, boats at sea, retries). The Harbor tab opens a gate (an Ingress with
 one host and path pointing at a lighthouse), lights a lighthouse (a Service
 whose selector follows a fleet's labels), seals orders (a ConfigMap or

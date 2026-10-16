@@ -76,6 +76,11 @@ export class BuildingView extends Phaser.GameObjects.Container {
     return new Phaser.Geom.Rectangle(this.x + 4, this.y + 4, CELL_PX - 8, CELL_PX - 8);
   }
 
+  /** The flag at the top-left corner: the namespace's colours. */
+  flagRect(): Phaser.Geom.Rectangle {
+    return new Phaser.Geom.Rectangle(this.x + 10, this.y - 4, 18, 20);
+  }
+
   update(dep: StructureModel, placement: Placement): void {
     this.dep = dep;
     const moved = placement.x !== this.placement.x || placement.y !== this.placement.y;

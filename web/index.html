@@ -151,6 +151,10 @@
           <label><span>MEM LIMIT</span> <input name="memLimit" placeholder="none, e.g. 128Mi" /></label>
         </div>
         <label class="orders"><span>SEALED ORDERS (env from)</span> <select name="orders" multiple size="3"></select></label>
+        <div class="row crew">
+          <label><span>EXTRA ENSIGN (labels)</span> <input name="labels" placeholder="track=canary, team=blue" /></label>
+          <label><span>GRACE (s)</span> <input name="grace" type="number" min="0" placeholder="30" /></label>
+        </div>
         <div class="row lookouts">
           <label><span>READINESS LOOKOUT</span> <input name="readiness" placeholder="none, or e.g. /ready" /></label>
           <label><span>LIVENESS LOOKOUT</span> <input name="liveness" placeholder="none, or e.g. /healthz" /></label>
@@ -478,7 +482,7 @@
     </div>
     <div id="ensign-form" class="overlay" hidden>
       <form class="panel" autocomplete="off">
-        <h2>CHANGE ENSIGN <span class="where"></span></h2>
+        <h2><span class="title-word">CHANGE ENSIGN</span> <span class="where"></span></h2>
         <label><span>LABELS (key=value, comma separated)</span> <input name="labels" placeholder="app=courier, track=canary" /></label>
         <p class="muted locked"></p>
         <p class="err" hidden></p>

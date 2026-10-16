@@ -1,6 +1,7 @@
 import { orders as ordersApi, type CreateDeploymentRequest, type CreateStatefulSetRequest, type MapPos, type OrdersRef } from '../api/client';
 import { modal } from '../app';
 import { deploymentYaml } from '../levels/manifest';
+import { parseLabels } from './lighthouseForm';
 
 export type BuildKind = 'Deployment' | 'StatefulSet';
 
@@ -37,6 +38,7 @@ export function openBuildForm(opts: BuildFormOptions): void {
   storageRow.hidden = opts.kind !== 'StatefulSet';
   $<HTMLDivElement>(form, '.lookouts').hidden = opts.kind !== 'Deployment';
   $<HTMLDivElement>(form, '.caps').hidden = opts.kind !== 'Deployment';
+  $<HTMLDivElement>(form, '.crew').hidden = opts.kind !== 'Deployment';
   const ordersLabel = $<HTMLLabelElement>(form, 'label.orders');
   const ordersSel = $<HTMLSelectElement>(form, 'select[name=orders]');
   ordersLabel.hidden = opts.kind !== 'Deployment';
@@ -78,6 +80,9 @@ export function openBuildForm(opts: BuildFormOptions): void {
     if (str('memLimit')) req.memLimit = str('memLimit');
     const chosen = chosenOrders();
     if (chosen.length) req.orders = chosen;
+    const extra = parseLabels(str('labels'));
+    if (Object.keys(extra).length) req.labels = extra;
+    if (str('grace')) req.terminationGracePeriodSeconds = Number(str('grace'));
     $<HTMLPreElement>(manifest, 'pre').textContent = deploymentYaml(req);
   };
   form.oninput = renderManifest;
@@ -113,6 +118,9 @@ export function openBuildForm(opts: BuildFormOptions): void {
       if (str('memLimit')) dep.memLimit = str('memLimit');
       const chosen = chosenOrders();
       if (chosen.length) dep.orders = chosen;
+      const extra = parseLabels(str('labels'));
+      if (Object.keys(extra).length) dep.labels = extra;
+      if (str('grace')) dep.terminationGracePeriodSeconds = Number(str('grace'));
     }
     if (opts.kind === 'StatefulSet') {
       const sts = req as CreateStatefulSetRequest;

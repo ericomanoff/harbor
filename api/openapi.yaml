@@ -168,6 +168,23 @@ paths:
           description: Deleted
         default:
           $ref: "#/components/responses/Error"
+    patch:
+      operationId: patchServiceSelector
+      summary: Re-aim a lighthouse (replace the Service's selector)
+      parameters:
+        - $ref: "#/components/parameters/NamespaceParam"
+        - $ref: "#/components/parameters/NameParam"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SelectorPatch"
+      responses:
+        "204":
+          description: Patched
+        default:
+          $ref: "#/components/responses/Error"
 
   /api/ingresses:
     post:
@@ -573,7 +590,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [found, lone-ship, sink-pod, bad-refit, cleanup]
+            enum: [found, lone-ship, sink-pod, bad-refit, drain, uncordon, quota, cleanup]
       requestBody:
         required: true
         content:
@@ -1016,6 +1033,9 @@ components:
           description: Labels the pod template carries (the ensign painted on new ships).
           additionalProperties:
             type: string
+        gracePeriod:
+          type: integer
+          description: terminationGracePeriodSeconds of the pod template.
         strategy:
           type: string
           description: Rollout strategy, summarised ("RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate").
@@ -1292,6 +1312,14 @@ components:
         memRequest:
           type: string
           description: Memory request per pod (e.g. "64Mi"). Defaults to 64Mi.
+        labels:
+          type: object
+          description: Extra labels on the pod template (the ensign painted on new ships) besides app=<name>.
+          additionalProperties:
+            type: string
+        terminationGracePeriodSeconds:
+          type: integer
+          description: Seconds a ship gets to stop after SIGTERM before it is killed; default 30.
         cpuLimit:
           type: string
           description: CPU limit per pod (e.g. "200m"); empty for none.
@@ -1540,6 +1568,15 @@ components:
           type: string
           description: Lines of spec that change ("- old" / "+ new"), empty when unchanged.
 
+    SelectorPatch:
+      type: object
+      required: [selector]
+      properties:
+        selector:
+          type: object
+          additionalProperties:
+            type: string
+
     LabelPatch:
       type: object
       properties:
@@ -1698,6 +1735,9 @@ components:
         image:
           type: string
           description: Image for a lone ship; defaults to nginx:1.27-alpine.
+        node:
+          type: string
+          description: Node to drain or uncordon (drain evicts the academy namespace's pods only).
 
     StageResult:
       type: object

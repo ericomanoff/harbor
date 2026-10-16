@@ -171,7 +171,8 @@ export interface paths {
         delete: operations["deleteService"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Re-aim a lighthouse (replace the Service's selector) */
+        patch: operations["patchServiceSelector"];
         trace?: never;
     };
     "/api/ingresses": {
@@ -803,6 +804,8 @@ export interface components {
             templateLabels?: {
                 [key: string]: string;
             };
+            /** @description terminationGracePeriodSeconds of the pod template. */
+            gracePeriod?: number;
             /** @description Rollout strategy, summarised ("RollingUpdate maxUnavailable=25% maxSurge=25%" or "Recreate"). */
             strategy?: string;
             /** @description Current rollout revision (deployment.kubernetes.io/revision), if known. */
@@ -936,6 +939,12 @@ export interface components {
             cpuRequest?: string;
             /** @description Memory request per pod (e.g. "64Mi"). Defaults to 64Mi. */
             memRequest?: string;
+            /** @description Extra labels on the pod template (the ensign painted on new ships) besides app=<name>. */
+            labels?: {
+                [key: string]: string;
+            };
+            /** @description Seconds a ship gets to stop after SIGTERM before it is killed; default 30. */
+            terminationGracePeriodSeconds?: number;
             /** @description CPU limit per pod (e.g. "200m"); empty for none. */
             cpuLimit?: string;
             /** @description Memory limit per pod (e.g. "128Mi"); empty for none. */
@@ -1064,6 +1073,11 @@ export interface components {
             /** @description Lines of spec that change ("- old" / "+ new"), empty when unchanged. */
             diff?: string;
         };
+        SelectorPatch: {
+            selector: {
+                [key: string]: string;
+            };
+        };
         LabelPatch: {
             set?: {
                 [key: string]: string;
@@ -1147,6 +1161,8 @@ export interface components {
             name?: string;
             /** @description Image for a lone ship; defaults to nginx:1.27-alpine. */
             image?: string;
+            /** @description Node to drain or uncordon (drain evicts the academy namespace's pods only). */
+            node?: string;
         };
         StageResult: {
             incident: string;
@@ -1495,6 +1511,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchServiceSelector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ns: components["parameters"]["NamespaceParam"];
+                name: components["parameters"]["NameParam"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SelectorPatch"];
+            };
+        };
+        responses: {
+            /** @description Patched */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2027,7 +2069,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                incident: "found" | "lone-ship" | "sink-pod" | "bad-refit" | "cleanup";
+                incident: "found" | "lone-ship" | "sink-pod" | "bad-refit" | "drain" | "uncordon" | "quota" | "cleanup";
             };
             cookie?: never;
         };

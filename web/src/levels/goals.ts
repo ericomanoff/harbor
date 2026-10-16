@@ -78,3 +78,18 @@ export function fleetRefitted(store: Pick<ClusterStore, 'deployments' | 'pods'>,
   const ships = [...store.pods.values()].filter((p) => p.ns === ns && p.deployment === deployment);
   return ships.filter((p) => p.ready).length >= n && ships.every((p) => !d.currentRS || p.ownerRS === d.currentRS) && crashShips(store, ns, deployment) === 0;
 }
+
+/** Ready ships of the shipyard carrying every given label. */
+export function shipsWithLabels(store: Pick<ClusterStore, 'pods'>, ns: string, labels: Record<string, string>): number {
+  return [...store.pods.values()].filter((p) => p.ns === ns && p.ready && Object.entries(labels).every(([k, v]) => p.labels[k] === v)).length;
+}
+
+/** A lighthouse in the namespace whose selector is exactly these labels. */
+export function lighthouseAimedAt(store: Pick<ClusterStore, 'services'>, ns: string, selector: Record<string, string>): string | undefined {
+  for (const s of store.services.values()) {
+    if (s.ns !== ns) continue;
+    const keys = Object.keys(s.selector);
+    if (keys.length === Object.keys(selector).length && keys.every((k) => s.selector[k] === selector[k])) return s.name;
+  }
+  return undefined;
+}

@@ -9,6 +9,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -101,6 +102,54 @@ func Stage(ctx context.Context, client kubernetes.Interface, incident string, re
 		}
 		out.Message = "shipyard " + name + " refitting to a hull that does not exist: " + bad
 		out.Name = optString(bad)
+	case "drain":
+		// Cordon the node and evict the academy fleet's pods on it; other
+		// namespaces are never touched, so a shared cluster stays whole.
+		node := derefStr(req.Node)
+		if node == "" {
+			return out, invalid("drain needs node")
+		}
+		if _, err := client.CoreV1().Nodes().Patch(ctx, node, types.MergePatchType, []byte(`{"spec":{"unschedulable":true}}`), metav1.PatchOptions{}); err != nil {
+			return out, err
+		}
+		pods, err := client.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{FieldSelector: "spec.nodeName=" + node})
+		if err != nil {
+			return out, err
+		}
+		n := 0
+		for i := range pods.Items {
+			if err := client.CoreV1().Pods(ns).Delete(ctx, pods.Items[i].Name, metav1.DeleteOptions{}); err == nil {
+				n++
+			}
+		}
+		out.Message = fmt.Sprintf("island %s cordoned; %d ship(s) of %s evicted", node, n, ns)
+		out.Name = optString(node)
+	case "uncordon":
+		node := derefStr(req.Node)
+		if node == "" {
+			return out, invalid("uncordon needs node")
+		}
+		if _, err := client.CoreV1().Nodes().Patch(ctx, node, types.MergePatchType, []byte(`{"spec":{"unschedulable":false}}`), metav1.PatchOptions{}); err != nil {
+			return out, err
+		}
+		out.Message = "island " + node + " open again"
+		out.Name = optString(node)
+	case "quota":
+		// The harbor authority: a ResourceQuota and a LimitRange on the academy fleet.
+		q := &corev1.ResourceQuota{ObjectMeta: metav1.ObjectMeta{Name: "harbor-authority", Namespace: ns, Labels: map[string]string{ManagedByLabel: managedByValue, StagedLabel: "true"}},
+			Spec: corev1.ResourceQuotaSpec{Hard: corev1.ResourceList{corev1.ResourcePods: resource.MustParse("5"), corev1.ResourceRequestsCPU: resource.MustParse("2"), corev1.ResourceRequestsMemory: resource.MustParse("2Gi")}}}
+		if _, err := client.CoreV1().ResourceQuotas(ns).Create(ctx, q, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return out, err
+		}
+		lr := &corev1.LimitRange{ObjectMeta: metav1.ObjectMeta{Name: "harbor-authority", Namespace: ns, Labels: map[string]string{ManagedByLabel: managedByValue, StagedLabel: "true"}},
+			Spec: corev1.LimitRangeSpec{Limits: []corev1.LimitRangeItem{{Type: corev1.LimitTypeContainer,
+				DefaultRequest: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m"), corev1.ResourceMemory: resource.MustParse("64Mi")},
+				Default:        corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m"), corev1.ResourceMemory: resource.MustParse("256Mi")}}}}}
+		if _, err := client.CoreV1().LimitRanges(ns).Create(ctx, lr, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+			return out, err
+		}
+		out.Message = "harbor authority posted on " + ns + ": 5 pods, 2 CPU, 2Gi requests; defaults 100m/64Mi"
+		out.Name = optString("harbor-authority")
 	default:
 		return out, invalid("unknown incident %q", incident)
 	}

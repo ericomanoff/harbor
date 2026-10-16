@@ -33,7 +33,9 @@ export function simulatedPapers(store: ClusterStore, kind: string, ns: string, n
   if (kind === 'Pod') {
     const p: Pod | undefined = store.pods.get(`${ns}/${name}`);
     if (!p) return undefined;
-    const owner = p.ownerRS ? [{ apiVersion: 'apps/v1', kind: 'ReplicaSet', name: p.ownerRS, controller: true }] : p.ownerKind ? [{ apiVersion: 'apps/v1', kind: p.ownerKind, name: p.ownerName, controller: true }] : undefined;
+    // A shipyard's ship is owned by its ReplicaSet (named after the Deployment when the fixture gave none).
+    const rsName = p.ownerRS ?? (p.deployment ? store.deployments.get(`${ns}/${p.deployment}`)?.currentRS ?? `${p.deployment}-rs` : undefined);
+    const owner = rsName ? [{ apiVersion: 'apps/v1', kind: 'ReplicaSet', name: rsName, controller: true }] : p.ownerKind ? [{ apiVersion: 'apps/v1', kind: p.ownerKind, name: p.ownerName, controller: true }] : undefined;
     return base(
       { labels: p.labels, creationTimestamp: p.created, ...(owner ? { ownerReferences: owner } : {}) },
       { ...(p.node ? { nodeName: p.node } : {}), containers: p.containers.map((c) => ({ name: c, image: store.deployments.get(`${ns}/${p.deployment ?? ''}`)?.image ?? 'unknown' })), restartPolicy: 'Always' },

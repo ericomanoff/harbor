@@ -1,3 +1,4 @@
+import { mode } from '../app';
 import type { MapApi } from '../hud/minimap';
 import type { Placement, TourStep } from './engine';
 
@@ -183,6 +184,16 @@ export class BubbleUI {
     }
     x = Math.max(12, Math.min(vw - bw - 12, x));
     y = Math.max(12, Math.min(vh - bh - 12, y));
+    // While a shipyard is being placed the islands are what matters: dock the bubble low and central, over water.
+    if (mode.current === 'place') {
+      x = vw / 2 - bw / 2;
+      y = vh - bh - 96;
+      this.spot.hidden = true;
+      this.bubble.style.left = `${x}px`;
+      this.bubble.style.top = `${y}px`;
+      this.bubble.dataset['place'] = 'top';
+      return;
+    }
     // Never cover an open form or panel: step beside it, narrowing if needed.
     const panel = document.querySelector<HTMLElement>('.overlay:not([hidden]) .panel, .overlay:not([hidden]) .drawer');
     const pr = panel?.getBoundingClientRect();

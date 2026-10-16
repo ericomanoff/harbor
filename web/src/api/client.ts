@@ -127,7 +127,7 @@ export const campaigns = {
 };
 
 /** Stage a whitelisted academy incident on the connected cluster. */
-export function stage(incident: string, args: { ns?: string; name?: string; image?: string } = {}, fetchFn: typeof fetch = fetch): Promise<StageResult> {
+export function stage(incident: string, args: { ns?: string; name?: string; image?: string; node?: string } = {}, fetchFn: typeof fetch = fetch): Promise<StageResult> {
   return request<StageResult>('POST', `/api/stage/${incident}`, args, fetchFn);
 }
 
@@ -212,6 +212,11 @@ export const orders = {
 
 export function createService(req: CreateServiceRequest, fetchFn: typeof fetch = fetch): Promise<Service> {
   return request<Service>('POST', '/api/services', req, fetchFn);
+}
+
+/** Re-aim a lighthouse: replace the Service's selector. */
+export function patchServiceSelector(ns: string, name: string, selector: Record<string, string>, fetchFn: typeof fetch = fetch): Promise<void> {
+  return request<void>('PATCH', `/api/services/${enc(ns)}/${enc(name)}`, { selector }, fetchFn);
 }
 
 export function deleteService(ns: string, name: string, fetchFn: typeof fetch = fetch): Promise<void> {

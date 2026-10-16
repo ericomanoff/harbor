@@ -59,9 +59,10 @@ export function openGlossary(id?: string): void {
   const render = (): void => {
     const q = input.value.trim().toLowerCase();
     // Name matches first (Kubernetes or harbor words), then entries whose concept mentions the query.
-    const byName = ORDERED.filter((t) => !q || [...t.naval, ...t.k8s].some((s) => s.toLowerCase().includes(q)));
-    const byText = q ? ORDERED.filter((t) => !byName.includes(t) && t.concept.toLowerCase().includes(q)) : [];
-    const hits = [...byName, ...byText];
+    const exact = q ? ORDERED.filter((t) => [...t.naval, ...t.k8s].some((s) => s.toLowerCase() === q)) : [];
+    const byName = ORDERED.filter((t) => !q || (!exact.includes(t) && [...t.naval, ...t.k8s].some((s) => s.toLowerCase().includes(q))));
+    const byText = q ? ORDERED.filter((t) => !exact.includes(t) && !byName.includes(t) && t.concept.toLowerCase().includes(q)) : [];
+    const hits = [...exact, ...byName, ...byText];
     list.replaceChildren(...hits.map((t) => {
       const li = document.createElement('li');
       li.dataset['id'] = t.id;

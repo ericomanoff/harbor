@@ -493,6 +493,24 @@ func (s *Server) CreateService(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, kube.ConvertService(svc))
 }
 
+func (s *Server) PatchServiceSelector(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
+	cur, ok := s.clientOr409(w)
+	if !ok {
+		return
+	}
+	var req gen.SelectorPatch
+	if !decode(w, r, &req) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), actionTimeout)
+	defer cancel()
+	if err := kube.PatchServiceSelector(ctx, cur.Client(), ns, name, req.Selector); err != nil {
+		writeKubeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) DeleteService(w http.ResponseWriter, r *http.Request, ns gen.NamespaceParam, name gen.NameParam) {
 	cur, ok := s.clientOr409(w)
 	if !ok {

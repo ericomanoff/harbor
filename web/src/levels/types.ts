@@ -60,7 +60,7 @@ export interface LevelContext {
   /** Sinks a ship: the simulator or a staged incident, as the mode demands. */
   sink(pod: Pod): void;
   /** Stages a whitelisted incident on the real cluster (no-op in the simulator). */
-  stage(incident: 'found' | 'lone-ship' | 'sink-pod' | 'bad-refit', args?: { name?: string; image?: string }): Promise<void>;
+  stage(incident: 'found' | 'lone-ship' | 'sink-pod' | 'bad-refit' | 'drain' | 'uncordon' | 'quota', args?: { name?: string; image?: string; node?: string }): Promise<void>;
   /** Sealed orders of a fleet (the level's by default), keys only; refreshed in the background for real. */
   orders(ns?: string): { kind: string; name: string }[];
   /** Play a script into the store; returns a cancel function. */

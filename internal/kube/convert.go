@@ -351,6 +351,10 @@ func ConvertDeployment(d *appsv1.Deployment) gen.Deployment {
 	if tl := d.Spec.Template.Labels; len(tl) > 0 {
 		out.TemplateLabels = &tl
 	}
+	if g := d.Spec.Template.Spec.TerminationGracePeriodSeconds; g != nil {
+		gi := int(*g)
+		out.GracePeriod = &gi
+	}
 	if rev, err := strconv.Atoi(d.Annotations[revisionAnnotation]); err == nil {
 		out.Revision = &rev
 	}

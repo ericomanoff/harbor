@@ -81,6 +81,27 @@ func BuildDeployment(req gen.CreateDeploymentRequest) (*appsv1.Deployment, error
 	if req.MapPos != nil {
 		annotations[MapPosAnnotation] = FormatMapPos(*req.MapPos)
 	}
+	// The ensign: extra template labels (app stays the selector).
+	podLabels := map[string]string{"app": req.Name}
+	if req.Labels != nil {
+		for k, v := range *req.Labels {
+			if k == "app" {
+				continue
+			}
+			if errs := validateLabel(k, v); errs != "" {
+				return nil, invalid("label %s=%s: %s", k, v, errs)
+			}
+			podLabels[k] = v
+		}
+	}
+	var grace *int64
+	if req.TerminationGracePeriodSeconds != nil {
+		if *req.TerminationGracePeriodSeconds < 0 {
+			return nil, invalid("terminationGracePeriodSeconds must be >= 0")
+		}
+		g := int64(*req.TerminationGracePeriodSeconds)
+		grace = &g
+	}
 	container := corev1.Container{
 		Name:  req.Name,
 		Image: strings.TrimSpace(req.Image),
@@ -155,8 +176,8 @@ func BuildDeployment(req gen.CreateDeploymentRequest) (*appsv1.Deployment, error
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": req.Name}},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": req.Name}},
-				Spec:       corev1.PodSpec{Containers: []corev1.Container{container}},
+				ObjectMeta: metav1.ObjectMeta{Labels: podLabels},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{container}, TerminationGracePeriodSeconds: grace},
 			},
 		},
 	}, nil

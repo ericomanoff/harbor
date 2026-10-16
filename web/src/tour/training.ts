@@ -38,6 +38,7 @@ export function enterTraining(snapshot: Snapshot = demoSnapshot()): void {
   trainingOrders.clear();
   trainingHistory.clear();
   controllers.paused = false;
+  authorities.clear();
   store.replace(snapshot);
   link.set('demo');
 }
@@ -65,6 +66,71 @@ const nodes = (): string[] => [...store.nodes.values()].filter((n) => n.ready).m
 /** The simulator's controllers can be paused (a lost watch): nothing reconciles until they are resumed. */
 export const controllers = { paused: false };
 
+/**
+ * The harbor authority: what the platform team enforces on a fleet. A quota
+ * caps pods and requests; a LimitRange stamps defaults on ships that set
+ * none; an admission rule refuses ships missing a required label.
+ */
+export interface Authority {
+  quota?: { pods: number; cpu: number; mem: number };
+  limitRange?: { cpuRequest: string; memRequest: string; cpuLimit: string; memLimit: string };
+  requireLabel?: string;
+}
+export const authorities = new Map<string, Authority>();
+
+const milli = (q: string | undefined, dflt: number): number => {
+  if (!q) return dflt;
+  const m = /^(\d+(?:\.\d+)?)(m?)$/.exec(q.trim());
+  if (!m) return dflt;
+  return m[2] ? Number(m[1]) : Number(m[1]) * 1000;
+};
+const mebi = (q: string | undefined, dflt: number): number => {
+  if (!q) return dflt;
+  const m = /^(\d+(?:\.\d+)?)(Mi|Gi|M|G)?$/.exec(q.trim());
+  if (!m) return dflt;
+  const n = Number(m[1]);
+  return m[2] === 'Gi' || m[2] === 'G' ? n * 1024 : n;
+};
+
+/** Requests of the fleet's ships, as the quota counts them. */
+function usage(ns: string): { pods: number; cpu: number; mem: number } {
+  let pods = 0;
+  let cpu = 0;
+  let mem = 0;
+  for (const p of store.pods.values()) {
+    if (p.ns !== ns || p.phase === 'Terminating') continue;
+    pods++;
+    const d = p.deployment ? store.deployments.get(nsKey(ns, p.deployment)) : undefined;
+    cpu += milli(/cpu (\S+)/.exec(d?.requests ?? '')?.[1], 0);
+    mem += mebi(/mem (\S+)/.exec(d?.requests ?? '')?.[1], 0);
+  }
+  return { pods, cpu, mem };
+}
+
+/** Admission: refuses a shipyard the authority would not accept. */
+function admit(ns: string, req: { name: string; replicas: number; cpuRequest?: string; memRequest?: string; labels?: Record<string, string> }): void {
+  const a = authorities.get(ns);
+  if (!a) return;
+  if (a.requireLabel && !(req.labels ?? {})[a.requireLabel]) throw new Error(`admission refused: every ship in fleet ${ns} must carry a ${a.requireLabel} label (harbor authority)`);
+}
+
+/** The quota's answer to launching one more ship of a shipyard; a reason when refused. */
+function quotaAllows(ns: string, dep: Deployment, queued = 0): string | undefined {
+  const a = authorities.get(ns)?.quota;
+  if (!a) return undefined;
+  const u = usage(ns);
+  const cpu = milli(/cpu (\S+)/.exec(dep.requests ?? '')?.[1], 0);
+  const mem = mebi(/mem (\S+)/.exec(dep.requests ?? '')?.[1], 0);
+  // Ships queued in the same launch count too: the quota admits one creation at a time.
+  u.pods += queued;
+  u.cpu += queued * cpu;
+  u.mem += queued * mem;
+  if (u.pods + 1 > a.pods) return `quota exceeded: ${a.pods} pods allowed in ${ns}, ${u.pods} in use`;
+  if (u.cpu + cpu > a.cpu * 1000) return `quota exceeded: requests.cpu ${a.cpu} in ${ns}, ${u.cpu / 1000} in use`;
+  if (u.mem + mem > a.mem * 1024) return `quota exceeded: requests.memory ${a.mem}Gi in ${ns}, ${Math.round(u.mem)}Mi in use`;
+  return undefined;
+}
+
 /** Runs fn with the ledger attributing the stream changes to `who` (the simulator's controllers and kubelets). */
 export function as(who: string, fn: () => void): void {
   const prev = ledger.actor;
@@ -79,6 +145,11 @@ let seq = 0;
 
 function launch(dep: Deployment, count: number, onReady?: (name: string) => void, delay = 0): void {
   for (let i = 0; i < count; i++) {
+    const refused = quotaAllows(dep.ns, dep, i);
+    if (refused) {
+      as('the ReplicaSet controller', () => store.apply({ type: 'added', kind: 'Event', obj: { ns: dep.ns, kind: 'ReplicaSet', name: dep.name, type: 'Warning', reason: 'FailedCreate', message: `${refused}`, ts: new Date().toISOString() } }));
+      continue;
+    }
     const name = `${dep.name}-trn-${(++seq).toString(36)}`;
     const cur0 = store.deployments.get(nsKey(dep.ns, dep.name));
     const rs = cur0?.currentRS;
@@ -93,8 +164,15 @@ function launch(dep: Deployment, count: number, onReady?: (name: string) => void
     later(delay + 1200 + i * 400, () => {
       const p = store.pods.get(nsKey(dep.ns, name));
       const node = p?.node || nodes()[0] || '';
-      as('the kubelet', () => store.apply({ type: 'modified', kind: 'Pod', obj: withLabels(podOf(dep.ns, name, dep.name, node, 'Running', rs)) }));
       const cur = store.deployments.get(nsKey(dep.ns, dep.name));
+      // A hull that does not exist (an image tag ending in "broken") burns on the slip.
+      if (/broken/.test(cur?.image ?? dep.image)) {
+        as('the kubelet', () => store.apply({ type: 'modified', kind: 'Pod', obj: { ...withLabels(podOf(dep.ns, name, dep.name, node, 'Running', rs)), ready: false, restarts: 3, reason: 'CrashLoopBackOff' } }));
+        as('the kubelet', () => store.apply({ type: 'added', kind: 'Event', obj: { ns: dep.ns, kind: 'Pod', name, type: 'Warning', reason: 'BackOff', message: `${cur?.image ?? dep.image}: container exits at once`, ts: new Date().toISOString() } }));
+        onReady?.(name);
+        return;
+      }
+      as('the kubelet', () => store.apply({ type: 'modified', kind: 'Pod', obj: withLabels(podOf(dep.ns, name, dep.name, node, 'Running', rs)) }));
       if (cur) as('the Deployment controller', () => store.apply({ type: 'modified', kind: 'Deployment', obj: { ...cur, available: Math.min(cur.replicas, cur.available + 1), updated: Math.min(cur.replicas, cur.updated + 1) } }));
       onReady?.(name);
     });
@@ -169,7 +247,17 @@ export function failNode(name: string): void {
   const lost = [...store.pods.values()].filter((p) => p.node === name);
   later(900, () => {
     for (const p of lost) as('the node controller', () => store.apply({ type: 'deleted', kind: 'Pod', obj: p }));
-    later(700, () => { if (!controllers.paused) reconcileAll(); });
+    later(700, () => {
+      if (controllers.paused) return;
+      reconcileAll();
+      // StatefulSet pods come back under the same name, with their volume, on another island.
+      for (const p of lost) {
+        if (p.ownerKind !== 'StatefulSet') continue;
+        const elsewhere = nodes().find((n) => n !== name) ?? '';
+        as('the StatefulSet controller', () => store.apply({ type: 'modified', kind: 'Pod', obj: { ...p, node: '', phase: 'Pending', ready: false } }));
+        later(1200, () => as('the kubelet', () => store.apply({ type: 'modified', kind: 'Pod', obj: { ...p, node: elsewhere, phase: 'Running', ready: true } })));
+      }
+    });
   });
 }
 
@@ -398,6 +486,14 @@ function simulateNow(method: string, path: string, body: unknown): unknown {
     store.apply({ type: 'modified', kind: 'Service', obj: svc });
     return svc;
   }
+  if ((m = /^\/api\/services\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'PATCH') {
+    const svc = store.services.get(nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)));
+    if (!svc) throw new Error('no such lighthouse');
+    const req = b as { selector: Record<string, string> };
+    if (!Object.keys(req.selector ?? {}).length) throw new Error('selector needs at least one label');
+    store.apply({ type: 'modified', kind: 'Service', obj: { ...svc, selector: req.selector } });
+    return undefined;
+  }
   if ((m = /^\/api\/services\/([^/]+)\/([^/]+)$/.exec(path)) && method === 'DELETE') {
     const svc = store.services.get(nsKey(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)));
     if (!svc) throw new Error('no such lighthouse');
@@ -405,12 +501,23 @@ function simulateNow(method: string, path: string, body: unknown): unknown {
     return undefined;
   }
   if (method === 'POST' && path === '/api/deployments') {
-    const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number }; readinessPath?: string; livenessPath?: string; cpuRequest?: string; memRequest?: string; cpuLimit?: string; memLimit?: string; orders?: { kind: string; name: string }[] };
+    const req = b as { ns: string; name: string; image: string; replicas: number; mapPos?: { x: number; y: number }; readinessPath?: string; livenessPath?: string; cpuRequest?: string; memRequest?: string; cpuLimit?: string; memLimit?: string; orders?: { kind: string; name: string }[]; labels?: Record<string, string>; terminationGracePeriodSeconds?: number };
     if (store.deployments.has(nsKey(req.ns, req.name))) throw new Error('a shipyard of that name already stands');
-    const limits = [req.cpuLimit ? `cpu ${req.cpuLimit}` : '', req.memLimit ? `mem ${req.memLimit}` : ''].filter(Boolean).join(' · ');
+    admit(req.ns, req);
+    // The LimitRange stamps defaults onto ships that set nothing.
+    const lr = authorities.get(req.ns)?.limitRange;
+    const cpuRequest = req.cpuRequest || lr?.cpuRequest || '50m';
+    const memRequest = req.memRequest || lr?.memRequest || '64Mi';
+    const cpuLimit = req.cpuLimit || lr?.cpuLimit;
+    const memLimit = req.memLimit || lr?.memLimit;
+    const limits = [cpuLimit ? `cpu ${cpuLimit}` : '', memLimit ? `mem ${memLimit}` : ''].filter(Boolean).join(' · ');
+    const extraLabels = { ...(req.labels ?? {}) };
+    delete extraLabels['app'];
     const dep: Deployment = {
       ns: req.ns, name: req.name, image: req.image, replicas: req.replicas, available: 0, updated: 0, conditions: [],
-      requests: `cpu ${req.cpuRequest || '50m'} · mem ${req.memRequest || '64Mi'}`,
+      requests: `cpu ${cpuRequest} · mem ${memRequest}`,
+      ...(Object.keys(extraLabels).length ? { templateLabels: extraLabels } : {}),
+      ...(req.terminationGracePeriodSeconds !== undefined ? { gracePeriod: req.terminationGracePeriodSeconds } : {}),
       strategy: 'RollingUpdate maxUnavailable=25% maxSurge=25%', revision: 1,
       ...(limits ? { limits } : {}),
       ...(req.orders?.length ? { orders: req.orders.map((o) => `${o.kind}/${o.name}`) } : {}),

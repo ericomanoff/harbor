@@ -284,3 +284,32 @@ func labelMergePatch(p gen.LabelPatch, protected map[string]bool) ([]byte, error
 	}
 	return json.Marshal(map[string]any{"metadata": map[string]any{"labels": labels}})
 }
+
+// PatchServiceSelector replaces a Service's selector: the lighthouse re-aims its beam.
+func PatchServiceSelector(ctx context.Context, client kubernetes.Interface, ns, name string, selector map[string]string) error {
+	if len(selector) == 0 {
+		return invalid("selector needs at least one label")
+	}
+	for k, v := range selector {
+		if errs := validateLabel(k, v); errs != "" {
+			return invalid("selector %s=%s: %s", k, v, errs)
+		}
+	}
+	// A merge patch replaces the whole selector map (JSON merge of maps keeps keys), so send $retainKeys semantics by hand: set, then clear the stale ones.
+	cur, err := client.CoreV1().Services(ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	sel := map[string]any{}
+	for k := range cur.Spec.Selector {
+		if _, keep := selector[k]; !keep {
+			sel[k] = nil
+		}
+	}
+	for k, v := range selector {
+		sel[k] = v
+	}
+	patch, _ := json.Marshal(map[string]any{"spec": map[string]any{"selector": sel}})
+	_, err = client.CoreV1().Services(ns).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	return err
+}

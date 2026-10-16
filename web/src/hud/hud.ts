@@ -107,7 +107,7 @@ export class Hud {
       tip.hide();
       return;
     }
-    const id = key.startsWith('b:sts:') ? 'tanker-terminal' : key.startsWith('b:') ? 'shipyard' : key.startsWith('s:') ? 'lighthouse' : key.startsWith('g:') ? 'gate' : key.startsWith('r:') ? 'anchorage' : key.startsWith('dock:') ? 'dock' : 'ship';
+    const id = key.startsWith('flag:') ? 'namespace' : key.startsWith('b:sts:') ? 'tanker-terminal' : key.startsWith('b:') ? 'shipyard' : key.startsWith('s:') ? 'lighthouse' : key.startsWith('g:') ? 'gate' : key.startsWith('r:') ? 'anchorage' : key.startsWith('dock:') ? 'dock' : 'ship';
     tip.showFor(id, new DOMRect(rect.x, rect.y, rect.width, rect.height), false);
   }
 
@@ -350,6 +350,7 @@ export class Hud {
         Object.keys(sv.selector).length ? `selector ${Object.entries(sv.selector).map(([k, v]) => `${k}=${v}`).join(',')}` : 'no selector',
       ], [
         { label: 'Papers', kind: 'secondary', enabled: true, run: async () => openPapers('Service', sv.ns, sv.name) },
+        { label: 'Re-aim beam', kind: 'secondary', enabled: true, run: async () => openEnsignForm({ kind: 'Service', ns: sv.ns, name: sv.name, labels: sv.selector }) },
         { label: 'Put out lighthouse', kind: 'danger', confirm: 'Confirm: delete the Service?', enabled: true, run: async () => { await deleteService(sv.ns, sv.name); selection.clear(); } },
       ], namespaceColor(sv.ns));
       return;
@@ -393,12 +394,16 @@ export class Hud {
       return;
     }
     const plan = sellPlan(pods, store.deployments);
+    // Lone ships (no shipyard) are simply deleted; nothing relaunches them.
+    const lone = pods.every((p) => !p.deployment && !p.ownerKind);
     const actions: Action[] = [
       {
-        label: plan.sellable ? `Scrap ${pods.length > 1 ? `${pods.length} ships` : 'ship'}` : 'No shipyard to scrap from',
-        kind: 'danger', enabled: plan.sellable,
+        label: plan.sellable || lone ? `Scrap ${pods.length > 1 ? `${pods.length} ships` : 'ship'}` : 'No shipyard to scrap from',
+        kind: 'danger', enabled: plan.sellable || lone,
+        ...(lone ? { confirm: 'Confirm: no shipyard will replace it' } : {}),
         run: async () => {
-          for (const g of plan.groups) await scaleDeployment(g.ns, g.deployment, g.target, g.names);
+          if (lone) for (const p of pods) await deletePod(p.ns, p.name);
+          else for (const g of plan.groups) await scaleDeployment(g.ns, g.deployment, g.target, g.names);
           this.announce(`UNIT${pods.length > 1 ? 'S' : ''} SOLD`);
           selection.clear();
         },

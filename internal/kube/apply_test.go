@@ -139,3 +139,22 @@ func TestPapersKindsAndLabels(t *testing.T) {
 		t.Errorf("managers: %v", ms)
 	}
 }
+
+func TestPatchServiceSelector(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewClientset()
+	if _, err := CreateService(ctx, client, gen.CreateServiceRequest{Ns: "harbor", Name: "courier", Selector: map[string]string{"app": "courier", "track": "blue"}, Port: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if err := PatchServiceSelector(ctx, client, "harbor", "courier", map[string]string{"track": "green"}); err != nil {
+		t.Fatal(err)
+	}
+	svc, _ := client.CoreV1().Services("harbor").Get(ctx, "courier", metav1.GetOptions{})
+	if len(svc.Spec.Selector) != 1 || svc.Spec.Selector["track"] != "green" {
+		t.Errorf("selector: %v", svc.Spec.Selector)
+	}
+	var ve *ValidationError
+	if err := PatchServiceSelector(ctx, client, "harbor", "courier", map[string]string{}); !errors.As(err, &ve) {
+		t.Errorf("empty selector: %v", err)
+	}
+}

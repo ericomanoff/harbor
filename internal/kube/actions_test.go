@@ -326,6 +326,23 @@ func TestBuildService(t *testing.T) {
 	}
 }
 
+func TestBuildDeploymentLabelsAndGrace(t *testing.T) {
+	d, err := BuildDeployment(gen.CreateDeploymentRequest{Ns: "harbor", Name: "courier", Image: "x", Replicas: 1, Labels: &map[string]string{"track": "canary", "app": "ignored"}, TerminationGracePeriodSeconds: ptr(5)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Spec.Template.Labels["track"] != "canary" || d.Spec.Template.Labels["app"] != "courier" || *d.Spec.Template.Spec.TerminationGracePeriodSeconds != 5 {
+		t.Errorf("template: %+v grace %v", d.Spec.Template.Labels, d.Spec.Template.Spec.TerminationGracePeriodSeconds)
+	}
+	out := ConvertDeployment(d)
+	if out.GracePeriod == nil || *out.GracePeriod != 5 || (*out.TemplateLabels)["track"] != "canary" {
+		t.Errorf("converted: %+v", out)
+	}
+	if _, err := BuildDeployment(gen.CreateDeploymentRequest{Ns: "harbor", Name: "courier", Image: "x", Replicas: 1, Labels: &map[string]string{"bad key!": "v"}}); err == nil {
+		t.Error("bad label should be invalid")
+	}
+}
+
 func TestBuildDeploymentLimitsAndOrders(t *testing.T) {
 	d, err := BuildDeployment(gen.CreateDeploymentRequest{
 		Ns: "harbor", Name: "hog", Image: "x", Replicas: 1, CpuRequest: ptr("100m"), MemRequest: ptr("64Mi"), CpuLimit: ptr("200m"), MemLimit: ptr("128Mi"),
