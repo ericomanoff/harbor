@@ -42,7 +42,11 @@ your cluster); replay it any time with the Help button, or add `?notour` to
 the URL to suppress it.
 
 The Expeditions button (or `?expeditions`) opens Harbor Select: Open Harbor,
-your cluster, and the Expeditions library. Advanced K8s teaches Kubernetes one
+your cluster, and the Expeditions library. 1st Principles teaches why
+Kubernetes is built the way it is, one principle per level: declarative
+desired state (Papers and Apply manifest), controllers that reconcile (a
+watch blackout and a prediction), one door through the API server (the
+ledger's writers and a toy operator); more follow. Advanced K8s teaches one
 idea per level in the training harbor: something goes wrong, the harbor
 master guides you through the fix with the normal forms, the same thing
 happens again and is handled, fireworks, then a summary card that maps the

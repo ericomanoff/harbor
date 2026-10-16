@@ -37,6 +37,7 @@ export function enterTraining(snapshot: Snapshot = demoSnapshot()): void {
   timers.length = 0;
   trainingOrders.clear();
   trainingHistory.clear();
+  controllers.paused = false;
   store.replace(snapshot);
   link.set('demo');
 }
@@ -61,8 +62,11 @@ const podOf = (ns: string, name: string, deployment: string, nodeName: string, p
 
 const nodes = (): string[] => [...store.nodes.values()].filter((n) => n.ready).map((n) => n.name);
 
+/** The simulator's controllers can be paused (a lost watch): nothing reconciles until they are resumed. */
+export const controllers = { paused: false };
+
 /** Runs fn with the ledger attributing the stream changes to `who` (the simulator's controllers and kubelets). */
-function as(who: string, fn: () => void): void {
+export function as(who: string, fn: () => void): void {
   const prev = ledger.actor;
   ledger.actor = who;
   try {
@@ -123,6 +127,55 @@ function scrap(dep: Deployment, names: string[]): void {
     const p = store.pods.get(nsKey(dep.ns, n));
     if (p) as('the Deployment controller', () => store.apply({ type: 'deleted', kind: 'Pod', obj: p }));
   }
+}
+
+/**
+ * One pass of the Deployment controller's loop for one shipyard: observe
+ * the ships it owns, compare with replicas, launch or scrap the difference.
+ * Level-triggered: it needs no event, only the current state.
+ */
+export function reconcile(ns: string, name: string): { observed: number; desired: number; action: string } | undefined {
+  const dep = store.deployments.get(nsKey(ns, name));
+  if (!dep) return undefined;
+  const own = [...store.pods.values()].filter((p) => p.ns === ns && p.deployment === name && p.phase !== 'Terminating');
+  const observed = own.length;
+  if (observed < dep.replicas) {
+    launch(dep, dep.replicas - observed);
+    return { observed, desired: dep.replicas, action: `launch ${dep.replicas - observed}` };
+  }
+  if (observed > dep.replicas) {
+    scrap(dep, own.slice(dep.replicas).map((p) => p.name));
+    return { observed, desired: dep.replicas, action: `scrap ${observed - dep.replicas}` };
+  }
+  as('the Deployment controller', () => store.apply({ type: 'modified', kind: 'Deployment', obj: { ...dep, available: Math.min(dep.replicas, own.filter((p) => p.ready).length) } }));
+  return { observed, desired: dep.replicas, action: 'nothing to do' };
+}
+
+/** The loop over every shipyard (a resync, as after a controller restart). */
+export function reconcileAll(): { ns: string; name: string; observed: number; desired: number; action: string }[] {
+  const out: { ns: string; name: string; observed: number; desired: number; action: string }[] = [];
+  for (const d of [...store.deployments.values()]) {
+    const r = reconcile(d.ns, d.name);
+    if (r) out.push({ ns: d.ns, name: d.name, ...r });
+  }
+  return out;
+}
+
+/** An island goes dark: the node is NotReady and the kubelet's ships on it are lost; the loop relaunches them elsewhere unless paused. */
+export function failNode(name: string): void {
+  const n = store.nodes.get(name);
+  if (!n) return;
+  as('the node controller', () => store.apply({ type: 'modified', kind: 'Node', obj: { ...n, ready: false } }));
+  const lost = [...store.pods.values()].filter((p) => p.node === name);
+  later(900, () => {
+    for (const p of lost) as('the node controller', () => store.apply({ type: 'deleted', kind: 'Pod', obj: p }));
+    later(700, () => { if (!controllers.paused) reconcileAll(); });
+  });
+}
+
+export function restoreNode(name: string): void {
+  const n = store.nodes.get(name);
+  if (n) as('the kubelet', () => store.apply({ type: 'modified', kind: 'Node', obj: { ...n, ready: true } }));
 }
 
 /** A pod's ensign changed: selectors re-evaluate. A ship that no longer flies its shipyard's label is orphaned and replaced. */
@@ -432,7 +485,7 @@ function simulateNow(method: string, path: string, body: unknown): unknown {
     store.apply({ type: 'deleted', kind: 'Pod', obj: p });
     if (p.deployment) {
       const dep = store.deployments.get(nsKey(p.ns, p.deployment));
-      if (dep) later(600, () => launch(dep, 1));
+      if (dep) later(600, () => { if (!controllers.paused) reconcile(dep.ns, dep.name); });
     }
     return undefined;
   }

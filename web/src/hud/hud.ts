@@ -108,7 +108,7 @@ export class Hud {
       return;
     }
     const id = key.startsWith('b:sts:') ? 'tanker-terminal' : key.startsWith('b:') ? 'shipyard' : key.startsWith('s:') ? 'lighthouse' : key.startsWith('g:') ? 'gate' : key.startsWith('r:') ? 'anchorage' : key.startsWith('dock:') ? 'dock' : 'ship';
-    tip.showFor(id, new DOMRect(rect.x, rect.y, rect.width, rect.height));
+    tip.showFor(id, new DOMRect(rect.x, rect.y, rect.width, rect.height), false);
   }
 
   // ---- top bar -----------------------------------------------------------

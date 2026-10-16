@@ -41,12 +41,18 @@ export class Tooltip {
     });
   }
 
-  /** Shows the entry near a rectangle (page coordinates). */
-  showFor(id: string, anchor: DOMRect, immediate = true): void {
+  /**
+   * Shows the entry near a rectangle (page coordinates). A tooltip raised by
+   * hovering the map must not catch the click meant for the thing under it,
+   * so it is click-through; tooltips over text keep "Click for more".
+   */
+  showFor(id: string, anchor: DOMRect, clickable = true): void {
     const term = termById(id);
     if (!term) return;
     this.cancelHide();
     this.el.dataset['term'] = id;
+    this.el.style.pointerEvents = clickable ? '' : 'none';
+    this.el.querySelector<HTMLElement>('.more')!.hidden = !clickable;
     this.el.querySelector('.pair')!.textContent = titleOf(term);
     this.el.querySelector('.concept')!.textContent = term.concept;
     const use = this.el.querySelector<HTMLElement>('.use')!;
@@ -63,7 +69,6 @@ export class Tooltip {
     this.el.style.left = `${x}px`;
     this.el.style.top = `${y}px`;
     this.el.classList.toggle('below', y > anchor.top);
-    void immediate;
   }
 
   hide(): void {

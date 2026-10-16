@@ -205,6 +205,14 @@ export class BubbleUI {
     const cr = card?.getBoundingClientRect();
     if (cr && cr.width > 0 && x < cr.right && x + bw > cr.left && y < cr.bottom && y + bh > cr.top && !(step.anchor?.kind === 'dom' && card?.contains(document.querySelector(step.anchor.selector)))) {
       y = Math.max(12, cr.top - 18 - bh);
+      // If that lands on the very thing the step points at, step beside it instead.
+      if (rect && rect.width > 0 && x < rect.right && x + bw > rect.left && y < rect.bottom && y + bh > rect.top) {
+        const roomRight = vw - rect.right - 30;
+        const roomLeft = rect.left - 30;
+        place = roomRight >= roomLeft ? 'right' : 'left';
+        x = place === 'right' ? Math.min(vw - bw - 12, rect.right + 18) : Math.max(12, rect.left - 18 - bw);
+        y = Math.max(12, Math.min(cr.top - 18 - bh, rect.top + rect.height / 2 - bh / 2));
+      }
     }
     this.bubble.style.left = `${x}px`;
     this.bubble.style.top = `${y}px`;

@@ -43,6 +43,11 @@ export interface MarkupOptions {
  */
 export function markupTerms(root: Element, opts: MarkupOptions = {}): number {
   let count = 0;
+  // The root itself may be a button or a no-terms panel (the observer hands
+  // over whichever element changed), so it and its ancestors count too.
+  for (let el: Element | null = root; el; el = el.parentElement) {
+    if (SKIP.has(el.tagName) || el.hasAttribute('data-no-terms')) return 0;
+  }
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (n) => {
       let el = n.parentElement;

@@ -52,7 +52,7 @@ test('Harbor Select lists the expeditions with level 2 locked', async ({ page })
   await page.goto('/?demo&expeditions');
   const select = page.locator('#expeditions');
   await expect(select).toBeVisible({ timeout: 15_000 });
-  await expect(select.locator('.row.level')).toHaveCount(10);
+  await expect(select.locator('.expedition[data-campaign=advanced] .row.level')).toHaveCount(10);
   await expect(select.locator('.row.level[data-level="advanced/2"]')).toHaveClass(/locked/);
   await expect(select.locator('.row.level[data-level="advanced/2"] button')).toBeDisabled();
   await select.locator('.row.level[data-level="advanced/1"] button').click();
@@ -127,7 +127,7 @@ test('levels 1 and 2 play through, award stars and unlock the next', async ({ pa
   await expect(select.locator('.row.level[data-level="advanced/1"] .stars')).toHaveText('★★★');
   await expect(select.locator('.row.level[data-level="advanced/2"] .stars')).toHaveText('★★☆');
   await expect(select.locator('.row.level[data-level="advanced/3"] button')).toBeEnabled();
-  await expect(select.locator('.row.level.locked')).toHaveCount(7);
+  await expect(select.locator('.expedition[data-campaign=advanced] .row.level.locked')).toHaveCount(7);
   await expect(select.locator('.row.level[data-level="advanced/2"] button').first()).toHaveText('REPLAY');
   expect(await page.evaluate(() => fetch('/api/progress').then((r) => r.json()))).toMatchObject({ levels: { 'advanced/1': { stars: 3 }, 'advanced/2': { stars: 2 } } });
 });
@@ -208,7 +208,7 @@ test('levels 3 to 5: scaling, lookouts and the lighthouse', async ({ page }) => 
   await page.locator('#summary [data-select]').click();
   const select = page.locator('#expeditions');
   await expect(select).toBeVisible();
-  await expect(select.locator('.row.level')).toHaveCount(10);
+  await expect(select.locator('.expedition[data-campaign=advanced] .row.level')).toHaveCount(10);
   await expect(select.locator('.row.level[data-level="advanced/5"] .stars')).toHaveText('★★★');
 });
 
@@ -302,7 +302,7 @@ test('levels 6 to 8: the gate, sealed orders, berths and cargo', async ({ page }
   await page.locator('#summary [data-select]').click();
   const select = page.locator('#expeditions');
   await expect(select).toBeVisible();
-  await expect(select.locator('.row.level')).toHaveCount(10);
+  await expect(select.locator('.expedition[data-campaign=advanced] .row.level')).toHaveCount(10);
   await expect(select.locator('.row.level[data-level="advanced/8"] .stars')).toHaveText('★★★');
 });
 
@@ -377,7 +377,7 @@ test('levels 9 and 10: fleets and ensigns, refit at sea', async ({ page }) => {
   await page.locator('#summary [data-select]').click();
   const select = page.locator('#expeditions');
   await expect(select).toBeVisible();
-  await expect(select.locator('.row.level')).toHaveCount(10);
+  await expect(select.locator('.expedition[data-campaign=advanced] .row.level')).toHaveCount(10);
   await expect(select.locator('.row.level[data-level="advanced/10"] .stars')).toHaveText('★★★');
 });
 
