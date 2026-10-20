@@ -22,6 +22,16 @@ test('terms get tooltips and the glossary opens on them', async ({ page }) => {
   await expect(tip.locator('.concept')).not.toBeEmpty();
   await expect(tip.locator('.harbor')).toContainText('In the harbor:');
 
+  // Terms in the status chips (outside the selection card) hover too: the HUD lets clicks through, terms must not.
+  await page.mouse.move(640, 400);
+  await expect(tip).toBeHidden();
+  const chipTerm = page.locator('#hud .chips abbr.term').first();
+  await expect(chipTerm).toBeVisible();
+  await chipTerm.hover();
+  await expect(tip).toBeVisible();
+  await expect(tip.locator('.pair')).toContainText('·');
+  await term.hover();
+
   // Clicking a term opens the glossary at that entry.
   const id = await term.getAttribute('data-term');
   await term.click();

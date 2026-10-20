@@ -196,6 +196,8 @@
 #hud .hud-bottom-left { bottom: 14px; left: 14px; display: flex; gap: 8px; }
 #hud .hud-bottom-center { bottom: 14px; left: 50%; transform: translateX(-50%); }
 #hud button, #hud .badge, #hud .bar, #hud .selection { pointer-events: auto; }
+/* Glossary terms anywhere on the HUD (chips, toasts, log) must take the hover; the HUD itself lets clicks fall through to the map. */
+#hud abbr.term, #challenge abbr.term { pointer-events: auto; cursor: help; }
 #hud .badge { cursor: pointer; }
 .hud .pill.big { padding: 10px 20px; font-size: 15px; }
 
