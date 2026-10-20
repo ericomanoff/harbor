@@ -6,7 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
  * cluster in a harbor-academy namespace, the learner uses the normal forms,
  * and the level cleans the namespace up afterwards.
  */
-const title = (page: Page) => page.locator('#tour .bubble .title');
+const title = (page: Page) => page.locator('#captain .bubble .title');
 const next = (page: Page) => page.locator('[data-tour=next]');
 const NS = 'harbor-academy';
 const TILE = 32;

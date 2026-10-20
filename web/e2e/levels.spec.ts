@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
  * Plays Harbor Academy levels 1 and 2 end to end in the training harbor
  * (no cluster needed), then checks stars, locks and the summary card.
  */
-const title = (page: Page) => page.locator('#tour .bubble .title');
+const title = (page: Page) => page.locator('#captain .bubble .title');
 const next = (page: Page) => page.locator('[data-tour=next]');
 
 type MapHandle = { layout: { plateaus: { node: string; w: number; h: number }[] }; screenRectOf(k: string): { x: number; y: number; width: number; height: number } | undefined };
@@ -59,14 +59,14 @@ test('Harbor Select lists the expeditions with level 2 locked', async ({ page })
   await expect(select).toBeHidden();
   await expect(title(page)).toHaveText('Welcome aboard');
   await page.locator('[data-tour=skip]').click(); // Leave level
-  await expect(page.locator('#tour')).toBeHidden();
+  await expect(page.locator('#captain')).toBeHidden();
   await expect(select).toBeVisible();
 });
 
 test('levels 1 and 2 play through, award stars and unlock the next', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 });
   await page.goto('/?demo&level=advanced/1');
-  const tour = page.locator('#tour');
+  const tour = page.locator('#captain');
   await expect(tour).toBeVisible({ timeout: 15_000 });
   await expect(title(page)).toHaveText('Welcome aboard');
   await expect(page.locator('#hud [data-chip=link]')).toHaveText('demo');
@@ -386,7 +386,7 @@ test('challenge mode: level 2 with objectives and the clock, no bubbles', async 
   await page.goto('/?demo&level=advanced/2&challenge');
   const bar = page.locator('#challenge');
   await expect(bar).toBeVisible({ timeout: 15_000 });
-  await expect(page.locator('#tour')).toBeHidden();
+  await expect(page.locator('#captain')).toBeHidden();
   await expect(bar.locator('.lvl')).toHaveText('Challenge · The shipyard');
   await expect(bar.locator('.objectives li')).toHaveCount(6);
   await expect(bar.locator('.objectives li.now')).toHaveText('Same reef, same sea');

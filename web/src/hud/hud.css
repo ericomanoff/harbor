@@ -194,6 +194,8 @@
 #hud .hud-right-rail { top: 50%; right: 14px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
 #hud .hud-bottom-left { bottom: 14px; left: 14px; display: flex; gap: 8px; }
 #hud .hud-bottom-center { bottom: 14px; left: 50%; transform: translateX(-50%); }
+/* While a speaker's dock is up (bottom right), the selection card sits left of centre so the two never meet. */
+body.captain-open #hud .hud-bottom-center { transform: translateX(calc(-50% - 200px)); }
 #hud button, #hud .badge, #hud .bar, #hud .selection, #hud .cluster { pointer-events: auto; }
 /* The cluster panel: health (nodes, pods, namespaces) and capacity (CPU, memory) under the badge. */
 #hud .cluster { padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(38, 48, 22, 0.82); border-color: rgba(255, 255, 255, 0.35); color: #fff; }
@@ -215,7 +217,7 @@
 .hud .toast.warn { background: rgba(120, 30, 20, 0.9); }
 .hud .toast.fade { opacity: 0; transition: opacity 0.4s; }
 
-.hud .selection { min-width: 360px; max-width: 520px; }
+.hud .selection { min-width: 360px; }
 .hud .selection .title { font-size: 17px; font-weight: 900; margin-bottom: 2px; }
 .hud .selection .lines { font-size: 12px; font-weight: 600; color: var(--ink-soft); line-height: 1.35; }
 .hud .selection .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
@@ -231,58 +233,67 @@
 /* While the shop is open the bottom HUD gets out of its way. */
 body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { display: none; }
 
-/* ---- welcome tour ---------------------------------------------------- */
-#tour { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
-#tour .spot {
+/* ---- Captain Huber's dock: expedition instructions, bottom right, off the gameplay ---- */
+#captain { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
+#captain .spot {
   position: absolute;
   border-radius: 14px;
-  box-shadow: 0 0 0 9999px rgba(10, 30, 50, 0.45), 0 0 0 3px #fff, 0 0 24px 6px rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 3px #fff, 0 0 24px 6px rgba(255, 255, 255, 0.6), inset 0 0 0 2px rgba(255, 255, 255, 0.5);
   transition: left 0.25s, top 0.25s, width 0.25s, height 0.25s;
   pointer-events: none;
 }
-#tour .bubble {
-  position: absolute;
-  width: 440px;
-  pointer-events: auto;
-  transition: left 0.25s, top 0.25s;
-}
-#tour .bubble .master { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-#tour .bubble .face { font-size: 26px; background: var(--sea); border: 2px solid var(--olive); border-radius: 50%; width: 38px; height: 38px; display: grid; place-items: center; }
-#tour .bubble .who { font-size: 10px; letter-spacing: 1.5px; color: var(--ink-soft); font-weight: 900; }
-#tour .bubble .title { font-size: 18px; font-weight: 900; margin-bottom: 4px; }
-#tour .bubble .text { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--ink); }
-#tour .bubble .cta { margin-top: 8px; padding: 6px 10px; background: var(--olive-dark); color: #fff; border-radius: 10px; font-weight: 800; font-size: 12px; animation: tour-nudge 1.2s ease-in-out infinite; }
-#tour .bubble .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
-#tour .bubble .dots { display: flex; gap: 4px; flex-wrap: wrap; }
-#tour .bubble .dot { width: 7px; height: 7px; border-radius: 50%; background: #d9cfb0; }
-#tour .bubble .dot.on { background: var(--green); }
-#tour .bubble .btns { display: flex; gap: 6px; }
-#tour .bubble .btns .pill { padding: 5px 12px; font-size: 12px; white-space: nowrap; }
-#tour .bubble::after {
+#captain .arrow { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+#captain .arrow .shaft { stroke: #fff; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 10 8; animation: captain-march 0.8s linear infinite; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)); }
+#captain .arrow .tip { fill: #fff; stroke: var(--olive); stroke-width: 2; }
+@keyframes captain-march { to { stroke-dashoffset: -18; } }
+#captain .dock { position: absolute; right: 14px; bottom: 14px; display: flex; align-items: flex-end; gap: 10px; max-width: calc(100vw - 28px); }
+#captain .bubble { position: relative; width: 440px; max-width: calc(100vw - 140px); pointer-events: auto; padding-right: 26px; }
+#captain .bubble::after {
   content: '';
   position: absolute;
+  right: -10px; bottom: 26px;
   width: 16px; height: 16px;
   background: var(--cream);
   border: 2px solid var(--olive);
+  border-left: none; border-bottom: none;
   transform: rotate(45deg);
-  left: calc(50% - 8px);
 }
-#tour .bubble[data-place="bottom"]::after { top: -10px; border-right: none; border-bottom: none; }
-#tour .bubble[data-place="top"]::after { bottom: -10px; border-left: none; border-top: none; }
-#tour .bubble[data-place="left"]::after { right: -10px; top: calc(50% - 8px); left: auto; border-left: none; border-bottom: none; }
-#tour .bubble[data-place="right"]::after { left: -10px; top: calc(50% - 8px); border-right: none; border-top: none; }
-#tour .bubble .result { margin-top: 8px; padding: 6px 10px; border-radius: 10px; font-weight: 800; font-size: 12px; }
-#tour .bubble .result.ok { background: #e4f5d6; border: 1px solid var(--green-dark); color: var(--green-dark); }
-#tour .bubble .result.fail { background: #fde3df; border: 1px solid var(--red); color: #a8291f; }
-#tour .bubble .result.busy { background: var(--cream-2); color: var(--ink-soft); }
+#captain .portrait { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 84px; flex: none; }
+#captain .portrait .face { font-size: 44px; line-height: 1; background: linear-gradient(#6fc6f0, #2e8fd0); border: 3px solid #fff; border-radius: 50%; width: 72px; height: 72px; display: grid; place-items: center; box-shadow: var(--shadow-sm); }
+#captain .portrait .who { font-size: 10px; letter-spacing: 1px; color: #fff; font-weight: 900; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); text-align: center; }
+#captain .bubble .collapse { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border: none; background: var(--cream-2); border-radius: 50%; font: 900 14px/1 var(--font); color: var(--ink-soft); cursor: pointer; padding: 0; }
+#captain .dock.collapsed .bubble .text, #captain .dock.collapsed .bubble .result, #captain .dock.collapsed .bubble .choices, #captain .dock.collapsed .bubble .dots { display: none; }
+#captain .dock.collapsed .bubble { width: 340px; }
+#captain .dock.collapsed .bubble .foot { margin-top: 6px; justify-content: flex-end; }
+/* While a form or panel is open it takes the stage: it sits left of the dock, above it, and the dock folds to title, CTA and buttons. */
+body.modal-open #captain { z-index: 8; }
+body.captain-open .overlay:not(.bottom) { justify-content: flex-start; padding-left: 140px; }
+#captain .dock.collapsed .bubble .collapse { transform: rotate(180deg); }
+#captain .bubble .title { font-size: 18px; font-weight: 900; margin-bottom: 4px; }
+#captain .bubble .text { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--ink); max-height: 150px; overflow-y: auto; }
+#captain .bubble .cta { margin-top: 8px; padding: 6px 10px; background: var(--olive-dark); color: #fff; border-radius: 10px; font-weight: 800; font-size: 12px; animation: tour-nudge 1.2s ease-in-out infinite; }
+#captain .bubble .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
+#captain .bubble .dots { display: flex; gap: 4px; flex-wrap: wrap; }
+#captain .bubble .dot { width: 7px; height: 7px; border-radius: 50%; background: #d9cfb0; }
+#captain .bubble .dot.on { background: var(--green); }
+#captain .bubble .btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+#captain .bubble .btns .pill { padding: 5px 12px; font-size: 12px; white-space: nowrap; }
+#captain .bubble .result { margin-top: 8px; padding: 6px 10px; border-radius: 10px; font-weight: 800; font-size: 12px; max-height: 120px; overflow: auto; white-space: pre-wrap; }
+#captain .bubble .result.ok { background: #e4f5d6; border: 1px solid var(--green-dark); color: var(--green-dark); }
+#captain .bubble .result.fail { background: #fde3df; border: 1px solid var(--red); color: #a8291f; }
+#captain .bubble .result.busy { background: var(--cream-2); color: var(--ink-soft); }
+#captain .bubble .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+#captain .bubble .choices .pill { padding: 5px 10px; font-size: 12px; }
+#captain .bubble .hint { margin-top: 8px; padding: 6px 10px; background: #fff4cf; border: 1px dashed var(--gold-dark); border-radius: 10px; font-weight: 700; font-size: 12px; color: var(--ink); }
+/* The selection card stays clear of the dock on a laptop screen. */
+.hud .selection { max-width: 440px; }
+
 .panel.expeditions .expeditions { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; }
 .panel.expeditions .expedition .title { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
 .panel.expeditions .expedition .title a { font-size: 10px; color: var(--green-dark); }
 .panel.expeditions .expedition .tagline { font-size: 11px; color: var(--ink-soft); font-weight: 700; margin-bottom: 4px; }
 .panel.expeditions .expedition .row.level .num { background: var(--gold-dark); }
 .panel.expeditions .muted { font-size: 12px; color: var(--ink-soft); font-weight: 700; }
-#tour .bubble .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-#tour .bubble .choices .pill { padding: 5px 10px; font-size: 12px; }
 .panel.expeditions .library { display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; }
 .panel.expeditions .expedition .title { display: flex; align-items: baseline; gap: 8px; font-size: 14px; }
 .panel.expeditions .expedition .title .origin { font-size: 10px; color: var(--ink-soft); font-weight: 800; }
@@ -311,7 +322,6 @@ body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { d
 .panel.apply .apply-item.configured { border-left: 4px solid var(--gold); }
 .panel.apply .apply-item.unchanged { border-left: 4px solid #c9c3b2; color: var(--ink-soft); }
 .panel.apply .apply-item .diff { margin: 4px 0 0; padding: 6px 8px; background: #1f2a16; color: #e9f0d8; border-radius: 6px; font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; overflow-x: auto; }
-#tour .bubble .hint { margin-top: 8px; padding: 6px 10px; background: #fff4cf; border: 1px dashed var(--gold-dark); border-radius: 10px; font-weight: 700; font-size: 12px; color: var(--ink); }
 
 /* ---- expeditions: harbor select, success, summary ------------------------- */
 .panel.expeditions { width: 760px; }

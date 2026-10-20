@@ -1,6 +1,6 @@
-import { mode } from '../app';
+import { modal } from '../app';
 import type { MapApi } from '../hud/minimap';
-import type { Placement, TourStep } from './engine';
+import type { TourStep } from './engine';
 
 export interface BubbleHandlers {
   onNext(): void;
@@ -20,6 +20,14 @@ export interface HintedStep extends TourStep {
   onChoice?: (correct: boolean) => void;
 }
 
+/** Who is talking: Captain Huber runs the expeditions, the harbor master runs the welcome tour. */
+export interface Speaker {
+  name: string;
+  face: string;
+}
+export const CAPTAIN_HUBER: Speaker = { name: 'Captain Huber', face: '🏴‍☠️' };
+export const HARBOR_MASTER: Speaker = { name: 'Harbor master', face: '🧑‍✈️' };
+
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T => {
   const el = root.querySelector<T>(sel);
   if (!el) throw new Error(`bubble: missing ${sel}`);
@@ -27,28 +35,47 @@ const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T =
 };
 
 /**
- * The harbor master's speech bubble and spotlight. Shared by the welcome
- * tour and the academy levels; it renders whatever step it is given and
- * reports button presses. The caller owns the step engine and the timer.
+ * The speaker's dock: a speech bubble and portrait fixed at the bottom
+ * right, off the gameplay, like an adventure game's talking character.
+ * The bubble never moves; the spotlight and an arrow point at the step's
+ * target instead. The caller owns the step engine and the timer.
  */
 export class BubbleUI {
   private readonly root: HTMLElement;
   private readonly spot: HTMLElement;
+  private readonly arrow: SVGSVGElement;
+  private readonly dock: HTMLElement;
   private readonly bubble: HTMLElement;
   private step?: HintedStep;
   private hintShown = false;
+  private readonly unModal: () => void;
 
-  constructor(private readonly map: MapApi, private readonly handlers: BubbleHandlers, private readonly skipLabel = 'Skip tour') {
-    this.root = $('#tour');
+  constructor(private readonly map: MapApi, private readonly handlers: BubbleHandlers, private readonly skipLabel = 'Skip tour', speaker: Speaker = CAPTAIN_HUBER) {
+    this.root = $('#captain');
     this.spot = $('.spot', this.root);
+    this.arrow = this.root.querySelector('svg.arrow') as SVGSVGElement;
+    this.dock = $('.dock', this.root);
     this.bubble = $('.bubble', this.root);
     this.root.hidden = false;
+    document.body.classList.add('captain-open');
+    this.dock.classList.remove('collapsed');
+    $('.portrait .face', this.root).textContent = speaker.face;
+    $('.portrait .who', this.root).textContent = speaker.name;
+    $('.portrait', this.root).title = speaker.name;
     $('[data-tour=next]', this.root).onclick = () => handlers.onNext();
     $('[data-tour=back]', this.root).onclick = () => handlers.onBack();
     $('[data-tour=skip]', this.root).onclick = () => handlers.onSkip();
     $('[data-tour=skip]', this.root).textContent = skipLabel;
     $('[data-tour=hint]', this.root).onclick = () => this.revealHint();
     $('[data-tour=action]', this.root).onclick = () => void this.runAction();
+    $('[data-tour=collapse]', this.root).onclick = () => this.dock.classList.toggle('collapsed');
+    $('.portrait', this.root).onclick = () => this.dock.classList.toggle('collapsed');
+    const onModal = (open: boolean): void => {
+      document.body.classList.toggle('modal-open', open);
+      this.dock.classList.toggle('collapsed', open);
+    };
+    onModal(modal.open);
+    this.unModal = modal.changed.on(onModal);
   }
 
   private async runAction(): Promise<void> {
@@ -73,15 +100,16 @@ export class BubbleUI {
       out.textContent = `✗ ${e instanceof Error ? e.message : String(e)}`;
     } finally {
       if (this.step === step) btn.disabled = false;
-      this.position();
     }
   }
 
   show(step: HintedStep, i: number, n: number): void {
     this.step = step;
     this.hintShown = false;
+    this.dock.classList.remove('collapsed');
     $('.title', this.bubble).textContent = step.title;
     $('.text', this.bubble).textContent = step.text;
+    $('.text', this.bubble).scrollTop = 0;
     const cta = $('.cta', this.bubble);
     cta.hidden = !step.cta;
     cta.textContent = step.cta ? `👉 ${step.cta}` : '';
@@ -123,7 +151,6 @@ export class BubbleUI {
       this.handlers.onHint?.();
       this.step?.onChoice?.(false);
     }
-    this.position();
   }
 
   private revealHint(): void {
@@ -134,10 +161,9 @@ export class BubbleUI {
     h.hidden = false;
     $<HTMLButtonElement>('[data-tour=hint]', this.root).disabled = true;
     this.handlers.onHint?.();
-    this.position();
   }
 
-  /** Spotlight and bubble follow the anchor (map anchors move with the camera). */
+  /** The spotlight and arrow follow the step's target (map targets move with the camera); the dock stays put. */
   position(): void {
     const step = this.step;
     if (!step) return;
@@ -147,90 +173,56 @@ export class BubbleUI {
       const r = this.map.screenRectOf(step.anchor.key);
       if (r) rect = new DOMRect(r.x, r.y, r.width, r.height);
     }
-    const pad = 10;
-    if (rect && rect.width > 0) {
-      this.spot.hidden = false;
-      this.spot.style.left = `${rect.left - pad}px`;
-      this.spot.style.top = `${rect.top - pad}px`;
-      this.spot.style.width = `${rect.width + 2 * pad}px`;
-      this.spot.style.height = `${rect.height + 2 * pad}px`;
-    } else {
+    // A panel over the map hides a map target; a target inside the panel is still pointed at.
+    const panel = document.querySelector<HTMLElement>('.overlay:not([hidden]) .panel, .overlay:not([hidden]) .drawer');
+    const inPanel = step.anchor?.kind === 'dom' && !!panel?.contains(document.querySelector(step.anchor.selector));
+    if (panel && !inPanel && step.anchor?.kind === 'map') rect = undefined;
+    const dockRect = this.dock.getBoundingClientRect();
+    const onScreen = !!rect && rect.width > 0 && rect.right > 0 && rect.left < window.innerWidth && rect.bottom > 0 && rect.top < window.innerHeight;
+    const underDock = !!rect && rect.left < dockRect.right && rect.right > dockRect.left && rect.top < dockRect.bottom && rect.bottom > dockRect.top;
+    if (!rect || !onScreen || underDock) {
       this.spot.hidden = true;
-    }
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let place: Placement = step.anchor && 'placement' in step.anchor && step.anchor.placement ? step.anchor.placement : 'bottom';
-    // Beside a wide anchor (a form), flip to the roomier side and, if the
-    // bubble still does not fit, narrow it rather than cover the anchor.
-    this.bubble.style.maxWidth = '';
-    if (rect && rect.width > 0 && (place === 'left' || place === 'right')) {
-      const roomLeft = rect.left - 30;
-      const roomRight = vw - rect.right - 30;
-      const want = this.bubble.offsetWidth || 440;
-      if ((place === 'left' ? roomLeft : roomRight) < want) place = roomLeft >= roomRight ? 'left' : 'right';
-      const room = place === 'left' ? roomLeft : roomRight;
-      if (room < want) this.bubble.style.maxWidth = `${Math.max(300, room)}px`;
-    }
-    const bw = this.bubble.offsetWidth || 440;
-    const bh = this.bubble.offsetHeight || 180;
-    let x = vw / 2 - bw / 2;
-    let y = vh / 2 - bh / 2;
-    if (rect && rect.width > 0) {
-      const gap = 18;
-      if (place === 'bottom') { x = rect.left + rect.width / 2 - bw / 2; y = rect.bottom + gap; }
-      if (place === 'top') { x = rect.left + rect.width / 2 - bw / 2; y = rect.top - gap - bh; }
-      if (place === 'left') { x = rect.left - gap - bw; y = rect.top + rect.height / 2 - bh / 2; }
-      if (place === 'right') { x = rect.right + gap; y = rect.top + rect.height / 2 - bh / 2; }
-    }
-    x = Math.max(12, Math.min(vw - bw - 12, x));
-    y = Math.max(12, Math.min(vh - bh - 12, y));
-    // While a shipyard is being placed the islands are what matters: dock the bubble low and central, over water.
-    if (mode.current === 'place') {
-      x = vw / 2 - bw / 2;
-      y = vh - bh - 96;
-      this.spot.hidden = true;
-      this.bubble.style.left = `${x}px`;
-      this.bubble.style.top = `${y}px`;
-      this.bubble.dataset['place'] = 'top';
+      this.arrow.setAttribute('hidden', '');
       return;
     }
-    // Never cover an open form or panel: step beside it, narrowing if needed.
-    const panel = document.querySelector<HTMLElement>('.overlay:not([hidden]) .panel, .overlay:not([hidden]) .drawer');
-    const pr = panel?.getBoundingClientRect();
-    const anchorInPanel = step.anchor?.kind === 'dom' && !!panel?.contains(document.querySelector(step.anchor.selector));
-    // A panel over the map hides what the spotlight pointed at; do not paint over the panel.
-    if (pr && pr.width > 0 && !anchorInPanel) this.spot.hidden = true;
-    if (pr && pr.width > 0 && x < pr.right && x + bw > pr.left && y < pr.bottom && y + bh > pr.top && !anchorInPanel) {
-      const roomLeft = pr.left - 30;
-      const roomRight = vw - pr.right - 30;
-      const side: Placement = roomLeft >= roomRight ? 'left' : 'right';
-      const room = Math.max(roomLeft, roomRight);
-      if (room < bw) this.bubble.style.maxWidth = `${Math.max(260, room)}px`;
-      const w = Math.min(bw, Math.max(260, room));
-      x = side === 'left' ? Math.max(12, pr.left - 18 - w) : Math.min(vw - w - 12, pr.right + 18);
-      y = Math.max(12, Math.min(vh - bh - 12, pr.top + pr.height / 2 - bh / 2));
-      place = side;
+    const pad = 10;
+    this.spot.hidden = false;
+    this.spot.style.left = `${rect.left - pad}px`;
+    this.spot.style.top = `${rect.top - pad}px`;
+    this.spot.style.width = `${rect.width + 2 * pad}px`;
+    this.spot.style.height = `${rect.height + 2 * pad}px`;
+    // An arrow from the bubble's edge to the target, stopping short of the spotlight.
+    const bx = this.bubble.getBoundingClientRect();
+    const sx = rect.left + rect.width / 2 < bx.left ? bx.left : bx.left + bx.width / 2;
+    const sy = rect.top + rect.height / 2 < bx.top ? bx.top : bx.top + bx.height / 2;
+    const tx = rect.left + rect.width / 2;
+    const ty = rect.top + rect.height / 2;
+    const dx = tx - sx;
+    const dy = ty - sy;
+    const len = Math.hypot(dx, dy) || 1;
+    const stop = Math.max(0, len - Math.max(rect.width, rect.height) / 2 - pad - 6);
+    const ex = sx + (dx / len) * stop;
+    const ey = sy + (dy / len) * stop;
+    if (stop < 40) {
+      this.arrow.setAttribute('hidden', '');
+      return;
     }
-    // Nor over the selection card: its buttons are usually the next thing to press.
-    const card = document.querySelector<HTMLElement>('#hud .selection:not([hidden])');
-    const cr = card?.getBoundingClientRect();
-    if (cr && cr.width > 0 && x < cr.right && x + bw > cr.left && y < cr.bottom && y + bh > cr.top && !(step.anchor?.kind === 'dom' && card?.contains(document.querySelector(step.anchor.selector)))) {
-      y = Math.max(12, cr.top - 18 - bh);
-      // If that lands on the very thing the step points at, step beside it instead.
-      if (rect && rect.width > 0 && x < rect.right && x + bw > rect.left && y < rect.bottom && y + bh > rect.top) {
-        const roomRight = vw - rect.right - 30;
-        const roomLeft = rect.left - 30;
-        place = roomRight >= roomLeft ? 'right' : 'left';
-        x = place === 'right' ? Math.min(vw - bw - 12, rect.right + 18) : Math.max(12, rect.left - 18 - bw);
-        y = Math.max(12, Math.min(cr.top - 18 - bh, rect.top + rect.height / 2 - bh / 2));
-      }
-    }
-    this.bubble.style.left = `${x}px`;
-    this.bubble.style.top = `${y}px`;
-    this.bubble.dataset['place'] = place;
+    this.arrow.removeAttribute('hidden');
+    const shaft = this.arrow.querySelector('.shaft')!;
+    shaft.setAttribute('x1', String(sx));
+    shaft.setAttribute('y1', String(sy));
+    shaft.setAttribute('x2', String(ex));
+    shaft.setAttribute('y2', String(ey));
+    const tip = this.arrow.querySelector('.tip')!;
+    tip.setAttribute('cx', String(ex));
+    tip.setAttribute('cy', String(ey));
   }
 
   destroy(): void {
     this.root.hidden = true;
+    this.unModal();
+    document.body.classList.remove('captain-open', 'modal-open');
+    this.spot.hidden = true;
+    this.arrow.setAttribute('hidden', '');
   }
 }

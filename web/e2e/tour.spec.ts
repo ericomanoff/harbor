@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
  * Plays the welcome tour end to end in the training harbor (no cluster
  * needed): every interactive step is performed the way a player would.
  */
-const title = (page: Page) => page.locator('#tour .bubble .title');
+const title = (page: Page) => page.locator('#captain .bubble .title');
 
 async function clickMapKey(page: Page, key: string): Promise<void> {
   await page.waitForFunction((k) => {
@@ -21,7 +21,7 @@ async function clickMapKey(page: Page, key: string): Promise<void> {
 test('welcome tour plays through in the training harbor', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 760 });
   await page.goto('/?demo');
-  const tour = page.locator('#tour');
+  const tour = page.locator('#captain');
   await expect(tour).toBeVisible({ timeout: 15_000 });
   await expect(title(page)).toHaveText('Ahoy, harbor master!');
   await expect(page.locator('#hud [data-chip=link]')).toHaveText('demo');
@@ -67,9 +67,13 @@ test('welcome tour plays through in the training harbor', async ({ page }) => {
   await expect(tour).toBeHidden();
   expect(await page.evaluate(() => localStorage.getItem('harbor.tour.v1'))).toBe('done');
 
-  // Help replays it; Skip ends it.
+  // Help replays it; Skip ends it. While the dock is up, the map outside the bubble still takes clicks.
   await page.locator('#hud [data-rail=help]').click();
   await expect(tour).toBeVisible();
+  await page.evaluate(() => window.harbor.selection.set(['b:sandbox/nginx']));
+  const bubble = await page.locator('#captain .bubble').boundingBox();
+  await page.mouse.click(bubble!.x + 60, bubble!.y - 60); // sea above the bubble, inside the dock layer's area
+  await expect.poll(() => page.evaluate(() => window.harbor.selection.keys.size)).toBe(0);
   await page.locator('[data-tour=skip]').click();
   await expect(tour).toBeHidden();
 });

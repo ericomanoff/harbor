@@ -5,7 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
  * (apply), the loop (blackout and prediction), one door (ledger actors and
  * the tide keeper operator).
  */
-const title = (page: Page) => page.locator('#tour .bubble .title');
+const title = (page: Page) => page.locator('#captain .bubble .title');
 const next = (page: Page) => page.locator('[data-tour=next]');
 const action = (page: Page) => page.locator('[data-tour=action]');
 
@@ -122,10 +122,10 @@ test('1st Principles is first in the library and level 1 plays', async ({ page }
   await expect(title(page)).toHaveText('The controller goes deaf');
   await page.locator('#ledger button[data-close]').click();
   await expect(title(page)).toHaveText('What happens when it hears again?', { timeout: 15_000 });
-  await page.locator('#tour .choices button', { hasText: 'stay sunk' }).click();
-  await expect(page.locator('#tour .result')).toHaveClass(/fail/);
-  await page.locator('#tour .choices button', { hasText: 'launches 2' }).click();
-  await expect(page.locator('#tour .result')).toHaveClass(/ok/);
+  await page.locator('#captain .choices button', { hasText: 'stay sunk' }).click();
+  await expect(page.locator('#captain .result')).toHaveClass(/fail/);
+  await page.locator('#captain .choices button', { hasText: 'launches 2' }).click();
+  await expect(page.locator('#captain .result')).toHaveClass(/ok/);
   await expect(title(page)).toHaveText('Level-triggered');
   await expect(title(page)).toHaveText('An island goes dark', { timeout: 20_000 });
   await expect(title(page)).toHaveText('Self-healing falls out of the design', { timeout: 20_000 });
@@ -148,7 +148,7 @@ test('1st Principles is first in the library and level 1 plays', async ({ page }
   await expect(title(page)).toHaveText('A kind of your own', { timeout: 15_000 });
   await page.locator('#ledger button[data-close]').click();
   await action(page).click();
-  await expect(page.locator('#tour .result')).toContainText('kind: TideTable');
+  await expect(page.locator('#captain .result')).toContainText('kind: TideTable');
   await next(page).click();
   await expect(title(page)).toHaveText('Post a tide keeper');
   await action(page).click();
@@ -156,7 +156,7 @@ test('1st Principles is first in the library and level 1 plays', async ({ page }
   await action(page).click();
   await expect(title(page)).toHaveText('Dismiss the keeper', { timeout: 40_000 });
   await action(page).click(); // dismiss + highWater 2
-  await expect(page.locator('#tour .result')).toContainText('nothing moves');
+  await expect(page.locator('#captain .result')).toContainText('nothing moves');
   await page.waitForTimeout(1500);
   expect(await page.evaluate(() => window.harbor.store.deployments.get('harbor/courier')?.replicas)).toBe(5);
   await action(page).click(); // post again

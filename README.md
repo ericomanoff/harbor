@@ -42,7 +42,10 @@ your cluster); replay it any time with the Help button, or add `?notour` to
 the URL to suppress it.
 
 The Expeditions button (or `?expeditions`) opens Harbor Select: Open Harbor,
-your cluster, and the Expeditions library. 1st Principles teaches why
+your cluster, and the Expeditions library. Captain Huber, a pirate docked at
+the bottom right, talks you through every expedition; his bubble stays put
+and a spotlight with an arrow shows where to look, so the map and HUD are
+always free to click. The welcome tour keeps the harbor master. 1st Principles teaches why
 Kubernetes is built the way it is, one principle per level: declarative
 desired state (Papers and Apply manifest), controllers that reconcile (a
 watch blackout and a prediction), one door through the API server (the

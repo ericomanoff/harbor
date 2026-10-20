@@ -15,7 +15,7 @@ let tooltip: Tooltip | undefined;
 export function startGlossary(): Tooltip {
   if (tooltip) return tooltip;
   tooltip = new Tooltip((id) => openGlossary(id));
-  const roots = ['#hud', '#tour', '.overlay'];
+  const roots = ['#hud', '#captain', '.overlay'];
   const inScope = (el: Element): Element | null => {
     for (const sel of roots) {
       const r = el.closest(sel);
@@ -58,7 +58,7 @@ function remarkAll(): void {
     k?.remove();
     abbr.replaceWith(document.createTextNode(abbr.textContent ?? ''));
   }
-  for (const sel of ['#hud', '#tour', '.overlay']) {
+  for (const sel of ['#hud', '#captain', '.overlay']) {
     document.querySelectorAll(sel).forEach((el) => {
       if (el.closest('#glossary')) return;
       el.normalize();

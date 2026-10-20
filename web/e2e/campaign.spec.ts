@@ -6,9 +6,9 @@ import { expect, test, type Page } from '@playwright/test';
  * run: checks run for real (some pass, the GPU one cannot), failed checks
  * are skipped, and the forms create the real namespace and secret.
  */
-const title = (page: Page) => page.locator('#tour .bubble .title');
+const title = (page: Page) => page.locator('#captain .bubble .title');
 const next = (page: Page) => page.locator('[data-tour=next]');
-const result = (page: Page) => page.locator('#tour .bubble .result');
+const result = (page: Page) => page.locator('#captain .bubble .result');
 
 function kubectl(...args: string[]): string {
   return execFileSync('kubectl', ['--context', 'kind-harbor', ...args], { encoding: 'utf8' });
