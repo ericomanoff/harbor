@@ -83,9 +83,9 @@ export function tourSteps(): TourStep[] {
     },
     {
       id: 'bars',
-      title: 'Harbor capacity',
-      text: 'BERTHS is CPU requested over CPU allocatable on ready nodes, CARGO is the same for memory, CREW is ships ready over ships afloat. When berths run short the harbor master will tell you.',
-      anchor: { kind: 'dom', selector: '#hud .hud-top-right', placement: 'left' },
+      title: 'Harbor health and capacity',
+      text: 'The cluster panel under the badge: HEALTH is docks ready (nodes) and ships ready (pods), with the fleets filter; CAPACITY is BERTHS, CPU requested over allocatable on ready nodes, and CARGO, the same for memory. When berths run short the harbor master will tell you.',
+      anchor: { kind: 'dom', selector: '#hud .cluster', placement: 'right' },
     },
     {
       id: 'shop',

@@ -50,7 +50,7 @@ test('welcome tour plays through in the training harbor', async ({ page }) => {
   await page.locator('[data-tour=next]').click();
   await expect(title(page)).toHaveText('Anchorages are Helm releases');
   await page.locator('[data-tour=next]').click();
-  await expect(title(page)).toHaveText('Harbor capacity');
+  await expect(title(page)).toHaveText('Harbor health and capacity');
   await page.locator('[data-tour=next]').click();
   await expect(title(page)).toHaveText('Building');
 

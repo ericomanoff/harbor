@@ -143,10 +143,8 @@ export class Hud {
     $('.fill', cargo).style.width = `${memAlloc ? Math.min(100, Math.round((memReq / memAlloc) * 100)) : 0}%`;
     $('.value', cargo).textContent = memAlloc ? `${gib(memReq)} / ${gib(memAlloc)} GiB` : '—';
     cargo.title = 'Memory requests over allocatable on ready docks';
-    const crew = $('[data-bar=crew]', this.root);
-    $('.fill', crew).style.width = `${ships ? Math.round((readyShips / ships) * 100) : 0}%`;
-    $('.value', crew).textContent = `${readyShips} / ${ships}`;
-    crew.title = 'Ships ready over ships afloat';
+    $('[data-chip=fleet]', this.root).title = 'Ships ready over ships afloat (pods Ready / pods)';
+    $('[data-chip=docks]', this.root).title = 'Docks ready over docks (nodes Ready / nodes)';
 
     if (p.level !== this.powerLevel) {
       this.powerLevel = p.level;

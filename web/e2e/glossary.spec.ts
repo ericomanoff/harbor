@@ -25,7 +25,7 @@ test('terms get tooltips and the glossary opens on them', async ({ page }) => {
   // Terms in the status chips (outside the selection card) hover too: the HUD lets clicks through, terms must not.
   await page.mouse.move(640, 400);
   await expect(tip).toBeHidden();
-  const chipTerm = page.locator('#hud .chips abbr.term').first();
+  const chipTerm = page.locator('#hud .cluster abbr.term').first();
   await expect(chipTerm).toBeVisible();
   await chipTerm.hover();
   await expect(tip).toBeVisible();

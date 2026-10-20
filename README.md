@@ -112,8 +112,9 @@ ensign (edit the labels its template paints on new ships). Select
 ships to Scrap exactly those pods, Refit them (delete so the ReplicaSet
 replaces them), or read the Ship's log. Ships from an old rollout look
 weathered; crash-looping ships burn; Warning events flash their ship or
-shipyard. BERTHS is CPU requests over allocatable, CARGO is memory, CREW is
-ships ready.
+shipyard. The cluster panel under the badge shows HEALTH (docks ready, ships
+ready, the fleets filter) and CAPACITY (BERTHS: CPU requests over allocatable;
+CARGO: the same for memory).
 
 Lighthouses stand near the ships they route to; select either side to see
 the beam lines. Helm: open Charts, add a chart library under REPOS (for

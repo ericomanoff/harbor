@@ -92,7 +92,6 @@ export class StyleScene extends Phaser.Scene {
       <div style="display:flex;flex-direction:column;gap:6px">
         <div class="bar"><span class="label">BERTHS</span><div class="track"><div class="fill" style="width:38%"></div></div><span class="value">9.1 / 24</span><span class="plus">+</span></div>
         <div class="bar cargo"><span class="label">CARGO</span><div class="track"><div class="fill" style="width:62%"></div></div><span class="value">21 GiB</span><span class="plus">+</span></div>
-        <div class="bar crew"><span class="label">CREW</span><div class="track"><div class="fill" style="width:18%"></div></div><span class="value">18</span><span class="plus">+</span></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="pill primary">Launch ship</button>
