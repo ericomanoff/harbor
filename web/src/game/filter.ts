@@ -19,7 +19,7 @@ export function filterSummary(all: Iterable<string>, f: NamespaceFilter): string
     total++;
     if (!namespaceVisible(ns, f)) hidden++;
   }
-  // Namespaces are flags on the map: the chip keeps the glyph and says the word in full.
-  const word = total === 1 ? 'namespace' : 'namespaces';
+  // Namespaces are fleets, each flying its own flag: the chip keeps the glyph and the harbor word.
+  const word = total === 1 ? 'fleet' : 'fleets';
   return hidden === 0 ? `⚑ all ${total} ${word}` : `⚑ ${hidden}/${total} ${word} hidden`;
 }
