@@ -10,7 +10,7 @@ describe('namespace filter', () => {
     expect(namespaceVisible('secret', { ...f, showSystemNamespaces: true })).toBe(false);
   });
   it('summarises', () => {
-    expect(filterSummary(['a', 'b'], { showSystemNamespaces: true, hiddenNamespaces: new Set() })).toBe('ALL 2 NS');
-    expect(filterSummary(['a', 'kube-system', 'secret'], f)).toBe('2/3 NS HIDDEN');
+    expect(filterSummary(['a', 'b'], { showSystemNamespaces: true, hiddenNamespaces: new Set() })).toBe('⚑ all 2 namespaces');
+    expect(filterSummary(['a', 'kube-system', 'secret'], f)).toBe('⚑ 2/3 namespaces hidden');
   });
 });

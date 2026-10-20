@@ -121,7 +121,8 @@ export class Hud {
     const readyShips = [...store.pods.values()].filter((p) => p.ready).length;
     $('[data-chip=docks]', this.root).textContent = `${ready}/${store.nodes.size} docks ready`;
     $('[data-chip=fleet]', this.root).textContent = `${readyShips}/${ships} ships ready`;
-    $('[data-chip=fleets]', this.root).textContent = filterSummary(store.namespaces.keys(), settings).toLowerCase();
+    $('[data-chip=fleets]', this.root).textContent = filterSummary(store.namespaces.keys(), settings);
+    $('[data-chip=fleets]', this.root).title = 'Namespaces shown on the map (the flag on each shipyard is its namespace); the Fleets filter chooses them';
     $('[data-rail=sound] .glyph', this.root).textContent = settings.sound ? '🔔' : '🔕';
 
     const p = computePower(store.nodes.values());

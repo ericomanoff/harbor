@@ -189,7 +189,7 @@
 #hud > * { position: absolute; }
 #hud .hud-top-left { top: 12px; left: 14px; display: flex; flex-direction: column; gap: 8px; }
 #hud .hud-top-right { top: 12px; right: 14px; }
-#hud .hud-top-center { top: 12px; left: 50%; transform: translateX(-50%); width: 420px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#hud .hud-top-center { top: 12px; left: 50%; transform: translateX(-62%); width: 380px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 #hud .hud-left-rail { top: 50%; left: 14px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
 #hud .hud-right-rail { top: 50%; right: 14px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
 #hud .hud-bottom-left { bottom: 14px; left: 14px; display: flex; gap: 8px; }

@@ -19,5 +19,7 @@ export function filterSummary(all: Iterable<string>, f: NamespaceFilter): string
     total++;
     if (!namespaceVisible(ns, f)) hidden++;
   }
-  return hidden === 0 ? `ALL ${total} NS` : `${hidden}/${total} NS HIDDEN`;
+  // Namespaces are flags on the map: the chip keeps the glyph and says the word in full.
+  const word = total === 1 ? 'namespace' : 'namespaces';
+  return hidden === 0 ? `⚑ all ${total} ${word}` : `⚑ ${hidden}/${total} ${word} hidden`;
 }
