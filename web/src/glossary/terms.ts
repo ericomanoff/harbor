@@ -49,7 +49,7 @@ export const TERMS: Term[] = [
     concept: 'Each node advertises allocatable CPU. Pods reserve some of it with requests, and the scheduler only places a pod on a node with enough unreserved CPU left.',
     useCase: 'When a pod sits Pending with "insufficient cpu", the cluster has no node whose free allocatable CPU covers its request.',
     inHarbor: 'The BERTHS bar is CPU requests over allocatable across ready islands.',
-    where: 'The BERTHS bar in the cluster panel, top left.', docs: `${K8S}/configuration/manage-resources-containers/` },
+    where: 'The BERTHS bar in the cluster panel, top right.', docs: `${K8S}/configuration/manage-resources-containers/` },
   { id: 'cargo-bar', naval: ['cargo'], k8s: ['memory request', 'memory'],
     concept: 'Memory works like CPU: nodes advertise allocatable memory, pods reserve some with requests, and the scheduler fits requests into what is free.',
     useCase: 'A node that is out of allocatable memory leaves new pods Pending; a pod that uses more than its limit is OOM-killed.',

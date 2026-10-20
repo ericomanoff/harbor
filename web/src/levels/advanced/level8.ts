@@ -42,7 +42,7 @@ export const level8: Level = {
           if (c) ctx.play([{ at: 1000, msg: podEvent(c, 'Warning', 'FailedScheduling', '0/2 docks have a free berth: insufficient cpu, insufficient memory') }]);
         },
         title: 'A greedy ship',
-        text: 'The hog sets no requests and no limits, so it grabs every berth and all the cargo space on the harbor-worker island. The courier waits in the open sea, Pending: no dock has a berth left for it. Look at BERTHS and CARGO in the cluster panel, top left.',
+        text: 'The hog sets no requests and no limits, so it grabs every berth and all the cargo space on the harbor-worker island. The courier waits in the open sea, Pending: no dock has a berth left for it. Look at BERTHS and CARGO in the cluster panel, top right.',
         anchor: { kind: 'map', key: 'unit-of:harbor/courier', placement: 'top' },
       },
       {

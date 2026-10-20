@@ -112,7 +112,7 @@ ensign (edit the labels its template paints on new ships). Select
 ships to Scrap exactly those pods, Refit them (delete so the ReplicaSet
 replaces them), or read the Ship's log. Ships from an old rollout look
 weathered; crash-looping ships burn; Warning events flash their ship or
-shipyard. The cluster panel under the badge shows HEALTH (docks ready, ships
+shipyard. The cluster panel, top right, shows HEALTH (docks ready, ships
 ready, the fleets filter) and CAPACITY (BERTHS: CPU requests over allocatable;
 CARGO: the same for memory).
 
