@@ -145,6 +145,11 @@ export class MapScene extends Phaser.Scene implements MapApi {
       ev.preventDefault();
       openGlossary();
     });
+    kb.on('keydown-E', (ev: KeyboardEvent) => {
+      if (modal.open) return;
+      ev.preventDefault();
+      openHarborSelect(this);
+    });
     kb.on('keydown-M', () => {
       if (modal.open) return;
       settings.sound = !settings.sound;
@@ -171,7 +176,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
     new Hud(this);
     startLedgerFeed();
     document.querySelector<HTMLButtonElement>('#hud [data-rail=help]')?.addEventListener('click', () => startTour(this));
-    document.querySelector<HTMLButtonElement>('#hud [data-rail=expeditions]')?.addEventListener('click', () => openHarborSelect(this));
+    document.querySelector<HTMLButtonElement>('#hud [data-expeditions]')?.addEventListener('click', () => openHarborSelect(this));
     void loadingSplash().done().then(() => {
       // Deep links: ?level=advanced/2 plays a level; ?expeditions opens Harbor Select.
       const params = new URLSearchParams(location.search);

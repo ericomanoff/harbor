@@ -3,6 +3,8 @@ import { openRefitForm } from '../ui/refitForm';
 import { openEnsignForm } from '../ui/ensignForm';
 import { openLedger } from '../ui/ledgerPanel';
 import { openPapers } from '../ui/papersPanel';
+import { activeLevel } from '../levels/runner';
+import { expeditionOf } from '../levels/library';
 import { hullNumber, shipVariant } from '../entities/Ship';
 import { eva, link, mode, modal, selection, settings, store, type LinkStatus } from '../app';
 import { sfx } from '../game/audio';
@@ -115,6 +117,11 @@ export class Hud {
 
   private refreshStatus(): void {
     $('[data-harbor-name]', this.root).textContent = store.context || 'no harbor';
+    const sub = $('[data-expeditions] .sub', this.root);
+    const lvl = activeLevel.current;
+    const exp = lvl ? expeditionOf(lvl.id) : undefined;
+    sub.hidden = !lvl;
+    sub.textContent = lvl ? `${exp?.title ?? ''} · ${lvl.number} ${lvl.title}` : '';
     $('[data-berths-count]', this.root).textContent = String(store.nodes.size);
     const ready = [...store.nodes.values()].filter((n) => n.ready).length;
     const ships = store.pods.size;

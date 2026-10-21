@@ -189,13 +189,15 @@
 #hud > * { position: absolute; }
 #hud .hud-top-left { top: 12px; left: 14px; display: flex; flex-direction: column; gap: 8px; }
 #hud .hud-top-right { top: 12px; right: 14px; }
-#hud .hud-top-center { top: 12px; left: 50%; transform: translateX(-62%); width: 380px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#hud .hud-top-center { top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+#hud .pill.expeditions { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 22px; }
+#hud .pill.expeditions .sub { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; opacity: 0.9; text-transform: none; }
 #hud .hud-left-rail { top: 50%; left: 14px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
 #hud .hud-right-rail { top: 50%; right: 14px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
 #hud .hud-bottom-left { bottom: 14px; left: 14px; display: flex; gap: 8px; }
-#hud .hud-bottom-center { bottom: 14px; left: 50%; transform: translateX(-50%); }
-/* While a speaker's dock is up (bottom right), the selection card sits left of centre so the two never meet. */
-body.captain-open #hud .hud-bottom-center { transform: translateX(calc(-50% - 200px)); }
+/* Toasts stack upward above the selection card; while a speaker's dock is up the whole column slides left by --card-shift (measured each tick) so the two never meet. */
+#hud .hud-bottom-center { bottom: 14px; left: 50%; transform: translateX(calc(-50% - var(--card-shift, 0px))); transition: transform 0.25s; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#hud .hud-bottom-center .toasts { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 #hud button, #hud .badge, #hud .bar, #hud .selection, #hud .cluster { pointer-events: auto; }
 /* The cluster panel: health (nodes, pods, namespaces) and capacity (CPU, memory) under the badge. */
 #hud .cluster { padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(38, 48, 22, 0.82); border-color: rgba(255, 255, 255, 0.35); color: #fff; }
@@ -217,7 +219,7 @@ body.captain-open #hud .hud-bottom-center { transform: translateX(calc(-50% - 20
 .hud .toast.warn { background: rgba(120, 30, 20, 0.9); }
 .hud .toast.fade { opacity: 0; transition: opacity 0.4s; }
 
-.hud .selection { min-width: 360px; }
+.hud .selection { min-width: 360px; max-width: 480px; }
 .hud .selection .title { font-size: 17px; font-weight: 900; margin-bottom: 2px; }
 .hud .selection .lines { font-size: 12px; font-weight: 600; color: var(--ink-soft); line-height: 1.35; }
 .hud .selection .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
@@ -247,7 +249,7 @@ body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { d
 #captain .arrow .tip { fill: #fff; stroke: var(--olive); stroke-width: 2; }
 @keyframes captain-march { to { stroke-dashoffset: -18; } }
 #captain .dock { position: absolute; right: 14px; bottom: 14px; display: flex; align-items: flex-end; gap: 10px; max-width: calc(100vw - 28px); }
-#captain .bubble { position: relative; width: 440px; max-width: calc(100vw - 140px); pointer-events: auto; padding-right: 26px; }
+#captain .bubble { position: relative; box-sizing: border-box; width: 440px; max-width: calc(100vw - 140px); pointer-events: auto; padding-right: 26px; }
 #captain .bubble::after {
   content: '';
   position: absolute;
@@ -269,6 +271,10 @@ body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { d
 body.modal-open #captain { z-index: 8; }
 body.captain-open .overlay:not(.bottom) { justify-content: flex-start; padding-left: 140px; }
 #captain .dock.collapsed .bubble .collapse { transform: rotate(180deg); }
+/* Folded for room (the selection card needs the width): the portrait steps aside and the bubble narrows. */
+#captain .dock.room .portrait, #captain .dock.room .bubble::after { display: none; }
+#captain .dock.room .bubble { width: 280px; }
+@media (max-width: 1200px) { #hud .hud-top-center { left: calc(50% - 120px); } }
 #captain .bubble .title { font-size: 18px; font-weight: 900; margin-bottom: 4px; }
 #captain .bubble .text { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--ink); max-height: 150px; overflow-y: auto; }
 #captain .bubble .cta { margin-top: 8px; padding: 6px 10px; background: var(--olive-dark); color: #fff; border-radius: 10px; font-weight: 800; font-size: 12px; animation: tour-nudge 1.2s ease-in-out infinite; }

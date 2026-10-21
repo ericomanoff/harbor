@@ -106,7 +106,7 @@ export function tourSteps(): TourStep[] {
     {
       id: 'rails',
       title: 'Around the harbor',
-      text: 'Map opens the chart table minimap, Log the harbor log, Find locates anything by name, Fleets filters namespaces. Keys: B build, T charts, C change harbor, / find, F fleets, M sound, H home, Tab cycle, Esc cancel. Drag a shipyard to move it; right-drag pans; the wheel zooms.',
+      text: 'Map opens the chart table minimap, Log the harbor log, Find locates anything by name, Fleets filters namespaces; Expeditions, top centre, opens the training library. Keys: B build, T charts, E expeditions, C change harbor, / find, F fleets, M sound, H home, Tab cycle, Esc cancel. Drag a shipyard to move it; right-drag pans; the wheel zooms.',
       anchor: { kind: 'dom', selector: '#hud .hud-left-rail', placement: 'right' },
       onEnter: () => {
         if (mode.current === 'place') mode.set('idle');

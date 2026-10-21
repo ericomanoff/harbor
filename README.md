@@ -41,7 +41,7 @@ Retry or the demo harbor. The first visit starts a welcome tour in a training ha
 your cluster); replay it any time with the Help button, or add `?notour` to
 the URL to suppress it.
 
-The Expeditions button (or `?expeditions`) opens Harbor Select: Open Harbor,
+The Expeditions button at the top centre (or E, or `?expeditions`) opens Harbor Select: Open Harbor,
 your cluster, and the Expeditions library. Captain Huber, a pirate docked at
 the bottom right, talks you through every expedition; his bubble stays put
 and a spotlight with an arrow shows where to look, so the map and HUD are
