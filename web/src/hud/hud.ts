@@ -109,9 +109,25 @@ export class Hud {
       tip.hide();
       return;
     }
-    const id = key.startsWith('flag:') ? 'namespace' : key.startsWith('b:sts:') ? 'tanker-terminal' : key.startsWith('b:') ? 'shipyard' : key.startsWith('s:') ? 'lighthouse' : key.startsWith('g:') ? 'gate' : key.startsWith('r:') ? 'anchorage' : key.startsWith('dock:') ? 'dock' : 'ship';
-    const subject = key.startsWith('flag:') ? key.slice(5).split('/')[0] : undefined;
+    const id = key.startsWith('flag:') ? 'namespace' : key.startsWith('bar:') ? 'readiness-bar' : key.startsWith('b:sts:') ? 'tanker-terminal' : key.startsWith('b:') ? 'shipyard' : key.startsWith('s:') ? 'lighthouse' : key.startsWith('g:') ? 'gate' : key.startsWith('r:') ? 'anchorage' : key.startsWith('dock:') ? 'dock' : 'ship';
+    let subject: string | undefined;
+    if (key.startsWith('flag:')) subject = key.slice(5).split('/')[0];
+    if (key.startsWith('bar:')) subject = this.barSubject(key.slice(4));
     tip.showFor(id, new DOMRect(rect.x, rect.y, rect.width, rect.height), false, subject);
+  }
+
+  /** The live numbers behind a structure's readiness bar: "2/3" plus "· refit 1/3" mid-rollout. */
+  private barSubject(structureKey: string): string | undefined {
+    const sts = structureKey.startsWith('sts:');
+    const id = sts ? structureKey.slice(4) : structureKey;
+    if (sts) {
+      const w = store.workloads.get(wlKey('StatefulSet', ...splitNs(id)));
+      return w ? `${w.ready}/${w.desired} tankers` : undefined;
+    }
+    const d = store.deployments.get(id);
+    if (!d) return undefined;
+    const rolling = d.replicas > 0 && d.updated < d.replicas;
+    return `${d.available}/${d.replicas}${rolling ? ` · refit ${d.updated}/${d.replicas}` : ''}`;
   }
 
   // ---- top bar -----------------------------------------------------------

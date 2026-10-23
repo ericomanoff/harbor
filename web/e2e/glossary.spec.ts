@@ -41,6 +41,12 @@ test('terms get tooltips and the glossary opens on them', async ({ page }) => {
   await expect(page.locator('#filter')).toBeVisible();
   await expect(page.locator('#filter .list label.highlight')).toContainText('sandbox');
   await page.keyboard.press('Escape');
+  // The readiness bar above the shipyard carries its live numbers.
+  const bar = await page.evaluate(() => (window.harbor.game.scene.keys['Map'] as { screenRectOf(k: string): { x: number; y: number; width: number; height: number } | undefined }).screenRectOf('bar:sandbox/nginx')!);
+  await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2);
+  await expect(tip).toBeVisible();
+  await expect(tip.locator('.pair')).toContainText('ready replicas');
+  await expect(tip.locator('.pair')).toContainText('3/3');
   await term.hover();
 
   // Clicking a term opens the glossary at that entry.

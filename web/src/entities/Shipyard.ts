@@ -90,6 +90,11 @@ export class BuildingView extends Phaser.GameObjects.Container {
     return new Phaser.Geom.Rectangle(this.x + FLAG_X - 2, this.y + FLAG_Y - 4, FLAG_W + 9, POLE_H + 6);
   }
 
+  /** The readiness bar above the structure (ships moored over ships wanted), with a little slack. */
+  barRect(): Phaser.Geom.Rectangle {
+    return new Phaser.Geom.Rectangle(this.x + 8, this.y - 14, CELL_PX - 16, 16);
+  }
+
   update(dep: StructureModel, placement: Placement): void {
     this.dep = dep;
     const moved = placement.x !== this.placement.x || placement.y !== this.placement.y;
