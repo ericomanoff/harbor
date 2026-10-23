@@ -84,8 +84,8 @@ export function tourSteps(): TourStep[] {
     {
       id: 'bars',
       title: 'Harbor health and capacity',
-      text: 'The cluster panel, top right: HEALTH is docks ready (nodes) and ships ready (pods), with the fleets filter; CAPACITY is BERTHS, CPU requested over allocatable on ready nodes, and CARGO, the same for memory. When berths run short the harbor master will tell you.',
-      anchor: { kind: 'dom', selector: '#hud .cluster', placement: 'left' },
+      text: 'The cluster panel, bottom right: HEALTH is docks ready (nodes) and ships ready (pods), with the fleets filter; CAPACITY is BERTHS, CPU requested over allocatable on ready nodes, and CARGO, the same for memory. When berths run short the harbor master will tell you.',
+      anchor: { kind: 'dom', selector: '#hud .cluster', placement: 'top' },
     },
     {
       id: 'shop',

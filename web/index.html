@@ -30,15 +30,6 @@
         <div class="badge" data-badge title="Sail to another harbor"><div class="shield" data-berths-count>0</div><div><div class="eyebrow">YOUR HARBOR</div><div class="name" data-harbor-name>…</div></div></div>
       </div>
       <div class="hud-top-center"><button class="pill primary big expeditions" data-expeditions title="Expeditions: the training library (E)"><span class="main">⛵ Expeditions</span><span class="sub" hidden></span></button></div>
-      <div class="hud-top-right">
-        <div class="cluster card">
-          <div class="crow"><span class="rowlabel">HEALTH</span><span class="chip" data-chip="link">…</span><span class="chip" data-chip="docks"></span><span class="chip" data-chip="fleet"></span><span class="chip" data-chip="fleets"></span></div>
-          <div class="crow"><span class="rowlabel">CAPACITY</span>
-            <div class="bar" data-bar="berths"><span class="label">BERTHS</span><div class="track"><div class="fill"></div></div><span class="value">—</span></div>
-            <div class="bar cargo" data-bar="cargo"><span class="label">CARGO</span><div class="track"><div class="fill"></div></div><span class="value">—</span></div>
-          </div>
-        </div>
-      </div>
       <div class="hud-left-rail">
         <button class="rail-btn" data-rail="map" title="Chart table (minimap)"><span class="glyph">🗺️</span>Map</button>
         <button class="rail-btn" data-rail="log" title="Harbor log"><span class="glyph">📜</span>Log</button>
@@ -47,13 +38,6 @@
         <button class="rail-btn" data-rail="help" title="Welcome tour"><span class="glyph">🧭</span>Help</button>
         <button class="rail-btn" data-rail="ledger" title="The ledger: who wrote what to the API server"><span class="glyph">📒</span>Ledger</button>
         <button class="rail-btn" data-rail="glossary" title="Glossary (G)"><span class="glyph">📖</span>Terms</button>
-      </div>
-      <div class="hud-right-rail">
-        <button class="rail-btn" data-rail="settings" title="Settings"><span class="glyph">⚙️</span></button>
-        <button class="rail-btn" data-rail="zoom-in" title="Zoom in"><span class="glyph">＋</span></button>
-        <button class="rail-btn" data-rail="home" title="Whole harbor (H)"><span class="glyph">⌂</span></button>
-        <button class="rail-btn" data-rail="zoom-out" title="Zoom out"><span class="glyph">－</span></button>
-        <button class="rail-btn" data-rail="sound" title="Sound (M)"><span class="glyph">🔕</span></button>
       </div>
       <div class="hud-bottom-left">
         <button class="pill primary big" data-shop-open>⚓ Shop</button>
@@ -67,11 +51,28 @@
           <div class="actions"></div>
         </div>
       </div>
+      <div class="hud-bottom-right">
+        <div class="hud-right-rail">
+          <button class="rail-btn" data-rail="settings" title="Settings"><span class="glyph">⚙️</span></button>
+          <button class="rail-btn" data-rail="zoom-in" title="Zoom in"><span class="glyph">＋</span></button>
+          <button class="rail-btn" data-rail="home" title="Whole harbor (H)"><span class="glyph">⌂</span></button>
+          <button class="rail-btn" data-rail="zoom-out" title="Zoom out"><span class="glyph">－</span></button>
+          <button class="rail-btn" data-rail="sound" title="Sound (M)"><span class="glyph">🔕</span></button>
+        </div>
+        <div class="cluster card">
+          <div class="crow"><span class="rowlabel">HEALTH</span><span class="chip" data-chip="link">…</span><span class="chip" data-chip="docks"></span><span class="chip" data-chip="fleet"></span><span class="chip" data-chip="fleets"></span></div>
+          <div class="crow"><span class="rowlabel">CAPACITY</span>
+            <div class="bar" data-bar="berths"><span class="label">BERTHS</span><div class="track"><div class="fill"></div></div><span class="value">—</span></div>
+            <div class="bar cargo" data-bar="cargo"><span class="label">CARGO</span><div class="track"><div class="fill"></div></div><span class="value">—</span></div>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="captain" class="hud" hidden>
       <div class="spot" hidden></div>
       <svg class="arrow" hidden><line class="shaft" /><circle class="tip" r="7" /></svg>
       <div class="dock">
+        <div class="portrait" title="Captain Huber"><span class="face">🏴‍☠️</span><span class="who">Captain Huber</span></div>
         <div class="bubble card">
           <button class="collapse" data-tour="collapse" title="Collapse">⌄</button>
           <div class="title"></div>
@@ -91,7 +92,6 @@
             </div>
           </div>
         </div>
-        <div class="portrait" title="Captain Huber"><span class="face">🏴‍☠️</span><span class="who">Captain Huber</span></div>
       </div>
     </div>
     <div id="shop" class="overlay bottom" hidden>

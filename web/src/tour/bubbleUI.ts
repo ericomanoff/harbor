@@ -1,7 +1,6 @@
 import { modal } from '../app';
 import type { MapApi } from '../hud/minimap';
 import type { TourStep } from './engine';
-import { keepClear } from './keepClear';
 
 export interface BubbleHandlers {
   onNext(): void;
@@ -21,13 +20,16 @@ export interface HintedStep extends TourStep {
   onChoice?: (correct: boolean) => void;
 }
 
-/** Who is talking: Captain Huber runs the expeditions, the harbor master runs the welcome tour. */
+/** Who is talking: Captain Huber, the harbor's harbor master, runs the welcome tour and every expedition. */
 export interface Speaker {
   name: string;
+  /** Hover title on the portrait. */
+  title: string;
   face: string;
+  /** Pinned to the portrait's rim: his pirate flag. */
+  badge: string;
 }
-export const CAPTAIN_HUBER: Speaker = { name: 'Captain Huber', face: '🏴‍☠️' };
-export const HARBOR_MASTER: Speaker = { name: 'Harbor master', face: '🧑‍✈️' };
+export const CAPTAIN_HUBER: Speaker = { name: 'Captain Huber', title: 'Captain Huber, harbor master', face: '🧑‍✈️', badge: '🏴‍☠️' };
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T => {
   const el = root.querySelector<T>(sel);
@@ -36,7 +38,7 @@ const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T =
 };
 
 /**
- * The speaker's dock: a speech bubble and portrait fixed at the bottom
+ * The speaker's dock: a portrait over a speech bubble fixed at the top
  * right, off the gameplay, like an adventure game's talking character.
  * The bubble never moves; the spotlight and an arrow point at the step's
  * target instead. The caller owns the step engine and the timer.
@@ -50,11 +52,11 @@ export class BubbleUI {
   private step?: HintedStep;
   private hintShown = false;
   private readonly unModal: () => void;
-  /** Why the dock is folded: the learner asked, a modal is open, or the selection card needs the room. */
-  private readonly folded = { manual: false, modal: false, room: false };
-  private shift = 0;
+  /** Why the dock is folded: the learner asked, or a modal is open. */
+  private readonly folded = { manual: false, modal: false };
 
-  constructor(private readonly map: MapApi, private readonly handlers: BubbleHandlers, private readonly skipLabel = 'Skip tour', speaker: Speaker = CAPTAIN_HUBER) {
+  constructor(private readonly map: MapApi, private readonly handlers: BubbleHandlers, private readonly skipLabel = 'Skip tour') {
+    const speaker = CAPTAIN_HUBER;
     this.root = $('#captain');
     this.spot = $('.spot', this.root);
     this.arrow = this.root.querySelector('svg.arrow') as SVGSVGElement;
@@ -64,8 +66,9 @@ export class BubbleUI {
     document.body.classList.add('captain-open');
     this.dock.classList.remove('collapsed');
     $('.portrait .face', this.root).textContent = speaker.face;
+    $('.portrait .badge', this.root).textContent = speaker.badge;
     $('.portrait .who', this.root).textContent = speaker.name;
-    $('.portrait', this.root).title = speaker.name;
+    $('.portrait', this.root).title = speaker.title;
     $('[data-tour=next]', this.root).onclick = () => handlers.onNext();
     $('[data-tour=back]', this.root).onclick = () => handlers.onBack();
     $('[data-tour=skip]', this.root).onclick = () => handlers.onSkip();
@@ -110,30 +113,7 @@ export class BubbleUI {
   }
 
   private applyFold(): void {
-    this.dock.classList.toggle('collapsed', this.folded.manual || this.folded.modal || this.folded.room);
-    this.dock.classList.toggle('room', this.folded.room);
-  }
-
-  /** Slides the bottom-centre column (toasts, selection card) clear of the bubble, folding the dock when there is no room. */
-  private keepCardClear(): void {
-    const column = document.querySelector<HTMLElement>('#hud .hud-bottom-center');
-    if (!column) return;
-    const rect = column.getBoundingClientRect();
-    const hasContent = rect.height > 0 && Array.from(column.children).some((c) => !(c as HTMLElement).hidden && c.getBoundingClientRect().height > 0);
-    const base = { left: rect.left + this.shift, right: rect.right + this.shift };
-    const dockRight = this.dock.getBoundingClientRect().right;
-    const fullLeft = dockRight - 94 - 440; // portrait and gap, then the full bubble
-    const foldedLeft = dockRight - 280; // the room-fold: no portrait, a narrow bubble
-    const left = document.querySelector<HTMLElement>('#hud .hud-bottom-left')?.getBoundingClientRect().right ?? 0;
-    const { shift, fold } = hasContent ? keepClear(base, fullLeft, foldedLeft, left, this.folded.room) : { shift: 0, fold: false };
-    if (shift !== this.shift) {
-      this.shift = shift;
-      document.body.style.setProperty('--card-shift', `${shift}px`);
-    }
-    if (fold !== this.folded.room) {
-      this.folded.room = fold;
-      this.applyFold();
-    }
+    this.dock.classList.toggle('collapsed', this.folded.manual || this.folded.modal);
   }
 
   show(step: HintedStep, i: number, n: number): void {
@@ -199,7 +179,6 @@ export class BubbleUI {
 
   /** The spotlight and arrow follow the step's target (map targets move with the camera); the dock stays put. */
   position(): void {
-    this.keepCardClear();
     const step = this.step;
     if (!step) return;
     let rect: DOMRect | undefined;
@@ -228,8 +207,10 @@ export class BubbleUI {
     this.spot.style.height = `${rect.height + 2 * pad}px`;
     // An arrow from the bubble's edge to the target, stopping short of the spotlight.
     const bx = this.bubble.getBoundingClientRect();
-    const sx = rect.left + rect.width / 2 < bx.left ? bx.left : bx.left + bx.width / 2;
-    const sy = rect.top + rect.height / 2 < bx.top ? bx.top : bx.top + bx.height / 2;
+    // The bubble is top right: start from its left edge for targets beside it, its bottom edge for targets below.
+    const below = rect.top + rect.height / 2 > bx.bottom;
+    const sx = below ? bx.left + bx.width / 2 : bx.left;
+    const sy = below ? bx.bottom : Math.min(Math.max(rect.top + rect.height / 2, bx.top + 24), bx.bottom - 24);
     const tx = rect.left + rect.width / 2;
     const ty = rect.top + rect.height / 2;
     const dx = tx - sx;
@@ -257,7 +238,6 @@ export class BubbleUI {
     this.root.hidden = true;
     this.unModal();
     document.body.classList.remove('captain-open', 'modal-open');
-    document.body.style.removeProperty('--card-shift');
     this.spot.hidden = true;
     this.arrow.setAttribute('hidden', '');
   }

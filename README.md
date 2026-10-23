@@ -43,7 +43,7 @@ the URL to suppress it.
 
 The Expeditions button at the top centre (or E, or `?expeditions`) opens Harbor Select: Open Harbor,
 your cluster, and the Expeditions library. Captain Huber, a pirate docked at
-the bottom right, talks you through every expedition; his bubble stays put
+the top right, talks you through every expedition; his bubble stays put
 and a spotlight with an arrow shows where to look, so the map and HUD are
 always free to click. The welcome tour keeps the harbor master. 1st Principles teaches why
 Kubernetes is built the way it is, one principle per level: declarative
@@ -115,7 +115,7 @@ ensign (edit the labels its template paints on new ships). Select
 ships to Scrap exactly those pods, Refit them (delete so the ReplicaSet
 replaces them), or read the Ship's log. Ships from an old rollout look
 weathered; crash-looping ships burn; Warning events flash their ship or
-shipyard. The cluster panel, top right, shows HEALTH (docks ready, ships
+shipyard. The cluster panel, bottom right, shows HEALTH (docks ready, ships
 ready, the fleets filter) and CAPACITY (BERTHS: CPU requests over allocatable;
 CARGO: the same for memory).
 

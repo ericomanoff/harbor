@@ -1,3 +1,4 @@
+import { startPanelRoom } from './panelRoom';
 import { deleteDeployment, deleteIngress, deletePod, helm, rollbackDeployment, scaleDeployment, workloads as workloadApi, type HelmRelease, deleteService } from '../api/client';
 import { openRefitForm } from '../ui/refitForm';
 import { openEnsignForm } from '../ui/ensignForm';
@@ -61,6 +62,7 @@ export class Hud {
   private powerLevel: PowerLevel = 'ok';
 
   constructor(private readonly map: MapApi) {
+    startPanelRoom();
     this.root = $('#hud');
     this.root.hidden = false;
     this.toasts = new Toasts($('.toasts', this.root));
