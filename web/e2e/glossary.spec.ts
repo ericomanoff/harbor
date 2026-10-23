@@ -32,6 +32,17 @@ test('terms get tooltips and the glossary opens on them', async ({ page }) => {
   await expect(tip.locator('.pair')).toContainText('·');
   await term.hover();
 
+  // Hovering a shipyard's flag on the map names the fleet; clicking it opens the Fleets filter on that fleet.
+  const flag = await page.evaluate(() => (window.harbor.game.scene.keys['Map'] as { screenRectOf(k: string): { x: number; y: number; width: number; height: number } | undefined }).screenRectOf('flag:sandbox/nginx')!);
+  await page.mouse.move(flag.x + flag.width / 2, flag.y + flag.height / 2);
+  await expect(tip).toBeVisible();
+  await expect(tip.locator('.pair')).toContainText('sandbox');
+  await page.mouse.click(flag.x + flag.width / 2, flag.y + flag.height / 2);
+  await expect(page.locator('#filter')).toBeVisible();
+  await expect(page.locator('#filter .list label.highlight')).toContainText('sandbox');
+  await page.keyboard.press('Escape');
+  await term.hover();
+
   // Clicking a term opens the glossary at that entry.
   const id = await term.getAttribute('data-term');
   await term.click();

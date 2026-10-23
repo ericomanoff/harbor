@@ -235,6 +235,8 @@
 /* While the shop is open the bottom HUD gets out of its way. */
 body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { display: none; }
 
+#filter .list label.highlight { outline: 2px solid var(--gold); border-radius: 6px; background: #fff4cf; }
+
 /* ---- Captain Huber's dock: expedition instructions, bottom right, off the gameplay ---- */
 #captain { position: fixed; inset: 0; pointer-events: none; z-index: 20; }
 #captain .spot {

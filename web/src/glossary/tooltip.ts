@@ -46,14 +46,14 @@ export class Tooltip {
    * hovering the map must not catch the click meant for the thing under it,
    * so it is click-through; tooltips over text keep "Click for more".
    */
-  showFor(id: string, anchor: DOMRect, clickable = true): void {
+  showFor(id: string, anchor: DOMRect, clickable = true, subject?: string): void {
     const term = termById(id);
     if (!term) return;
     this.cancelHide();
     this.el.dataset['term'] = id;
     this.el.style.pointerEvents = clickable ? '' : 'none';
     this.el.querySelector<HTMLElement>('.more')!.hidden = !clickable;
-    this.el.querySelector('.pair')!.textContent = titleOf(term);
+    this.el.querySelector('.pair')!.textContent = subject ? `${titleOf(term)} ${subject}` : titleOf(term);
     this.el.querySelector('.concept')!.textContent = term.concept;
     const use = this.el.querySelector<HTMLElement>('.use')!;
     use.hidden = !term.useCase;

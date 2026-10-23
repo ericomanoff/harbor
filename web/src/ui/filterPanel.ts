@@ -3,7 +3,7 @@ import { isSystemNamespace } from '../layout/colors';
 import { openOverlay } from './overlay';
 
 /** "F" filter: tick the namespaces to show on the map. */
-export function openFilter(): void {
+export function openFilter(opts: { highlight?: string } = {}): void {
   const root = document.getElementById('filter')!;
   const list = root.querySelector<HTMLDivElement>('.list')!;
   const sys = root.querySelector<HTMLInputElement>('input[name=system]')!;
@@ -21,8 +21,10 @@ export function openFilter(): void {
       settings.changed.emit();
     };
     label.append(box, ` ${ns}${isSystemNamespace(ns) ? '  (system)' : ''}`);
+    if (ns === opts.highlight) label.classList.add('highlight');
     return label;
   }));
+  list.querySelector<HTMLElement>('label.highlight')?.scrollIntoView({ block: 'nearest' });
   sys.checked = settings.showSystemNamespaces;
   sys.onchange = () => {
     settings.showSystemNamespaces = sys.checked;

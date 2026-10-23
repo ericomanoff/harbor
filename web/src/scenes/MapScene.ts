@@ -518,6 +518,12 @@ export class MapScene extends Phaser.Scene implements MapApi {
         return;
       }
     }
+    for (const b of this.buildings.values()) {
+      if (b.flagRect().contains(end.x, end.y)) {
+        openFilter({ highlight: b.dep.ns });
+        return;
+      }
+    }
     for (const sv of this.services.values()) {
       if (sv.rect().contains(end.x, end.y)) {
         selection.set([serviceKey(sv.key)]);

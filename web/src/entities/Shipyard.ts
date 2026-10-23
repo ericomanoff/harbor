@@ -28,6 +28,13 @@ export function structureOfStatefulSet(w: Workload): StructureModel {
 const CELL_PX = BUILD_CELL * TILE; // 96
 export const BUILDING_PX = CELL_PX;
 
+// The fleet flag: a pole at the top-left corner with a flag flying right.
+const FLAG_X = 4;
+const FLAG_Y = -34;
+const FLAG_W = 22;
+const FLAG_H = 15;
+const POLE_H = 46;
+
 /** A Deployment (shipyard) or StatefulSet (tanker terminal): a slipway with a hull and crates. */
 export class BuildingView extends Phaser.GameObjects.Container {
   readonly key: string;
@@ -37,7 +44,8 @@ export class BuildingView extends Phaser.GameObjects.Container {
   private readonly slip: Phaser.GameObjects.Graphics;
   private readonly hull: Phaser.GameObjects.Image;
   private readonly crates: Phaser.GameObjects.Image[];
-  private readonly flag: Phaser.GameObjects.Image;
+  private readonly flag: Phaser.GameObjects.Graphics;
+  private readonly initial: Phaser.GameObjects.Text;
   private readonly bar: Phaser.GameObjects.Graphics;
   private readonly sel: Phaser.GameObjects.Graphics;
   private readonly hit: Phaser.GameObjects.Graphics;
@@ -54,14 +62,15 @@ export class BuildingView extends Phaser.GameObjects.Container {
     this.slip = scene.add.graphics();
     this.hull = scene.add.image(CELL_PX / 2 + 8, CELL_PX / 2 + 6, ATLAS.ships.key, SPRITES.hullLarge(0).frame).setScale(0.5);
     this.crates = [0, 1, 2].map((i) => scene.add.image(14 + i * 15, CELL_PX - 20, ATLAS.tiles.key, TILES.crate).setScale(TILE_SCALE * 0.6));
-    this.flag = scene.add.image(18, 14, ATLAS.ships.key, SPRITES.flag(0).frame).setScale(0.5).setOrigin(0.5, 1);
+    this.flag = scene.add.graphics();
+    this.initial = scene.add.text(FLAG_X + 3 + FLAG_W / 2, FLAG_Y + FLAG_H / 2, '', { fontFamily: MAP_FONT, fontSize: '10px', fontStyle: '900', color: '#ffffff', stroke: '#1d2a12', strokeThickness: 2 }).setOrigin(0.5);
     this.bar = scene.add.graphics();
     this.sel = scene.add.graphics();
     this.hit = scene.add.graphics();
     this.label = scene.add.text(CELL_PX / 2, CELL_PX + 1, '', { fontFamily: MAP_FONT, fontSize: '11px', fontStyle: '800', color: '#ffffff', stroke: '#1d5f87', strokeThickness: 3 }).setOrigin(0.5, 0);
     this.status = scene.add.text(CELL_PX / 2 + 8, CELL_PX / 2 + 4, '', { fontFamily: MAP_FONT, fontSize: '12px', fontStyle: '900', color: '#ffffff', stroke: '#000000', strokeThickness: 3 }).setOrigin(0.5);
     this.rollout = scene.add.text(CELL_PX - 6, 4, 'REFIT', { fontFamily: MAP_FONT, fontSize: '9px', fontStyle: '900', color: '#ffd166', stroke: '#000000', strokeThickness: 3 }).setOrigin(1, 0).setVisible(false);
-    this.add([this.slip, this.hull, ...this.crates, this.flag, this.bar, this.sel, this.hit, this.label, this.status, this.rollout]);
+    this.add([this.slip, this.hull, ...this.crates, this.flag, this.initial, this.bar, this.sel, this.hit, this.label, this.status, this.rollout]);
     this.setDepth(10);
     scene.add.existing(this);
     this.redraw();
@@ -76,9 +85,9 @@ export class BuildingView extends Phaser.GameObjects.Container {
     return new Phaser.Geom.Rectangle(this.x + 4, this.y + 4, CELL_PX - 8, CELL_PX - 8);
   }
 
-  /** The flag at the top-left corner: the namespace's colours. */
+  /** The fleet flag at the top-left corner, pole included. */
   flagRect(): Phaser.Geom.Rectangle {
-    return new Phaser.Geom.Rectangle(this.x + 10, this.y - 4, 18, 20);
+    return new Phaser.Geom.Rectangle(this.x + FLAG_X - 2, this.y + FLAG_Y - 4, FLAG_W + 9, POLE_H + 6);
   }
 
   update(dep: StructureModel, placement: Placement): void {
@@ -102,7 +111,28 @@ export class BuildingView extends Phaser.GameObjects.Container {
     const building = this.dep.available === 0 && this.dep.replicas > 0;
     this.hull.setAlpha(building ? (Math.floor(time / 350) % 2 === 0 ? 0.9 : 0.4) : 1);
     this.hit.setVisible(time < this.flashUntil && Math.floor(time / 120) % 2 === 0);
-    this.flag.setScale(0.5 + Math.sin(time / 250) * 0.03, 0.5);
+    this.drawFlag(Math.sin(time / 250) * 2);
+  }
+
+  /** The namespace flag: a pole, a waving flag in the fleet's colour, the fleet's initial on it. */
+  private drawFlag(wave: number): void {
+    const color = namespaceColor(this.dep.ns);
+    const g = this.flag;
+    g.clear();
+    g.fillStyle(0x4a3826, 1).fillRect(FLAG_X, FLAG_Y, 4, POLE_H);
+    g.fillStyle(0xffffff, 1).fillCircle(FLAG_X + 2, FLAG_Y, 3);
+    const x0 = FLAG_X + 4;
+    g.fillStyle(color, 1);
+    g.beginPath();
+    g.moveTo(x0, FLAG_Y + 1);
+    g.lineTo(x0 + FLAG_W, FLAG_Y + 1 + wave);
+    g.lineTo(x0 + FLAG_W, FLAG_Y + 1 + FLAG_H + wave);
+    g.lineTo(x0, FLAG_Y + 1 + FLAG_H);
+    g.closePath();
+    g.fillPath();
+    g.lineStyle(2, 0xffffff, 0.95);
+    g.strokePath();
+    this.initial.setPosition(x0 + FLAG_W / 2, FLAG_Y + 1 + FLAG_H / 2 + wave / 2);
   }
 
   private redraw(): void {
@@ -120,7 +150,8 @@ export class BuildingView extends Phaser.GameObjects.Container {
     }
     g.lineStyle(3, terminal ? 0xe8e8e0 : 0xd9c79a, 1).strokeRoundedRect(22, 16, CELL_PX - 36, CELL_PX - 30, 6);
     this.hull.setTexture(ATLAS.ships.key, SPRITES.hullLarge(terminal ? 1 : 0).frame);
-    this.flag.setTint(color);
+    this.initial.setText((this.dep.ns[0] ?? '').toUpperCase());
+    this.drawFlag(0);
     const frac = this.dep.replicas > 0 ? Math.min(1, this.dep.available / this.dep.replicas) : 1;
     const barColor = frac >= 1 ? 0x5cb82a : frac > 0 ? 0xe8b33a : 0xe5473a;
     this.bar.clear();

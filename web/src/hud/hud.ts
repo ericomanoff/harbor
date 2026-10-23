@@ -110,7 +110,8 @@ export class Hud {
       return;
     }
     const id = key.startsWith('flag:') ? 'namespace' : key.startsWith('b:sts:') ? 'tanker-terminal' : key.startsWith('b:') ? 'shipyard' : key.startsWith('s:') ? 'lighthouse' : key.startsWith('g:') ? 'gate' : key.startsWith('r:') ? 'anchorage' : key.startsWith('dock:') ? 'dock' : 'ship';
-    tip.showFor(id, new DOMRect(rect.x, rect.y, rect.width, rect.height), false);
+    const subject = key.startsWith('flag:') ? key.slice(5).split('/')[0] : undefined;
+    tip.showFor(id, new DOMRect(rect.x, rect.y, rect.width, rect.height), false, subject);
   }
 
   // ---- top bar -----------------------------------------------------------
