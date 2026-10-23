@@ -35,6 +35,8 @@ interface Action {
   enabled: boolean;
   run?: () => Promise<void>;
   confirm?: string;
+  /** Opens a scroll (a form that writes to the cluster): the button shows a quill. */
+  scroll?: boolean;
 }
 
 const CONFIRM_MS = 4000;
@@ -73,14 +75,6 @@ export class Hud {
     $('[data-rail=locate]', this.root).onclick = () => this.map.openSearch();
     $('[data-rail=fleets]', this.root).onclick = () => openFilter();
     $('[data-rail=settings]', this.root).onclick = () => this.openSettings();
-    $('[data-rail=zoom-in]', this.root).onclick = () => this.map.zoomBy(1.25);
-    $('[data-rail=zoom-out]', this.root).onclick = () => this.map.zoomBy(0.8);
-    $('[data-rail=home]', this.root).onclick = () => this.map.home();
-    $('[data-rail=sound]', this.root).onclick = () => {
-      settings.sound = !settings.sound;
-      sfx.setEnabled(settings.sound);
-      settings.changed.emit();
-    };
     $('[data-shop-open]', this.root).onclick = () => openShop();
     $('[data-tech]', this.root).onclick = () => openTechTree();
     $('[data-rail=glossary]', this.root).onclick = () => openGlossary();
@@ -149,7 +143,7 @@ export class Hud {
     $('[data-chip=fleet]', this.root).textContent = `${readyShips}/${ships} ships ready`;
     $('[data-chip=fleets]', this.root).textContent = filterSummary(store.namespaces.keys(), settings);
     $('[data-chip=fleets]', this.root).title = 'Fleets are namespaces; the flag on each shipyard and ship is its fleet. The Fleets filter chooses which are shown';
-    $('[data-rail=sound] .glyph', this.root).textContent = settings.sound ? '🔔' : '🔕';
+    this.settingsRefresh?.();
 
     const p = computePower(store.nodes.values());
     const colors: Record<PowerLevel, string> = { ok: 'var(--gold)', low: '#f29b2a', critical: 'var(--red)' };
@@ -218,10 +212,36 @@ export class Hud {
     $('button[data-close]', root).onclick = close;
   }
 
+  private settingsRefresh?: () => void;
+  private settingsClose?: () => void;
+
+  /** Settings is a popover beside the rail, not a modal: the map stays live, so the VIEW row acts at once. Clicking the gear again, Escape or a click outside closes it. */
   private openSettings(): void {
+    if (this.settingsClose) { this.settingsClose(); return; }
     const root = $('#settings');
-    const close = openOverlayHere('settings');
-    $('button[data-close]', root).onclick = close;
+    const gear = $('[data-rail=settings]', this.root);
+    const onEscape = (ev: KeyboardEvent): void => {
+      if (ev.key !== 'Escape') return;
+      ev.stopImmediatePropagation();
+      close();
+    };
+    const onOutside = (ev: PointerEvent): void => {
+      const t = ev.target as Node;
+      if (!root.contains(t) && !gear.contains(t)) close();
+    };
+    const close = (): void => {
+      root.hidden = true;
+      window.removeEventListener('keydown', onEscape, true);
+      document.removeEventListener('pointerdown', onOutside, true);
+      this.settingsClose = undefined;
+    };
+    root.hidden = false;
+    window.addEventListener('keydown', onEscape, true);
+    document.addEventListener('pointerdown', onOutside, true);
+    this.settingsClose = close;
+    $('[data-set=zoom-in]', root).onclick = () => this.map.zoomBy(1.25);
+    $('[data-set=zoom-out]', root).onclick = () => this.map.zoomBy(0.8);
+    $('[data-set=home]', root).onclick = () => this.map.home();
     $('[data-set=theater]', root).onclick = () => { close(); openMissionSelect(); };
     $('[data-set=fleets]', root).onclick = () => { close(); openFilter(); };
     $('[data-set=tech]', root).onclick = () => { close(); openTechTree(); };
@@ -229,13 +249,14 @@ export class Hud {
     const sys = $('[data-set=system]', root);
     const both = $('[data-set=both]', root);
     const refresh = (): void => {
-      sound.textContent = settings.sound ? 'Sound: on' : 'Sound: off';
+      sound.textContent = settings.sound ? '🔔 Sound: on' : '🔕 Sound: off';
       sys.textContent = settings.showSystemNamespaces ? 'System fleets: shown' : 'System fleets: hidden';
       both.textContent = settings.bothLanguages ? 'Both languages: harbor (Kubernetes)' : 'Both languages: off';
     };
     both.onclick = () => { settings.bothLanguages = !settings.bothLanguages; settings.changed.emit(); refresh(); };
     sound.onclick = () => { settings.sound = !settings.sound; sfx.setEnabled(settings.sound); settings.changed.emit(); refresh(); };
     sys.onclick = () => { settings.showSystemNamespaces = !settings.showSystemNamespaces; settings.changed.emit(); refresh(); };
+    this.settingsRefresh = refresh;
     refresh();
   }
 
@@ -273,6 +294,7 @@ export class Hud {
       b.textContent = confirming ? (a.confirm ?? a.label) : a.label;
       b.disabled = !a.enabled;
       b.dataset['action'] = String(i);
+      if (a.scroll && !confirming) b.dataset['scroll'] = '';
       b.onclick = () => void this.run(i);
       return b;
     }));
@@ -356,9 +378,9 @@ export class Hud {
         { label: 'Launch ship', kind: 'primary', enabled: true, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas + 1); this.announce(`UNIT ORDERED: ${d.name}`); } },
         { label: 'Scrap one', kind: 'secondary', enabled: d.replicas > 0, run: async () => { await scaleDeployment(d.ns, d.name, d.replicas - 1); this.announce(`UNIT RETIRED: ${d.name}`); } },
         { label: 'Sell shipyard', kind: 'danger', confirm: 'Confirm: sell and lose its ships?', enabled: true, run: async () => { await deleteDeployment(d.ns, d.name); selection.clear(); } },
-        { label: 'Refit shipyard', kind: 'secondary', enabled: true, run: async () => openRefitForm(d) },
+        { label: 'Refit shipyard', kind: 'secondary', enabled: true, scroll: true, run: async () => openRefitForm(d) },
         { label: 'Papers', kind: 'secondary', enabled: true, run: async () => openPapers('Deployment', d.ns, d.name) },
-        { label: 'Change ensign', kind: 'secondary', enabled: true, run: async () => openEnsignForm({ kind: 'Deployment', ns: d.ns, name: d.name, labels: { app: d.name, ...(d.templateLabels ?? {}) }, locked: ['app'] }) },
+        { label: 'Change ensign', kind: 'secondary', enabled: true, scroll: true, run: async () => openEnsignForm({ kind: 'Deployment', ns: d.ns, name: d.name, labels: { app: d.name, ...(d.templateLabels ?? {}) }, locked: ['app'] }) },
         { label: 'Roll back refit', kind: 'secondary', confirm: 'Confirm: return to the previous refit?', enabled: (d.revision ?? 1) > 1, run: async () => { await rollbackDeployment(d.ns, d.name); this.announce(`ROLLBACK ORDERED: ${d.name}`); } },
       ], namespaceColor(d.ns));
       return;
@@ -375,7 +397,7 @@ export class Hud {
         Object.keys(sv.selector).length ? `selector ${Object.entries(sv.selector).map(([k, v]) => `${k}=${v}`).join(',')}` : 'no selector',
       ], [
         { label: 'Papers', kind: 'secondary', enabled: true, run: async () => openPapers('Service', sv.ns, sv.name) },
-        { label: 'Re-aim beam', kind: 'secondary', enabled: true, run: async () => openEnsignForm({ kind: 'Service', ns: sv.ns, name: sv.name, labels: sv.selector }) },
+        { label: 'Re-aim beam', kind: 'secondary', enabled: true, scroll: true, run: async () => openEnsignForm({ kind: 'Service', ns: sv.ns, name: sv.name, labels: sv.selector }) },
         { label: 'Put out lighthouse', kind: 'danger', confirm: 'Confirm: delete the Service?', enabled: true, run: async () => { await deleteService(sv.ns, sv.name); selection.clear(); } },
       ], namespaceColor(sv.ns));
       return;
@@ -407,7 +429,7 @@ export class Hud {
         det?.chart ? `chart ${det.chart}-${det.chartVersion ?? ''}${det.appVersion ? ` · app ${det.appVersion}` : ''}` : 'chart …',
         live.updated ? `updated ${new Date(live.updated).toLocaleString()}` : '',
       ], [
-        { label: 'Upgrade', kind: 'primary', enabled: true, run: async () => openTechTree({ upgrade: key }) },
+        { label: 'Upgrade', kind: 'primary', enabled: true, scroll: true, run: async () => openTechTree({ upgrade: key }) },
         { label: 'Roll back', kind: 'secondary', confirm: 'Confirm roll back?', enabled: live.revision > 1, run: async () => { await helm.rollback(live.ns, live.name, 0); this.announce(`ROLLBACK ORDERED: ${live.name}`); } },
         { label: 'Weigh anchor', kind: 'danger', confirm: 'Confirm: uninstall release?', enabled: true, run: async () => { await helm.uninstall(live.ns, live.name); this.announce(`EXPANSION SOLD: ${live.name}`); selection.clear(); } },
       ]);
@@ -460,7 +482,7 @@ export class Hud {
       if (variant === 'boat' && owner) tail.push({ label: 'Recall fleet', kind: 'danger', confirm: 'Confirm: delete the Job?', enabled: true, run: async () => { await workloadApi.remove('Job', owner.ns, owner.name); selection.clear(); } });
       tail.unshift({ label: "Ship's log", kind: 'primary', enabled: true, run: async () => openLogs(p) });
       tail.push({ label: 'Papers', kind: 'secondary', enabled: true, run: async () => openPapers('Pod', p.ns, p.name) });
-      tail.push({ label: 'Change ensign', kind: 'secondary', enabled: true, run: async () => openEnsignForm({ kind: 'Pod', ns: p.ns, name: p.name, labels: p.labels }) });
+      tail.push({ label: 'Change ensign', kind: 'secondary', enabled: true, scroll: true, run: async () => openEnsignForm({ kind: 'Pod', ns: p.ns, name: p.name, labels: p.labels }) });
       this.setCard(title, [
         `${p.ns} · ${p.phase}${p.ready ? ' · ready' : ''} · ${p.restarts} restart${p.restarts === 1 ? '' : 's'}`,
         `dock ${p.node || '(not yet berthed)'} · cargo ${p.containers.join(', ') || 'none'}`,

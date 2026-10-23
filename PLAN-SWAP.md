@@ -3,6 +3,8 @@
 Status: done 2026-10-23 (all three decisions as recommended). Swaps two HUD
 regions and gives Captain Huber room to be read. One deviation from the
 design below: the right rail became a **row** above the cluster panel
+(*2026-10-23: that row was then folded into a Settings popover on the
+left rail, PLAN-SETTINGS*)
 (five buttons in a column plus the panel do not fit in the bottom third of
 a 760 px window), and the panel's room-fold stacks the HEALTH chips in a
 column, since the HEALTH row alone was as wide as the whole panel.

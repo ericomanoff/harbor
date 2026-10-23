@@ -58,7 +58,7 @@ function openForm(step: CampaignStep): void {
   }
 }
 
-/** One campaign step as a harbor master step; goals become waitFor, checks and forms become the action button. */
+/** One campaign step as a Huber step; goals become waitFor, checks and forms become the action button. */
 export function campaignStep(step: CampaignStep, i: number, ctx: LevelContext, results: Map<number, boolean>): HintedStep {
   const base: HintedStep = {
     id: `step-${i}`,

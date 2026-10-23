@@ -38,14 +38,14 @@ Settings can show both languages everywhere.
 
 The loading screen hails the backend first; if no harbor answers it offers
 Retry or the demo harbor. The first visit starts a welcome tour in a training harbor (nothing touches
-your cluster); replay it any time with the Help button, or add `?notour` to
+your cluster); replay it any time with the Tour button, or add `?notour` to
 the URL to suppress it.
 
-The Expeditions button at the top centre (or E, or `?expeditions`) opens Harbor Select: Open Harbor,
-your cluster, and the Expeditions library. Captain Huber, a pirate docked at
-the top right, talks you through every expedition; his bubble stays put
+The Expeditions button under Captain Huber at the top right (or his portrait, or E, or `?expeditions`) opens Harbor Select: Open Harbor,
+your cluster, and the Expeditions library. Captain Huber, the harbor master, docked at
+the top right with a pirate flag for a badge, talks you through the welcome tour and every expedition; his bubble stays put
 and a spotlight with an arrow shows where to look, so the map and HUD are
-always free to click. The welcome tour keeps the harbor master. 1st Principles teaches why
+always free to click. 1st Principles teaches why
 Kubernetes is built the way it is, one principle per level: declarative
 desired state (Papers and Apply manifest), controllers that reconcile (a
 watch blackout and a prediction), one door through the API server (the
@@ -81,7 +81,7 @@ following `internal/campaign/builtin/fortiaigate/campaign.yaml`. Failed
 checks can be skipped for a dry run.
 
 Controls: left-click selects, drag box-selects ships, drag a shipyard to move
-it, right-drag pans, wheel or the right rail zooms, arrows or WASD scroll, H
+it, right-drag pans, wheel, + and − or the Settings VIEW row zoom, arrows or WASD scroll, H
 or the home button fits the harbor, Shop (or B) starts placing a shipyard,
 Charts (or T) opens the Helm chart table, the harbor badge (or C) changes
 context, Find (or `/`) locates, Fleets (or F) filters namespaces, the bell
@@ -117,7 +117,8 @@ replaces them), or read the Ship's log. Ships from an old rollout look
 weathered; crash-looping ships burn; Warning events flash their ship or
 shipyard. The cluster panel, bottom right, shows HEALTH (docks ready, ships
 ready, the fleets filter) and CAPACITY (BERTHS: CPU requests over allocatable;
-CARGO: the same for memory).
+CARGO: the same for memory); announcements stack above it, newest at the
+bottom, and stop short of Captain Huber's bubble while he speaks.
 
 Lighthouses stand near the ships they route to; select either side to see
 the beam lines. Helm: open Charts, add a chart library under REPOS (for

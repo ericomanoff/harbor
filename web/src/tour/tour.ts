@@ -1,7 +1,7 @@
 import { selection } from '../app';
 import { activeLevel } from '../levels/runner';
 import type { MapApi } from '../hud/minimap';
-import { BubbleUI, HARBOR_MASTER } from './bubbleUI';
+import { BubbleUI } from './bubbleUI';
 import { TourEngine } from './engine';
 import { tourSteps } from './steps';
 import { enterTraining, leaveTraining } from './training';
@@ -17,14 +17,14 @@ export function tourDone(): boolean {
   }
 }
 
-/** The welcome tour: the harbor master walks through the harbor in the training harbor. */
+/** The welcome tour: Captain Huber walks through the harbor in the training harbor. */
 export function startTour(map: MapApi): void {
   if (running || activeLevel.current) return;
   running = true;
   enterTraining();
   selection.clear();
   let engine: TourEngine;
-  const ui = new BubbleUI(map, { onNext: () => engine.next(), onBack: () => engine.back(), onSkip: () => engine.skip() }, 'Skip tour', HARBOR_MASTER);
+  const ui = new BubbleUI(map, { onNext: () => engine.next(), onBack: () => engine.back(), onSkip: () => engine.skip() }, 'Skip tour');
   const timer = setInterval(() => {
     engine.tick();
     ui.position();

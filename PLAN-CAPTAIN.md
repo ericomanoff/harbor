@@ -20,7 +20,8 @@ old adventure game puts its talking character in a corner.
 
 - **Captain Huber**, a pirate, replaces the harbor master as the voice of
   every expedition (the welcome tour keeps the harbor master: he runs the
-  harbor; Huber runs the expeditions).
+  harbor; Huber runs the expeditions). *2026-10-23: the welcome tour moved
+  to Huber too; he is the harbor master in person (PLAN-AVATAR).*
 - A **dock at the bottom right**: Huber's portrait on the right, a speech
   bubble to his left pointing at him, the step's controls under the text.
   Fixed position, fixed maximum size (about 460 by 260 px at laptop widths),

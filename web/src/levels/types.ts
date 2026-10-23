@@ -46,7 +46,7 @@ export interface Level {
   parSeconds: number;
   /** The harbor the level starts in. */
   fixture: () => Snapshot;
-  /** Steps shown by the harbor master; waitFor steps are the goals. */
+  /** Steps shown by Captain Huber; waitFor steps are the goals. */
   steps: (ctx: LevelContext) => HintedStep[];
   summary: (store: ClusterStore) => LevelSummary;
 }

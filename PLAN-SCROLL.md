@@ -1,6 +1,6 @@
 # Speech bubbles for talk, scrolls for orders
 
-Status: proposed 2026-10-23. A styling change to the HTML overlays; no gameplay or API change.
+Status: done 2026-10-23 (all four decisions as recommended). A styling change to the HTML overlays; no gameplay or API change.
 
 ## 1. The problem
 

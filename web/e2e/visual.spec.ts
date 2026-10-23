@@ -65,4 +65,17 @@ test.describe('visual', () => {
     await expect(tip).toBeVisible();
     await expect(tip).toHaveScreenshot('tooltip-shipyard.png');
   });
+
+  test('a scroll: the refit form over the selection card', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 760 });
+    await page.addInitScript(() => localStorage.setItem('harbor.tour.v1', 'done'));
+    await page.goto('/?demo');
+    await page.waitForFunction(() => !document.getElementById('hud')?.hidden && document.getElementById('splash')?.hidden);
+    await page.evaluate(() => window.harbor.selection.set(['b:sandbox/nginx']));
+    await page.locator('#hud .selection .actions button', { hasText: 'Refit shipyard' }).click();
+    const scroll = page.locator('#refit-form .panel.scroll');
+    await expect(scroll).toBeVisible();
+    await page.waitForTimeout(300);
+    await expect(scroll).toHaveScreenshot('scroll-refit.png');
+  });
 });

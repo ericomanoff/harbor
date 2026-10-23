@@ -35,7 +35,7 @@ let stopUI: (() => void) | undefined;
 
 /**
  * Plays one level: loads its harbor (into the training simulator, or onto
- * the real cluster), walks the harbor master's steps on the tour engine
+ * the real cluster), walks Huber's steps on the tour engine
  * (goals are `waitFor` steps), then celebrates, saves progress and shows
  * the summary card. In challenge mode the bubbles are replaced by an
  * objectives bar and the clock.

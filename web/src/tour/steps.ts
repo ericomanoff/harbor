@@ -3,7 +3,7 @@ import { nsKey } from '../store/cluster';
 import type { TourStep } from './engine';
 
 /**
- * The welcome tour, told by the harbor master. Runs in the training harbor
+ * The welcome tour, told by Captain Huber. Runs in the training harbor
  * (demo data), so the nginx shipyard, db terminal, lighthouses and the
  * outpost anchorage always exist.
  */
@@ -106,7 +106,7 @@ export function tourSteps(): TourStep[] {
     {
       id: 'rails',
       title: 'Around the harbor',
-      text: 'Map opens the chart table minimap, Log the harbor log, Find locates anything by name, Fleets filters namespaces; Expeditions, top centre, opens the training library. Keys: B build, T charts, E expeditions, C change harbor, / find, F fleets, M sound, H home, Tab cycle, Esc cancel. Drag a shipyard to move it; right-drag pans; the wheel zooms.',
+      text: 'Map opens the chart table minimap, Log the harbor log, Find locates anything by name, Fleets filters namespaces, Settings holds the view buttons and the toggles; Tour and Expeditions sit under Captain Huber at the top right, and Expeditions opens the training library. Keys: B build, T charts, E expeditions, C change harbor, / find, F fleets, M sound, H home, + − zoom, Tab cycle, Esc cancel. Drag a shipyard to move it; right-drag pans; the wheel zooms.',
       anchor: { kind: 'dom', selector: '#hud .hud-left-rail', placement: 'right' },
       onEnter: () => {
         if (mode.current === 'place') mode.set('idle');
@@ -117,8 +117,8 @@ export function tourSteps(): TourStep[] {
     {
       id: 'done',
       title: 'Fair winds',
-      text: 'That is the harbor. Replay this tour any time from the Help button. Sailing back to your real harbor now.',
-      anchor: { kind: 'dom', selector: '#hud [data-rail=help]', placement: 'right' },
+      text: 'That is the harbor. Replay this tour any time from the Tour button. Sailing back to your real harbor now.',
+      anchor: { kind: 'dom', selector: '#hud [data-rail=tour]', placement: 'left' },
     },
   ];
 }

@@ -49,6 +49,9 @@ export class BubbleUI {
   private readonly arrow: SVGSVGElement;
   private readonly dock: HTMLElement;
   private readonly bubble: HTMLElement;
+  private blockSize?: ResizeObserver;
+  /** The bubble's bottom edge as last published to CSS (`--captain-bottom`). */
+  private bubbleBottom = -1;
   private step?: HintedStep;
   private hintShown = false;
   private readonly unModal: () => void;
@@ -65,10 +68,18 @@ export class BubbleUI {
     this.root.hidden = false;
     document.body.classList.add('captain-open');
     this.dock.classList.remove('collapsed');
-    $('.portrait .face', this.root).textContent = speaker.face;
-    $('.portrait .badge', this.root).textContent = speaker.badge;
-    $('.portrait .who', this.root).textContent = speaker.name;
-    $('.portrait', this.root).title = speaker.title;
+    // His portrait is on the HUD, top right, whether or not he is speaking; the bubble docks
+    // under the portrait-and-buttons block, whose height changes when a level name shows.
+    const portrait = $('#hud .portrait');
+    const block = $('#hud .hud-top-right');
+    const dockUnder = (): void => this.root.style.setProperty('--captain-dock-top', `${Math.round(block.getBoundingClientRect().bottom) + 8}px`);
+    dockUnder();
+    this.blockSize = new ResizeObserver(dockUnder);
+    this.blockSize.observe(block);
+    $('.face', portrait).textContent = speaker.face;
+    $('.badge', portrait).textContent = speaker.badge;
+    $('.who', portrait).textContent = speaker.name;
+    portrait.title = speaker.title;
     $('[data-tour=next]', this.root).onclick = () => handlers.onNext();
     $('[data-tour=back]', this.root).onclick = () => handlers.onBack();
     $('[data-tour=skip]', this.root).onclick = () => handlers.onSkip();
@@ -77,7 +88,6 @@ export class BubbleUI {
     $('[data-tour=action]', this.root).onclick = () => void this.runAction();
     const toggle = (): void => { this.folded.manual = !this.folded.manual; this.applyFold(); };
     $('[data-tour=collapse]', this.root).onclick = toggle;
-    $('.portrait', this.root).onclick = toggle;
     const onModal = (open: boolean): void => {
       document.body.classList.toggle('modal-open', open);
       this.folded.modal = open;
@@ -179,6 +189,12 @@ export class BubbleUI {
 
   /** The spotlight and arrow follow the step's target (map targets move with the camera); the dock stays put. */
   position(): void {
+    // The toast stack at the bottom right may not climb past the bubble.
+    const bottom = this.root.hidden ? 0 : Math.round(this.bubble.getBoundingClientRect().bottom);
+    if (bottom !== this.bubbleBottom) {
+      this.bubbleBottom = bottom;
+      document.body.style.setProperty('--captain-bottom', `${bottom}px`);
+    }
     const step = this.step;
     if (!step) return;
     let rect: DOMRect | undefined;
@@ -236,6 +252,8 @@ export class BubbleUI {
 
   destroy(): void {
     this.root.hidden = true;
+    this.blockSize?.disconnect();
+    document.body.style.removeProperty('--captain-bottom');
     this.unModal();
     document.body.classList.remove('captain-open', 'modal-open');
     this.spot.hidden = true;

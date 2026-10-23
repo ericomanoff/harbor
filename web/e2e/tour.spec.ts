@@ -67,8 +67,8 @@ test('welcome tour plays through in the training harbor', async ({ page }) => {
   await expect(tour).toBeHidden();
   expect(await page.evaluate(() => localStorage.getItem('harbor.tour.v1'))).toBe('done');
 
-  // Help replays it; Skip ends it. While the dock is up, the map outside the bubble still takes clicks.
-  await page.locator('#hud [data-rail=help]').click();
+  // Tour replays it; Skip ends it. While the dock is up, the map outside the bubble still takes clicks.
+  await page.locator('#hud [data-rail=tour]').click();
   await expect(tour).toBeVisible();
   await page.evaluate(() => window.harbor.selection.set(['b:sandbox/nginx']));
   const bubble = await page.locator('#captain .bubble').boundingBox();

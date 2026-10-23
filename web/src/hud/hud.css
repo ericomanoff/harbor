@@ -5,9 +5,41 @@
   font-weight: 200 1000;
   font-display: swap;
 }
+/* The scroll's hand: IM Fell English (OFL), a worn 17th-century letter for orders written to the harbor authority. */
+@font-face {
+  font-family: 'IM Fell English';
+  src: url('/fonts/IMFellEnglish-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IM Fell English';
+  src: url('/fonts/IMFellEnglish-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IM Fell English SC';
+  src: url('/fonts/IMFellEnglishSC-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
 
 :root {
   --font: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  /* Scrolls: parchment, sepia ink, wax. Speech bubbles keep the cream tokens below. */
+  --font-scroll: 'IM Fell English', Georgia, 'Times New Roman', serif;
+  --font-scroll-sc: 'IM Fell English SC', 'IM Fell English', Georgia, serif;
+  --parchment: #efe0bd;
+  --parchment-dark: #e3cf9f;
+  --parchment-deep: #d7bf88;
+  --sepia: #5a3b1a;
+  --sepia-soft: #8a6a42;
+  --wax: #9c2a1e;
+  --wax-dark: #6e1a12;
+  --quill-cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><path d='M3 21l2-6 11-11c1.5-1.5 4-1.5 4 0 0 1-1 2.5-2 4L7 19l-4 2z' fill='%23f4e9cf' stroke='%235a3b1a' stroke-width='1.5' stroke-linejoin='round'/><path d='M5 15l4 4' stroke='%235a3b1a' stroke-width='1.5'/></svg>") 2 22, text;
   --cream: #f6efdc;
   --cream-2: #efe5c9;
   --olive: #4b5a2a;
@@ -188,19 +220,38 @@
 }
 #hud > * { position: absolute; }
 #hud .hud-top-left { top: 12px; left: 14px; display: flex; flex-direction: column; gap: 8px; }
-#hud .hud-top-center { top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
-#hud .pill.expeditions { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 22px; }
-#hud .pill.expeditions .sub { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; opacity: 0.9; text-transform: none; }
+/* Captain Huber, top right, always on deck; Tour and Expeditions under him. His bubble docks beneath (see #captain .dock). */
+#hud .hud-top-right { top: 12px; right: 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#hud .captain-btns { display: flex; gap: 6px; }
+#hud .captain-btns .pill { padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+#hud .pill.expeditions { display: flex; flex-direction: column; align-items: center; gap: 0; }
+#hud .pill.expeditions .sub { font-size: 9px; font-weight: 800; letter-spacing: 0.5px; opacity: 0.9; text-transform: none; }
 #hud .hud-left-rail { top: 50%; left: 14px; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; }
-/* The right rail (settings, zoom, home, sound) is a row above the cluster panel, bottom right, so the right edge above it belongs to Captain Huber. */
-#hud .hud-right-rail { position: static; display: flex; flex-direction: row; gap: 10px; }
+/* Settings: a popover beside the left rail, level with its last button, no dimmed backdrop; the map stays live behind it. */
+#hud .popover { left: 76px; top: calc(50% + 227px); transform: translateY(-100%); width: 236px; pointer-events: auto; z-index: 6; }
+#hud .popover::before { content: ''; position: absolute; left: -8px; bottom: 18px; width: 12px; height: 12px; background: var(--cream); border-left: 2px solid var(--olive); border-bottom: 2px solid var(--olive); transform: rotate(45deg); }
+#hud .popover .head { font-size: 11px; letter-spacing: 1.5px; font-weight: 900; color: var(--ink-soft); margin-bottom: 6px; }
+#hud .popover .view { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+#hud .popover .view .rowlabel { flex: 1; font-size: 9px; letter-spacing: 1.5px; font-weight: 900; color: var(--ink-soft); }
+#hud .popover .view button { width: 38px; height: 32px; border-radius: 8px; background: var(--cream-2); border: 2px solid var(--olive); font: 900 17px/1 var(--font); color: var(--ink); cursor: pointer; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2); }
+#hud .popover .view button:active { transform: translateY(2px); box-shadow: none; }
+#hud .popover .menu { display: flex; flex-direction: column; gap: 2px; }
+#hud .popover .menu button { text-align: left; background: transparent; border: none; border-radius: 8px; padding: 6px 8px; font: 800 12px var(--font); color: var(--ink); cursor: pointer; }
+#hud .popover .menu button:hover { background: var(--cream-2); }
+#hud .popover hr { border: none; border-top: 1px solid #e3d8ba; margin: 6px 0; }
 #hud .hud-bottom-left { bottom: 14px; left: 14px; display: flex; gap: 8px; }
 /* Toasts stack upward above the selection card; while a speaker's dock is up the whole column slides left by --card-shift (measured each tick) so the two never meet. */
 #hud .hud-bottom-center { bottom: 14px; left: 50%; transform: translateX(calc(-50% - var(--card-shift, 0px))); transition: transform 0.25s; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-#hud .hud-bottom-center .toasts { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+/* Toasts stack above the cluster panel at the bottom right, newest at the bottom. The stack may not climb past Captain Huber's bubble (--captain-bottom, set while he speaks): the toast column shrinks and clips its oldest lines first. */
+#hud .hud-bottom-right { max-height: calc(100vh - var(--captain-bottom, 0px) - 22px); }
+#hud .hud-bottom-right .toasts { display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end; gap: 4px; flex: 0 1 auto; min-height: 0; overflow: hidden; }
+#hud .hud-bottom-right .cluster { flex: none; }
+#hud .hud-bottom-right .toast { font-size: 12px; padding: 5px 10px; max-width: 360px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
 #hud .hud-bottom-right { bottom: 14px; right: 14px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 #hud button, #hud .badge, #hud .bar, #hud .selection, #hud .cluster { pointer-events: auto; }
-/* The cluster panel, bottom right: health (nodes, pods, namespaces) and capacity (CPU, memory). Folded for room (a wide selection card) it keeps only the HEALTH chips, stacked. */
+/* A button that opens a scroll says so with a quill. */
+.hud .pill[data-scroll]::before { content: '🪶'; margin-right: 4px; font-size: 11px; }
+/* The cluster panel, alone at the bottom right: health (nodes, pods, namespaces) and capacity (CPU, memory). Folded for room (a wide selection card) it keeps only the HEALTH chips, stacked. */
 #hud .cluster { padding: 6px 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(38, 48, 22, 0.82); border-color: rgba(255, 255, 255, 0.35); color: #fff; }
 #hud .cluster .crow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 #hud .cluster .rowlabel { font-size: 9px; letter-spacing: 1.5px; font-weight: 900; opacity: 0.75; width: 58px; }
@@ -226,6 +277,49 @@
 .hud .selection .title { font-size: 17px; font-weight: 900; margin-bottom: 2px; }
 .hud .selection .lines { font-size: 12px; font-weight: 600; color: var(--ink-soft); line-height: 1.35; }
 .hud .selection .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+/* The selection card is a scroll like the shop: what is selected, and the orders you may give it. */
+.hud .selection.scroll {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 20% 15%, rgba(255, 250, 235, 0.55), transparent 55%),
+    radial-gradient(ellipse at 80% 85%, rgba(120, 80, 30, 0.14), transparent 60%),
+    linear-gradient(170deg, var(--parchment), var(--parchment-dark));
+  color: var(--sepia);
+  border: 1.5px solid var(--sepia);
+  border-radius: 4px;
+  padding: 14px 16px 16px;
+  box-shadow: inset 0 0 24px rgba(110, 70, 20, 0.18), 0 8px 0 -4px var(--parchment-deep), 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+.hud .selection.scroll::before, .hud .selection.scroll::after {
+  content: '';
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(#8b5a2b, #c48a4f 30%, #6e4420 70%, #3f2612);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.hud .selection.scroll::before { top: -7px; }
+.hud .selection.scroll::after { bottom: -7px; }
+.hud .selection.scroll .title { font: 400 20px/1.1 var(--font-scroll-sc); letter-spacing: 1px; margin-bottom: 4px; text-shadow: 0 1px 0 rgba(255, 250, 235, 0.6); }
+.hud .selection.scroll .lines { color: var(--sepia); font-weight: 600; }
+.hud .selection.scroll .actions { gap: 6px; margin-top: 10px; }
+.hud .selection.scroll .pill {
+  border-radius: 3px;
+  border: 1px solid var(--sepia);
+  padding: 5px 12px;
+  font: 400 13px var(--font-scroll-sc);
+  letter-spacing: 0.5px;
+  text-shadow: none;
+  box-shadow: 0 2px 0 rgba(90, 59, 26, 0.35);
+}
+.hud .selection.scroll .pill.primary { background: radial-gradient(circle at 35% 30%, #d2564a, var(--wax) 55%, var(--wax-dark)); border-color: var(--wax-dark); color: #ffe6dc; }
+.hud .selection.scroll .pill.secondary { background: rgba(255, 250, 235, 0.5); color: var(--sepia); }
+.hud .selection.scroll .pill.secondary:hover:not(:disabled) { background: rgba(255, 250, 235, 0.85); }
+.hud .selection.scroll .pill.danger { background: linear-gradient(#4a2c15, #2e1a0c); border-color: #2e1a0c; color: #f0b9ae; }
+.hud .selection.scroll .pill:disabled, .hud .selection.scroll .pill.disabled { background: transparent; border-color: rgba(90, 59, 26, 0.35); color: var(--sepia-soft); opacity: 0.7; box-shadow: none; }
 
 /* overlay drawer at the bottom of the screen */
 .overlay.bottom { align-items: flex-end; background: transparent; }
@@ -253,22 +347,24 @@ body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { d
 #captain .arrow .shaft { stroke: #fff; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 10 8; animation: captain-march 0.8s linear infinite; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)); }
 #captain .arrow .tip { fill: #fff; stroke: var(--olive); stroke-width: 2; }
 @keyframes captain-march { to { stroke-dashoffset: -18; } }
-/* Captain Huber's dock: a column at the top right, portrait over the bubble, the bubble up to two thirds of the window tall. */
-#captain .dock { position: absolute; right: 14px; top: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: calc(100vw - 28px); max-height: calc(100vh - 24px); }
-#captain .bubble { position: relative; box-sizing: border-box; width: 440px; max-width: calc(100vw - 28px); max-height: min(66vh, calc(100vh - 320px)); display: flex; flex-direction: column; pointer-events: auto; padding-right: 26px; }
+/* Captain Huber's dock: his speech bubble under the portrait and buttons at the top right, up to two thirds of the window tall. */
+#captain .dock { position: absolute; right: 14px; top: var(--captain-dock-top, 150px); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; max-width: calc(100vw - 28px); max-height: calc(100vh - var(--captain-dock-top, 150px) - 12px); }
+#captain .bubble { position: relative; box-sizing: border-box; width: 440px; max-width: calc(100vw - 28px); max-height: min(calc(100vh - var(--captain-dock-top, 150px) - 150px), calc(var(--card-top, 200vh) - var(--captain-dock-top, 150px) - 12px)); display: flex; flex-direction: column; pointer-events: auto; padding-right: 26px; }
 #captain .bubble::after {
   content: '';
   position: absolute;
-  right: 34px; top: -10px;
+  right: 125px; top: -10px; /* under Huber, between Tour and Expeditions */
   width: 16px; height: 16px;
   background: var(--cream);
   border: 2px solid var(--olive);
   border-right: none; border-bottom: none;
   transform: rotate(45deg);
 }
-#captain .portrait { pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 84px; flex: none; }
-#captain .portrait .face { font-size: 44px; line-height: 1; background: linear-gradient(#6fc6f0, #2e8fd0); border: 3px solid #fff; border-radius: 50%; width: 72px; height: 72px; display: grid; place-items: center; box-shadow: var(--shadow-sm); }
-#captain .portrait .who { font-size: 10px; letter-spacing: 1px; color: #fff; font-weight: 900; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); text-align: center; }
+.hud .portrait { position: relative; pointer-events: auto; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 84px; flex: none; cursor: pointer; }
+/* His pirate flag, pinned to the portrait's rim like a ship's fleet flag. */
+.hud .portrait .badge { position: absolute; top: 46px; left: 50%; margin-left: 14px; width: 24px; height: 24px; border-radius: 50%; background: var(--cream); border: 2px solid #fff; display: grid; place-items: center; font-size: 14px; line-height: 1; box-shadow: var(--shadow-sm); pointer-events: none; }
+.hud .portrait .face { font-size: 44px; line-height: 1; background: linear-gradient(#6fc6f0, #2e8fd0); border: 3px solid #fff; border-radius: 50%; width: 72px; height: 72px; display: grid; place-items: center; box-shadow: var(--shadow-sm); }
+.hud .portrait .who { font-size: 10px; letter-spacing: 1px; color: #fff; font-weight: 900; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); text-align: center; }
 #captain .bubble .collapse { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border: none; background: var(--cream-2); border-radius: 50%; font: 900 14px/1 var(--font); color: var(--ink-soft); cursor: pointer; padding: 0; }
 #captain .dock.collapsed .bubble .text, #captain .dock.collapsed .bubble .result, #captain .dock.collapsed .bubble .choices, #captain .dock.collapsed .bubble .dots { display: none; }
 #captain .dock.collapsed .bubble { width: 340px; }
@@ -276,9 +372,9 @@ body.shop-open #hud .hud-bottom-center, body.shop-open #hud .hud-bottom-left { d
 /* While a form or panel is open it takes the stage, above the dock, and the dock folds to title, CTA and buttons. */
 body.modal-open #captain { z-index: 8; }
 #captain .dock.collapsed .bubble .collapse { transform: rotate(180deg); }
-#captain .bubble .title { font-size: 18px; font-weight: 900; margin-bottom: 4px; flex: none; }
+#captain .bubble .title { font-size: 19px; font-weight: 900; margin-bottom: 4px; flex: none; }
 #captain .bubble .cta, #captain .bubble .hint, #captain .bubble .result, #captain .bubble .choices, #captain .bubble .foot { flex: none; }
-#captain .bubble .text { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--ink); flex: 0 1 auto; min-height: 60px; overflow-y: auto; }
+#captain .bubble .text { font-size: 14px; font-weight: 600; line-height: 1.5; color: var(--ink); flex: 0 1 auto; min-height: 60px; overflow-y: auto; }
 #captain .bubble .cta { margin-top: 8px; padding: 6px 10px; background: var(--olive-dark); color: #fff; border-radius: 10px; font-weight: 800; font-size: 12px; animation: tour-nudge 1.2s ease-in-out infinite; }
 #captain .bubble .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
 #captain .bubble .dots { display: flex; gap: 4px; flex-wrap: wrap; }

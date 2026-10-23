@@ -9,7 +9,7 @@ const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T =
 const fmt = (s: number): string => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 
 /**
- * Challenge mode: no harbor master, just the objectives (the level's goal
+ * Challenge mode: no Captain Huber, just the objectives (the level's goal
  * steps), a running clock against par, and a way out.
  */
 export class ChallengeUI {

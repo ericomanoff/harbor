@@ -29,36 +29,57 @@
       <div class="hud-top-left">
         <div class="badge" data-badge title="Sail to another harbor"><div class="shield" data-berths-count>0</div><div><div class="eyebrow">YOUR HARBOR</div><div class="name" data-harbor-name>…</div></div></div>
       </div>
-      <div class="hud-top-center"><button class="pill primary big expeditions" data-expeditions title="Expeditions: the training library (E)"><span class="main">⛵ Expeditions</span><span class="sub" hidden></span></button></div>
+      <!-- Captain Huber at the top right, always; Tour and Expeditions under him. His bubble (#captain) docks beneath. -->
+      <div class="hud-top-right">
+        <div class="portrait" title="Captain Huber, harbor master"><span class="face">🧑‍✈️</span><span class="badge">🏴‍☠️</span><span class="who">Captain Huber</span></div>
+        <div class="captain-btns">
+          <button class="pill secondary" data-rail="tour" title="Welcome tour">🧭 Tour</button>
+          <button class="pill primary expeditions" data-expeditions title="Expeditions: the training library (E)"><span class="main">⛵ Expeditions</span><span class="sub" hidden></span></button>
+        </div>
+      </div>
       <div class="hud-left-rail">
         <button class="rail-btn" data-rail="map" title="Chart table (minimap)"><span class="glyph">🗺️</span>Map</button>
         <button class="rail-btn" data-rail="log" title="Harbor log"><span class="glyph">📜</span>Log</button>
         <button class="rail-btn" data-rail="locate" title="Locate (/)"><span class="glyph">🔭</span>Find</button>
         <button class="rail-btn" data-rail="fleets" title="Fleets filter (F)"><span class="glyph">⚑</span>Fleets</button>
-        <button class="rail-btn" data-rail="help" title="Welcome tour"><span class="glyph">🧭</span>Help</button>
         <button class="rail-btn" data-rail="ledger" title="The ledger: who wrote what to the API server"><span class="glyph">📒</span>Ledger</button>
-        <button class="rail-btn" data-rail="glossary" title="Glossary (G)"><span class="glyph">📖</span>Terms</button>
+        <button class="rail-btn" data-rail="glossary" title="Glossary (G)"><span class="glyph">📖</span>Glossary</button>
+        <button class="rail-btn" data-rail="settings" title="Settings"><span class="glyph">⚙️</span>Settings</button>
+      </div>
+      <!-- Settings: a popover beside the rail, not a modal; the map stays live so the VIEW row acts at once. -->
+      <div id="settings" class="popover card" hidden>
+        <div class="head">SETTINGS</div>
+        <div class="view">
+          <span class="rowlabel">VIEW</span>
+          <button type="button" data-set="zoom-in" title="Zoom in (+)">＋</button>
+          <button type="button" data-set="home" title="Whole harbor (H)">⌂</button>
+          <button type="button" data-set="zoom-out" title="Zoom out (−)">－</button>
+        </div>
+        <div class="menu">
+          <button type="button" data-set="sound" title="Sound (M)">Sound</button>
+          <button type="button" data-set="both">Both languages</button>
+          <button type="button" data-set="system" title="System fleets (N)">System fleets</button>
+        </div>
+        <hr />
+        <div class="menu">
+          <button type="button" data-set="theater">Sail to another harbor…</button>
+          <button type="button" data-set="fleets">Fleets filter…</button>
+          <button type="button" data-set="tech">Chart libraries…</button>
+        </div>
       </div>
       <div class="hud-bottom-left">
         <button class="pill primary big" data-shop-open>⚓ Shop</button>
         <button class="pill secondary big" data-tech>🗺️ Charts</button>
       </div>
       <div class="hud-bottom-center">
-        <div class="toasts"></div>
-        <div class="selection card" hidden>
+        <div class="selection card scroll" hidden>
           <div class="title"></div>
           <div class="lines"></div>
           <div class="actions"></div>
         </div>
       </div>
       <div class="hud-bottom-right">
-        <div class="hud-right-rail">
-          <button class="rail-btn" data-rail="settings" title="Settings"><span class="glyph">⚙️</span></button>
-          <button class="rail-btn" data-rail="zoom-in" title="Zoom in"><span class="glyph">＋</span></button>
-          <button class="rail-btn" data-rail="home" title="Whole harbor (H)"><span class="glyph">⌂</span></button>
-          <button class="rail-btn" data-rail="zoom-out" title="Zoom out"><span class="glyph">－</span></button>
-          <button class="rail-btn" data-rail="sound" title="Sound (M)"><span class="glyph">🔕</span></button>
-        </div>
+        <div class="toasts"></div>
         <div class="cluster card">
           <div class="crow"><span class="rowlabel">HEALTH</span><span class="chip" data-chip="link">…</span><span class="chip" data-chip="docks"></span><span class="chip" data-chip="fleet"></span><span class="chip" data-chip="fleets"></span></div>
           <div class="crow"><span class="rowlabel">CAPACITY</span>
@@ -72,7 +93,6 @@
       <div class="spot" hidden></div>
       <svg class="arrow" hidden><line class="shaft" /><circle class="tip" r="7" /></svg>
       <div class="dock">
-        <div class="portrait" title="Captain Huber"><span class="face">🏴‍☠️</span><span class="who">Captain Huber</span></div>
         <div class="bubble card">
           <button class="collapse" data-tour="collapse" title="Collapse">⌄</button>
           <div class="title"></div>
@@ -95,7 +115,7 @@
       </div>
     </div>
     <div id="shop" class="overlay bottom" hidden>
-      <div class="drawer hud">
+      <div class="drawer hud scroll">
         <div class="tabs"><h3>Shop</h3><span class="tab active" data-tab="all">All</span><span class="tab" data-tab="shipyards">Shipyards</span><span class="tab" data-tab="harbor">Harbor</span><span class="tab" data-tab="charts">Charts</span><span style="flex:1"></span><button class="pill secondary" data-close>Close</button></div>
         <div class="cards"></div>
       </div>
@@ -125,22 +145,8 @@
         <div class="actions"><button type="button" data-close>CLOSE</button></div>
       </div>
     </div>
-    <div id="settings" class="overlay" hidden>
-      <div class="panel">
-        <h2>SETTINGS</h2>
-        <div class="menu">
-          <button type="button" data-set="theater">Sail to another harbor…</button>
-          <button type="button" data-set="fleets">Fleets filter…</button>
-          <button type="button" data-set="tech">Chart libraries…</button>
-          <button type="button" data-set="sound">Sound</button>
-          <button type="button" data-set="both">Both languages</button>
-          <button type="button" data-set="system">System fleets</button>
-        </div>
-        <div class="actions"><button type="button" data-close>CLOSE</button></div>
-      </div>
-    </div>
     <div id="build-form" class="overlay" hidden>
-      <form class="panel" autocomplete="off">
+      <form class="panel scroll" autocomplete="off">
         <h2><span class="kind">SHIPYARD</span> <span class="where"></span></h2>
         <label>NAMESPACE <select name="ns"></select></label>
         <label>NAME <input name="name" required maxlength="63" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?" placeholder="lowercase, dashes" /></label>
@@ -178,12 +184,12 @@
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">BUILD</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>
     <div id="job-form" class="overlay" hidden>
-      <form class="panel" autocomplete="off">
+      <form class="panel scroll" autocomplete="off">
         <h2>SEND OUT A FLEET <span class="where">Job</span></h2>
         <div class="row">
           <label>NAMESPACE <select name="ns"></select></label>
@@ -207,12 +213,12 @@
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">SET SAIL</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>
     <div id="refit-form" class="overlay" hidden>
-      <form class="panel" autocomplete="off">
+      <form class="panel scroll" autocomplete="off">
         <h2>REFIT SHIPYARD <span class="where"></span></h2>
         <label><span>NEW IMAGE</span> <input name="image" required /></label>
         <div class="row">
@@ -227,24 +233,24 @@
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">REFIT</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>
     <div id="fleet-form" class="overlay" hidden>
-      <form class="panel" autocomplete="off">
+      <form class="panel scroll" autocomplete="off">
         <h2>FOUND A FLEET <span class="where">Namespace</span></h2>
         <label>NAME <input name="name" required maxlength="63" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?" placeholder="lowercase, dashes" /></label>
         <p class="muted">A fleet is a namespace: its own ensign colour, its own names, its own lighthouses. Ships in one fleet cannot be confused with another's.</p>
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">FOUND</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>
     <div id="orders-form" class="overlay" hidden>
-      <form class="panel" autocomplete="off">
+      <form class="panel scroll" autocomplete="off">
         <h2>SEALED ORDERS <span class="where">ConfigMap or Secret</span></h2>
         <div class="row">
           <label>KIND <select name="kind"><option value="ConfigMap">Chart locker (ConfigMap)</option><option value="Secret">Sealed envelope (Secret)</option></select></label>
@@ -259,12 +265,12 @@
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">SEAL</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>
     <div id="lighthouse-form" class="overlay" hidden>
-      <form class="panel" autocomplete="off">
+      <form class="panel scroll" autocomplete="off">
         <h2>LIGHT A LIGHTHOUSE <span class="where">Service</span></h2>
         <div class="row">
           <label>NAMESPACE <select name="ns"></select></label>
@@ -284,12 +290,12 @@
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">LIGHT</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>
     <div id="gate-form" class="overlay" hidden>
-      <form class="panel" autocomplete="off">
+      <form class="panel scroll" autocomplete="off">
         <h2>OPEN A GATE <span class="where">Ingress at the harbor mouth</span></h2>
         <div class="row">
           <label>NAMESPACE <select name="ns"></select></label>
@@ -311,7 +317,7 @@
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">OPEN GATE</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>
@@ -334,7 +340,7 @@
       </div>
     </div>
     <div id="tech" class="overlay" hidden>
-      <div class="panel wide">
+      <div class="panel wide scroll">
         <h2>TECH TREE <span class="where">helm</span></h2>
         <div class="tabs">
           <button type="button" data-tab="charts">CHARTS</button>
@@ -475,7 +481,7 @@
       </div>
     </div>
     <div id="apply-form" class="overlay" hidden>
-      <form class="panel wide apply" autocomplete="off" data-no-terms>
+      <form class="panel wide apply scroll" autocomplete="off" data-no-terms>
         <h2>APPLY A MANIFEST <span class="where">declare what should exist; the harbor master records it</span></h2>
         <textarea name="manifest" rows="14" spellcheck="false"></textarea>
         <div class="results"></div>
@@ -483,19 +489,19 @@
         <div class="actions">
           <button type="button" data-preview>PREVIEW (dry run)</button>
           <button type="submit">APPLY</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>
     <div id="ensign-form" class="overlay" hidden>
-      <form class="panel" autocomplete="off">
+      <form class="panel scroll" autocomplete="off">
         <h2><span class="title-word">CHANGE ENSIGN</span> <span class="where"></span></h2>
         <label><span>LABELS (key=value, comma separated)</span> <input name="labels" placeholder="app=courier, track=canary" /></label>
         <p class="muted locked"></p>
         <p class="err" hidden></p>
         <div class="actions">
           <button type="submit">HOIST</button>
-          <button type="button" data-cancel>CANCEL</button>
+          <button type="button" data-cancel>TEAR UP</button>
         </div>
       </form>
     </div>

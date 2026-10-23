@@ -108,6 +108,9 @@ export class MapScene extends Phaser.Scene implements MapApi {
       w: kb.addKey(K.W), a: kb.addKey(K.A), s: kb.addKey(K.S), d: kb.addKey(K.D),
     };
     kb.on('keydown-H', () => !modal.open && this.homeCamera());
+    // + / = and - zoom like the VIEW buttons in Settings.
+    for (const k of ['PLUS', 'NUMPAD_ADD']) kb.on(`keydown-${k}`, () => !modal.open && this.zoomBy(1.25));
+    for (const k of ['MINUS', 'NUMPAD_SUBTRACT']) kb.on(`keydown-${k}`, () => !modal.open && this.zoomBy(0.8));
     kb.on('keydown-N', () => {
       if (modal.open) return;
       settings.showSystemNamespaces = !settings.showSystemNamespaces;
@@ -175,8 +178,10 @@ export class MapScene extends Phaser.Scene implements MapApi {
     this.homeCamera();
     new Hud(this);
     startLedgerFeed();
-    document.querySelector<HTMLButtonElement>('#hud [data-rail=help]')?.addEventListener('click', () => startTour(this));
+    document.querySelector<HTMLButtonElement>('#hud [data-rail=tour]')?.addEventListener('click', () => startTour(this));
     document.querySelector<HTMLButtonElement>('#hud [data-expeditions]')?.addEventListener('click', () => openHarborSelect(this));
+    // Captain Huber himself is the way in: his portrait opens the library too.
+    document.querySelector<HTMLElement>('#hud .portrait')?.addEventListener('click', () => openHarborSelect(this));
     void loadingSplash().done().then(() => {
       // Deep links: ?level=advanced/2 plays a level; ?expeditions opens Harbor Select.
       const params = new URLSearchParams(location.search);
