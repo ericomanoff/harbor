@@ -130,7 +130,7 @@ export class Hud {
     $('[data-chip=docks]', this.root).textContent = `${ready}/${store.nodes.size} docks ready`;
     $('[data-chip=fleet]', this.root).textContent = `${readyShips}/${ships} ships ready`;
     $('[data-chip=fleets]', this.root).textContent = filterSummary(store.namespaces.keys(), settings);
-    $('[data-chip=fleets]', this.root).title = 'Fleets are namespaces; the flag on each shipyard is its fleet. The Fleets filter chooses which are shown';
+    $('[data-chip=fleets]', this.root).title = 'Fleets are namespaces; the flag on each shipyard and ship is its fleet. The Fleets filter chooses which are shown';
     $('[data-rail=sound] .glyph', this.root).textContent = settings.sound ? '🔔' : '🔕';
 
     const p = computePower(store.nodes.values());

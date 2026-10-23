@@ -163,7 +163,7 @@ export const TERMS: Term[] = [
   { id: 'namespace', naval: ['fleet', 'fleets', 'clan', 'flag'], k8s: ['namespace', 'namespaces'],
     concept: 'A namespace partitions a cluster: names are unique within it, Services resolve as name.namespace, and quotas, access rules and network policies attach to it.',
     useCase: 'Give each team or environment its own namespace so names cannot clash and access and quotas can differ.',
-    inHarbor: 'A fleet is a namespace; every shipyard flies its fleet\'s flag, coloured and lettered with the fleet\'s initial, and clicking the flag opens the Fleets filter on it.',
+    inHarbor: 'A fleet is a namespace; every shipyard and every ship flies its fleet\'s flag, coloured and lettered with the fleet\'s initial, and clicking a shipyard\'s flag opens the Fleets filter on it.',
     docs: `${K8S}/overview/working-with-objects/namespaces/` },
   { id: 'label', naval: ['ensign', 'ensigns'], k8s: ['label', 'labels'],
     concept: 'Labels are key/value tags on any object. Selectors on Services, Deployments and kubectl -l pick objects by label, so labels are how things find each other.',
