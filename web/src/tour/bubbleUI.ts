@@ -29,7 +29,7 @@ export interface Speaker {
   /** Pinned to the portrait's rim: his pirate flag. */
   badge: string;
 }
-export const CAPTAIN_HUBER: Speaker = { name: 'Captain Huber', title: 'Captain Huber, harbor master', face: '🧑‍✈️', badge: '🏴‍☠️' };
+export const CAPTAIN_HUBER: Speaker = { name: 'Captain Huber', title: 'Captain Huber, harbor master', face: '👨‍✈️', badge: '🏴‍☠️' };
 
 const $ = <T extends HTMLElement>(sel: string, root: ParentNode = document): T => {
   const el = root.querySelector<T>(sel);

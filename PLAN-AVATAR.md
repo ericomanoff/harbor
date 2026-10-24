@@ -29,7 +29,8 @@ Huber is the one who voices it.
 - Name on the portrait: `Captain Huber`. Hover title on the portrait:
   `Captain Huber, harbor master`.
 - **Portrait: a human face with the pirate flag kept as his badge.** The
-  circle shows 🧑‍✈️ at the current 44 px; a 🏴‍☠️ badge, about 22 px with
+  circle shows 🧑‍✈️ at the current 44 px (*2026-10-23: now 👨‍✈️, the man-pilot
+  form, PLAN-HUBER-FACE.md*); a 🏴‍☠️ badge, about 22 px with
   the same white edge as the circle, sits on the circle's lower-right
   rim, the way every ship wears its fleet flag. One portrait for both the
   tour and the expeditions; nothing else in the dock changes.
