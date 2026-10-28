@@ -18,6 +18,8 @@ export interface MapApi {
   screenRectOf(key: string): { x: number; y: number; width: number; height: number } | undefined;
   /** Pan (and zoom in a little) so the thing is comfortably in view. */
   focusKey(key: string): void;
+  /** Shipyards and terminals standing on an island. */
+  structuresOn(node: string): number;
   /** Hover over map things: a selection-style key and its screen rect, or undefined when over water. */
   onHover(fn: (key: string | undefined, rect: { x: number; y: number; width: number; height: number } | undefined) => void): void;
 }

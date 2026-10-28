@@ -109,7 +109,16 @@ export class Hud {
     let subject: string | undefined;
     if (key.startsWith('flag:')) subject = key.slice(5).split('/')[0];
     if (key.startsWith('bar:')) subject = this.barSubject(key.slice(4));
+    if (key.startsWith('dock:')) subject = this.dockSubject(key.slice(5));
     tip.showFor(id, new DOMRect(rect.x, rect.y, rect.width, rect.height), false, subject);
+  }
+
+  /** An island's state for its tooltip: "harbor-worker · Ready · 5 ships moored". */
+  private dockSubject(node: string): string | undefined {
+    const n = store.nodes.get(node);
+    if (!n) return undefined;
+    const moored = [...store.pods.values()].filter((p) => p.node === node).length;
+    return `${n.name} · ${n.ready ? 'Ready' : 'NotReady'} · ${moored} ship${moored === 1 ? '' : 's'} moored`;
   }
 
   /** The live numbers behind a structure's readiness bar: "2/3" plus "· refit 1/3" mid-rollout. */
@@ -354,6 +363,26 @@ export class Hud {
         { label: 'Scrap one', kind: 'secondary', enabled: w.desired > 0, run: async () => { await workloadApi.scale('StatefulSet', w.ns, w.name, w.desired - 1); this.announce(`UNIT RETIRED: ${w.name}`); } },
         { label: 'Sell terminal', kind: 'danger', confirm: 'Confirm: sell and lose its tankers?', enabled: true, run: async () => { await workloadApi.remove('StatefulSet', w.ns, w.name); selection.clear(); } },
       ], namespaceColor(w.ns));
+      return;
+    }
+    if (keys.length === 1 && k0.startsWith('dock:')) {
+      const n = store.nodes.get(k0.slice(5));
+      if (!n) return;
+      const moored = [...store.pods.values()].filter((p) => p.node === n.name).length;
+      const standing = this.map.structuresOn(n.name);
+      const pct = (req: number, alloc: number): string => (alloc ? `${Math.round((req / alloc) * 100)}%` : '—');
+      const gib = (b: number): string => (b / 1024 ** 3).toFixed(1);
+      const roles = Object.keys(n.labels).filter((k) => k.startsWith('node-role.kubernetes.io/')).map((k) => k.slice('node-role.kubernetes.io/'.length)).filter(Boolean);
+      const plural = (c: number, w: string): string => `${c} ${w}${c === 1 ? '' : 's'}`;
+      this.setCard(`Island ${n.name}`, [
+        `${n.ready ? 'Ready' : 'NotReady: the kubelet is not answering'} · node${roles.length ? ` · role ${roles.join(', ')}` : ''}`,
+        `CPU ${n.cpuReq}m requested of ${n.cpuAlloc}m allocatable · ${pct(n.cpuReq, n.cpuAlloc)}`,
+        `memory ${gib(n.memReq)} GiB requested of ${gib(n.memAlloc)} GiB · ${pct(n.memReq, n.memAlloc)}`,
+        `${plural(moored, 'ship')} moored · ${plural(standing, 'shipyard')} standing`,
+      ], [
+        { label: 'Papers', kind: 'secondary', enabled: true, run: async () => openPapers('Node', '', n.name) },
+        { label: 'Fit island', kind: 'secondary', enabled: true, run: async () => this.map.focusKey(`dock:${n.name}`) },
+      ], n.ready ? undefined : 0xe5473a);
       return;
     }
     if (keys.length === 1 && k0.startsWith('w:')) {

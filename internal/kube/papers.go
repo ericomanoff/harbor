@@ -40,6 +40,8 @@ func Papers(ctx context.Context, client kubernetes.Interface, kind, ns, name str
 		obj, err = client.CoreV1().ConfigMaps(ns).Get(ctx, name, get)
 	case "Namespace":
 		obj, err = client.CoreV1().Namespaces().Get(ctx, name, get)
+	case "Node":
+		obj, err = client.CoreV1().Nodes().Get(ctx, name, get)
 	default:
 		return gen.ObjectPapers{}, invalid("kind %q has no papers here", kind)
 	}

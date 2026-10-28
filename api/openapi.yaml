@@ -470,7 +470,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [Deployment, Pod, Service, Ingress, StatefulSet, DaemonSet, Job, ConfigMap, Namespace]
+            enum: [Deployment, Pod, Service, Ingress, StatefulSet, DaemonSet, Job, ConfigMap, Namespace, Node]
         - $ref: "#/components/parameters/NamespaceParam"
         - $ref: "#/components/parameters/NameParam"
       responses:

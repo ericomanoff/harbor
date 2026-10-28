@@ -287,6 +287,7 @@ const (
 	GetObjectParamsKindIngress     GetObjectParamsKind = "Ingress"
 	GetObjectParamsKindJob         GetObjectParamsKind = "Job"
 	GetObjectParamsKindNamespace   GetObjectParamsKind = "Namespace"
+	GetObjectParamsKindNode        GetObjectParamsKind = "Node"
 	GetObjectParamsKindPod         GetObjectParamsKind = "Pod"
 	GetObjectParamsKindService     GetObjectParamsKind = "Service"
 	GetObjectParamsKindStatefulSet GetObjectParamsKind = "StatefulSet"
@@ -306,6 +307,8 @@ func (e GetObjectParamsKind) Valid() bool {
 	case GetObjectParamsKindJob:
 		return true
 	case GetObjectParamsKindNamespace:
+		return true
+	case GetObjectParamsKindNode:
 		return true
 	case GetObjectParamsKindPod:
 		return true

@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { MAP_FONT } from '../config';
+import { MAP_FONT, SEA } from '../config';
 import { ATLAS, TILES } from '../gfx/manifest';
 import { hashString } from '../layout/hash';
-import { BUILD_CELL, BUILD_ROWS, TILE, TILE_SCALE, TILE_SRC, type PlateauLayout } from '../layout/grid';
+import { TILE, TILE_SCALE, TILE_SRC, dockLandRect, dockLandRows, type PlateauLayout } from '../layout/grid';
 
 /**
  * A node: an island. Land (sand with a grass heart) where shipyards stand,
@@ -15,6 +15,7 @@ export class DockView extends Phaser.GameObjects.Container {
   private readonly label: Phaser.GameObjects.Text;
   private readonly beacon: Phaser.GameObjects.Arc;
   private readonly pier: Phaser.GameObjects.Graphics;
+  private readonly sel: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, layout: PlateauLayout) {
     super(scene, layout.x * TILE, layout.y * TILE);
@@ -23,7 +24,8 @@ export class DockView extends Phaser.GameObjects.Container {
     this.label = scene.add.text(10, -16, '', { fontFamily: MAP_FONT, fontSize: '12px', fontStyle: '900', color: '#ffffff', stroke: '#1d5f87', strokeThickness: 4 });
     this.beacon = scene.add.circle(layout.w * TILE - 12, -8, 5, 0xe5473a).setVisible(false);
     this.pier = scene.add.graphics();
-    this.add([this.rt, this.pier, this.label, this.beacon]);
+    this.sel = scene.add.graphics();
+    this.add([this.rt, this.pier, this.sel, this.label, this.beacon]);
     this.setDepth(-10);
     scene.add.existing(this);
     this.redraw(layout);
@@ -31,7 +33,23 @@ export class DockView extends Phaser.GameObjects.Container {
 
   /** Rows of land: margin row + building rows + the quay row. */
   static landRows(): number {
-    return 1 + BUILD_ROWS * BUILD_CELL + 1;
+    return dockLandRows();
+  }
+
+  get node(): string {
+    return this.layout.node;
+  }
+
+  /** The land, quay and name label in world px: what hovers and clicks. Ships in the shallows keep the pointer. */
+  landRect(): Phaser.Geom.Rectangle {
+    const r = dockLandRect(this.layout);
+    return new Phaser.Geom.Rectangle(r.x, r.y, r.w, r.h);
+  }
+
+  /** The same outline every selected object wears, around the land and quay. */
+  setSelected(on: boolean): void {
+    this.sel.clear();
+    if (on) this.sel.lineStyle(3, SEA.outline, 1).strokeRoundedRect(2, 2, this.layout.w * TILE - 4, dockLandRows() * TILE - 4, 8);
   }
 
   private drawnKey = '';

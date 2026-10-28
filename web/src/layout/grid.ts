@@ -29,6 +29,17 @@ export interface PlateauLayout extends Cell {
   ready: boolean;
 }
 
+/** Rows of land on an island: margin row + building rows + the quay row; the rest is shallows. */
+export function dockLandRows(): number {
+  return 1 + BUILD_ROWS * BUILD_CELL + 1;
+}
+
+/** World rectangle (px) of an island's land, quay and the name label above it: the part that hovers and clicks. Shallows are water. */
+export function dockLandRect(p: PlateauLayout): { x: number; y: number; w: number; h: number } {
+  const label = 18;
+  return { x: p.x * TILE, y: p.y * TILE - label, w: p.w * TILE, h: dockLandRows() * TILE + label };
+}
+
 export type PlacementKind = 'plateau' | 'queue' | 'void';
 
 export interface Placement extends Cell {

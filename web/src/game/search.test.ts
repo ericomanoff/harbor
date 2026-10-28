@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Deployment, Pod } from '../store/cluster';
+import type { Deployment, Node, Pod } from '../store/cluster';
 import { searchObjects } from './search';
 
 const dep = (ns: string, name: string): Deployment => ({ ns, name, replicas: 1, available: 1, updated: 1, image: 'x', conditions: [] });
@@ -9,7 +9,15 @@ const store = {
   pods: new Map([['sandbox/nginx-1', pod('sandbox', 'nginx-1')], ['default/api-x', pod('default', 'api-x')], ['kube-system/coredns-1', pod('kube-system', 'coredns-1')]]),
 };
 
+const node = (name: string): Node => ({ name, ready: true, cpuAlloc: 4000, memAlloc: 0, cpuReq: 0, memReq: 0, labels: {} });
+
 describe('searchObjects', () => {
+  it('finds islands by node name, keyed for the map', () => {
+    const hits = searchObjects('harbor-w', { ...store, nodes: new Map([['harbor-worker', node('harbor-worker')], ['harbor-control-plane', node('harbor-control-plane')]]) });
+    expect(hits.map((h) => h.key)).toEqual(['dock:harbor-worker']);
+    expect(hits[0]).toMatchObject({ kind: 'island', ns: '', name: 'harbor-worker' });
+  });
+
   it('returns nothing for a blank query', () => {
     expect(searchObjects('  ', store)).toEqual([]);
   });

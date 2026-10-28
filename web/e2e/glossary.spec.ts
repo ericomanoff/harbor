@@ -23,8 +23,8 @@ test('terms get tooltips and the glossary opens on them', async ({ page }) => {
   await expect(tip.locator('.harbor')).toContainText('In the harbor:');
 
   // Terms in the status chips (outside the selection card) hover too: the HUD lets clicks through, terms must not.
-  // Open sea under the Expeditions pill: clear of the card and of the tooltip, which stays while hovered.
-  await page.mouse.move(640, 160);
+  // Open sea at the top centre: clear of the card, the tooltip (which stays while hovered) and the islands (which hover too).
+  await page.mouse.move(640, 90);
   await expect(tip).toBeHidden();
   const chipTerm = page.locator('#hud .cluster abbr.term').first();
   await expect(chipTerm).toBeVisible();

@@ -1,6 +1,6 @@
 # Islands you can hover and click
 
-Status: proposed 2026-10-23. Makes every island (node) a first-class map
+Status: done 2026-10-23 (all three decisions as recommended). Makes every island (node) a first-class map
 object: hover for its glossary tooltip, click to select it and read its
 card, Papers for the Node, Locate finds it. No change to how islands are
 laid out or drawn, and no new write actions.

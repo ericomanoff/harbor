@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { Deployment, Ingress, Node, Pod, Service, Workload } from '../store/cluster';
-import { GATE_W, buildingCells, cellAt, computeLayout, isCellFree, layoutPlateaus, plateauWidth, unitCells } from './grid';
+import { GATE_W, buildingCells, cellAt, computeLayout, dockLandRect, dockLandRows, isCellFree, layoutPlateaus, plateauWidth, unitCells } from './grid';
 
 const node = (name: string, cpu = 4000, ready = true): Node => ({ name, ready, cpuAlloc: cpu, memAlloc: 0, cpuReq: 0, memReq: 0, labels: {} });
 const dep = (ns: string, name: string, mapPos?: { x: number; y: number }, release?: string): Deployment => ({ ns, name, replicas: 1, available: 1, updated: 1, image: 'x', conditions: [], ...(mapPos ? { mapPos } : {}), ...(release ? { release } : {}) });
 const pod = (ns: string, name: string, nodeName: string, deployment?: string): Pod => ({ ns, name, node: nodeName, phase: 'Running', ready: true, restarts: 0, created: 'x', labels: {}, containers: [], ...(deployment ? { deployment } : {}) });
+
+describe('dockLandRect', () => {
+  it('covers the land rows and the label, not the shallows', () => {
+    const r = dockLandRect({ node: 'n', x: 2, y: 3, w: 12, h: 14, ready: true });
+    expect(dockLandRows()).toBe(8);
+    expect(r).toEqual({ x: 64, y: 96 - 18, w: 384, h: 8 * 32 + 18 });
+    expect(r.y + r.h).toBeLessThan((3 + 14) * 32);
+  });
+});
 
 describe('plateaus', () => {
   it('width grows with CPU within bounds', () => {

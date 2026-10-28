@@ -257,10 +257,21 @@ export class MapScene extends Phaser.Scene implements MapApi {
     const r = this.worldRectOf(key);
     if (!r) return undefined;
     // From scroll and zoom rather than worldView, which lags a frame after a pan.
+    return this.toScreen(r);
+  }
+
+  private toScreen(r: Phaser.Geom.Rectangle): { x: number; y: number; width: number; height: number } {
     const cam = this.cameras.main;
     const vx = cam.scrollX + (cam.width / 2) * (1 - 1 / cam.zoom);
     const vy = cam.scrollY + (cam.height / 2) * (1 - 1 / cam.zoom);
     return { x: (r.x - vx) * cam.zoom, y: (r.y - vy) * cam.zoom, width: r.width * cam.zoom, height: r.height * cam.zoom };
+  }
+
+  /** Shipyards and terminals standing on an island. */
+  structuresOn(node: string): number {
+    let n = 0;
+    for (const b of this.layout.buildings.values()) if (b.kind === 'plateau' && b.plateau === node) n++;
+    return n;
   }
 
   focusKey(key: string): void {
@@ -435,6 +446,8 @@ export class MapScene extends Phaser.Scene implements MapApi {
     for (const b of this.buildings.values()) if (b.rect().contains(wx, wy)) return buildingKey(b.key);
     for (const r of this.releases.values()) if (r.plateRect().contains(wx, wy)) return releaseKey(r.key);
     for (const gt of this.gates.values()) if (gt.rect().contains(wx, wy)) return gateKey(gt.key);
+    // Islands last: everything standing or moored on one wins.
+    for (const d of this.plateaus.values()) if (d.landRect().contains(wx, wy)) return `dock:${d.node}`;
     return undefined;
   }
 
@@ -447,7 +460,9 @@ export class MapScene extends Phaser.Scene implements MapApi {
     const key = this.keyAt(w.x, w.y, true);
     if (key === this.hoverKey) return;
     this.hoverKey = key;
-    this.hoverFn(key, key ? this.screenRectOf(key) : undefined);
+    // An island's tooltip anchors to its land, not the whole plateau with its shallows.
+    const dock = key?.startsWith('dock:') ? this.plateaus.get(key.slice(5)) : undefined;
+    this.hoverFn(key, dock ? this.toScreen(dock.landRect()) : key ? this.screenRectOf(key) : undefined);
   }
 
   private onPointerMove(p: Phaser.Input.Pointer): void {
@@ -551,6 +566,12 @@ export class MapScene extends Phaser.Scene implements MapApi {
         return;
       }
     }
+    for (const d of this.plateaus.values()) {
+      if (d.landRect().contains(end.x, end.y)) {
+        selection.set([`dock:${d.node}`]);
+        return;
+      }
+    }
     selection.clear();
   }
 
@@ -560,6 +581,7 @@ export class MapScene extends Phaser.Scene implements MapApi {
     for (const r of this.releases.values()) r.setSelected(selection.keys.has(releaseKey(r.key)));
     for (const sv of this.services.values()) sv.setSelected(selection.keys.has(serviceKey(sv.key)));
     for (const gt of this.gates.values()) gt.setSelected(selection.keys.has(gateKey(gt.key)));
+    for (const [n, d] of this.plateaus) d.setSelected(selection.keys.has(`dock:${n}`));
     this.drawLinks();
   }
 

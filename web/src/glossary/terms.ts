@@ -43,7 +43,7 @@ export const TERMS: Term[] = [
   { id: 'dock', naval: ['dock', 'island', 'docks', 'islands'], k8s: ['node', 'nodes', 'worker node'],
     concept: 'A node is a machine, virtual or physical, that runs pods. Its kubelet reports health and capacity; a node is Ready when the kubelet is healthy and NotReady when it stops answering.',
     useCase: 'You look at nodes when pods will not schedule, when a machine is being drained for maintenance, or when capacity runs out.',
-    inHarbor: 'Each island is a node; a dark island with a red beacon is NotReady, and island size follows allocatable CPU.',
+    inHarbor: 'Each island is a node; a dark island with a red beacon is NotReady, and island size follows allocatable CPU. Hover an island for its state, click it for its card and papers.',
     where: 'Every island on the map.', docs: `${K8S}/architecture/nodes/` },
   { id: 'berths', naval: ['berths', 'berth'], k8s: ['allocatable CPU', 'CPU request', 'allocatable'],
     concept: 'Each node advertises allocatable CPU. Pods reserve some of it with requests, and the scheduler only places a pod on a node with enough unreserved CPU left.',

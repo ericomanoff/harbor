@@ -1921,7 +1921,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: "Deployment" | "Pod" | "Service" | "Ingress" | "StatefulSet" | "DaemonSet" | "Job" | "ConfigMap" | "Namespace";
+                kind: "Deployment" | "Pod" | "Service" | "Ingress" | "StatefulSet" | "DaemonSet" | "Job" | "ConfigMap" | "Namespace" | "Node";
                 ns: components["parameters"]["NamespaceParam"];
                 name: components["parameters"]["NameParam"];
             };
