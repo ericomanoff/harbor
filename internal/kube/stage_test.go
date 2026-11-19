@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,31 @@ func TestStageIncidents(t *testing.T) {
 	if _, err := Stage(ctx, client, "found", gen.StageRequest{Ns: ptr(ns)}); err != nil {
 		t.Errorf("found twice should be fine: %v", err)
 	}
+	// Founding while the previous fleet is still scuttling waits for it to go.
+	scuttling := "harbor-academy-old"
+	gone := metav1.NewTime(time.Now())
+	if _, err := client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: scuttling, DeletionTimestamp: &gone}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		time.Sleep(700 * time.Millisecond)
+		_ = client.CoreV1().Namespaces().Delete(ctx, scuttling, metav1.DeleteOptions{})
+	}()
+	if _, err := Stage(ctx, client, "found", gen.StageRequest{Ns: ptr(scuttling)}); err != nil {
+		t.Errorf("found over a scuttling fleet should wait and succeed: %v", err)
+	}
+	if n, err := client.CoreV1().Namespaces().Get(ctx, scuttling, metav1.GetOptions{}); err != nil || n.DeletionTimestamp != nil || n.Labels[AcademyLabel] != "true" {
+		t.Errorf("refounded fleet: %+v %v", n, err)
+	}
+	scuttleWait = time.Second
+	stuck := "harbor-academy-stuck"
+	if _, err := client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: stuck, DeletionTimestamp: &gone}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Stage(ctx, client, "found", gen.StageRequest{Ns: ptr(stuck)}); !errors.As(err, &ve) {
+		t.Errorf("found over a fleet that never sinks: err = %v, want ValidationError", err)
+	}
+	scuttleWait = 90 * time.Second
 	// Incidents refuse namespaces the academy did not found.
 	if _, err := client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "prod"}}, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
@@ -65,11 +91,20 @@ func TestStageIncidents(t *testing.T) {
 	if _, err := client.CoreV1().Pods("prod").Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "theirs", Namespace: "prod"}, Spec: corev1.PodSpec{NodeName: "w1"}}, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := client.CoreV1().Pods(ns).Create(ctx, &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "trader", Namespace: ns, Labels: map[string]string{StagedLabel: "true"}}, Spec: corev1.PodSpec{NodeName: "w1"}}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Stage(ctx, client, "drain", gen.StageRequest{Ns: ptr(ns), Node: ptr("w1")}); err != nil {
 		t.Fatal(err)
 	}
 	if n, _ := client.CoreV1().Nodes().Get(ctx, "w1", metav1.GetOptions{}); !n.Spec.Unschedulable {
 		t.Error("drain should cordon")
+	}
+	if _, err := client.CoreV1().Pods(ns).Get(ctx, "mine", metav1.GetOptions{}); err == nil {
+		t.Error("drain should evict the academy fleet's pods")
+	}
+	if _, err := client.CoreV1().Pods(ns).Get(ctx, "trader", metav1.GetOptions{}); err != nil {
+		t.Error("drain must leave staged props moored")
 	}
 	if _, err := client.CoreV1().Pods("prod").Get(ctx, "theirs", metav1.GetOptions{}); err != nil {
 		t.Error("drain must not touch other namespaces")
@@ -92,8 +127,9 @@ func TestStageIncidents(t *testing.T) {
 	if _, err := Stage(ctx, client, "storm", gen.StageRequest{Ns: ptr(ns)}); !errors.As(err, &ve) {
 		t.Errorf("unknown incident: err = %v, want ValidationError", err)
 	}
+	// The fleet and the refounded one both carry the academy label.
 	res, err = Stage(ctx, client, "cleanup", gen.StageRequest{})
-	if err != nil || !strings.HasPrefix(res.Message, "1 ") {
+	if err != nil || !strings.HasPrefix(res.Message, "2 ") {
 		t.Errorf("cleanup: %+v %v", res, err)
 	}
 	if _, err := client.CoreV1().Namespaces().Get(ctx, "prod", metav1.GetOptions{}); err != nil {

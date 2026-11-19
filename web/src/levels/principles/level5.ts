@@ -1,3 +1,4 @@
+import { createDeployment, createStatefulSet } from '../../api/client';
 import { selection } from '../../app';
 import { nsKey, type Pod, type Workload } from '../../store/cluster';
 import { failNode, restoreNode } from '../../tour/training';
@@ -6,6 +7,10 @@ import { lighthouseFor, lookoutsShipyard, readyShips } from '../goals';
 import { fakeIP } from '../../tour/papers';
 import { deploymentYaml } from '../manifest';
 import type { Level } from '../types';
+
+const REAL_SHIP = 'nginx:1.27-alpine';
+/** Lone ships staged for a level carry this label; the drain leaves them moored. */
+const STAGED = 'harbor.dev/staged';
 
 /** Principle 5: cattle, not pets; assume failure. */
 export const level5: Level = {
@@ -24,28 +29,52 @@ export const level5: Level = {
     snap.workloads = [db];
     return snap;
   },
+  real: {
+    setup: async (ctx) => {
+      await ctx.stage('found');
+      await createDeployment({ ns: ctx.ns, name: 'courier', image: REAL_SHIP, replicas: 1, port: 80 });
+      // The tanker keeps its name across the drain; on a local-disk cluster a tank could not follow it, so it sails without one
+      // here. The terminal brings its own headless lighthouse of the same name.
+      await createStatefulSet({ ns: ctx.ns, name: 'ledger-db', image: REAL_SHIP, replicas: 1, port: 80 });
+      // The trader is a staged prop: the drain leaves it moored to miss its ship.
+      await ctx.stage('lone-ship', { name: 'trader' });
+    },
+    ready: (ctx) => readyShips(ctx.store, ctx.ns, 'courier') >= 1 && ctx.store.pods.get(nsKey(ctx.ns, 'trader'))?.ready === true && ctx.store.pods.get(nsKey(ctx.ns, 'ledger-db-0'))?.ready === true,
+  },
   steps: (ctx) => {
     const NS = ctx.ns;
+    const real = ctx.mode === 'real';
     const traderKey = nsKey(NS, 'trader');
     const courierShip = (): Pod | undefined => [...ctx.store.pods.values()].find((p) => p.ns === NS && p.deployment === 'courier');
     let oldIP = '';
     let oldName = '';
     let yard = '';
-    const drain = (node: string): void => {
-      if (ctx.mode === 'real') void ctx.stage('drain', { node });
-      else failNode(node);
+    // The island drained: harbor-worker in the simulator, wherever the courier ship is moored for real.
+    let island = 'harbor-worker';
+    const drain = (): void => {
+      if (real) {
+        island = courierShip()?.node || island;
+        void ctx.stage('drain', { node: island });
+      } else failNode(island);
     };
-    const undrain = (node: string): void => {
-      if (ctx.mode === 'real') void ctx.stage('uncordon', { node });
-      else restoreNode(node);
+    const undrain = (): void => {
+      if (real) void ctx.stage('uncordon', { node: island });
+      else restoreNode(island);
     };
+    const tankerMoved = (): boolean => {
+      const t = ctx.store.pods.get(nsKey(NS, 'ledger-db-0'));
+      return real ? !!t && t.node !== '' && t.node !== island : (t?.node ?? island) !== island;
+    };
+    const shipAnchor = { kind: 'map', key: real ? `unit-of:${NS}/courier` : `dock:${island}`, placement: 'bottom' } as const;
+    const lookouts = real ? '/ (nginx answers there; it has no /ready)' : '/ready, /healthz';
+    const lookoutHint = real ? 'readiness /, liveness /' : 'readiness /ready, liveness /healthz';
     return [
       {
         id: 'pet',
         onEnter: () => {
           selection.clear();
           const s = courierShip();
-          if (s) { oldName = s.name; oldIP = fakeIP(s.name); }
+          if (s) { oldName = s.name; oldIP = real ? '' : fakeIP(s.name); }
         },
         title: 'A trader with a pet',
         text: `The trader carries the courier ship's address: ${oldIP || 'its pod IP'}. Open the courier ship's Papers and find status.podIP: that number belongs to this one ship and dies with it. Beside it, the ledger-db tanker keeps its name, ledger-db-0, and its tank.`,
@@ -57,21 +86,24 @@ export const level5: Level = {
         id: 'drain',
         onEnter: () => {
           const t = ctx.store.pods.get(traderKey);
-          setTimeout(() => drain('harbor-worker'), 1200);
-          if (t) ctx.play([{ at: 3800, msg: podEvent(t, 'Warning', 'NoRoute', `${oldIP}: no route to host (the ship it named is gone)`) }, { at: 3900, msg: { type: 'modified', kind: 'Pod', obj: { ...t, ready: false, reason: 'NoRoute' } } }]);
+          setTimeout(drain, 1200);
+          // The trader's loss is narrated; on a real cluster its pod stays as it is.
+          if (t) ctx.play([{ at: 3800, msg: podEvent(t, 'Warning', 'NoRoute', `${oldIP || 'the old pod IP'}: no route to host (the ship it named is gone)`) }, ...(real ? [] : [{ at: 3900, msg: { type: 'modified' as const, kind: 'Pod' as const, obj: { ...t, ready: false, reason: 'NoRoute' } } }])]);
         },
         title: 'The island is drained',
-        text: 'The harbor master drains the harbor-worker island for maintenance. The courier ship relaunches elsewhere with a new name and a new IP; the trader is lost. The tanker relaunches too, as ledger-db-0 again, on another island, with its tank following: its data is intact.',
-        anchor: { kind: 'map', key: 'dock:harbor-worker', placement: 'bottom' },
+        text: real
+          ? 'The harbor master drains the island the courier ship is moored at. The ship relaunches elsewhere with a new name and a new IP; the trader is lost. The tanker relaunches too, as ledger-db-0 again, on another island: its name is stable, and with a tank on networked storage its data would follow.'
+          : 'The harbor master drains the harbor-worker island for maintenance. The courier ship relaunches elsewhere with a new name and a new IP; the trader is lost. The tanker relaunches too, as ledger-db-0 again, on another island, with its tank following: its data is intact.',
+        anchor: shipAnchor,
         waitFor: () => {
-          const s = courierShip();
+          const s = [...ctx.store.pods.values()].find((p) => p.ns === NS && p.deployment === 'courier' && p.name !== oldName && p.ready);
           const t = ctx.store.pods.get(traderKey);
-          return !!s && s.name !== oldName && s.ready && t?.ready === false && (ctx.store.pods.get(nsKey(NS, 'ledger-db-0'))?.node ?? 'harbor-worker') !== 'harbor-worker';
+          return !!s && (real || t?.ready === false) && tankerMoved();
         },
       },
       {
         id: 'lighthouse',
-        onEnter: () => { undrain('harbor-worker'); selection.clear(); },
+        onEnter: () => { undrain(); selection.clear(); },
         title: 'A stable name on top',
         text: 'Pods are disposable; the system gives you something stable to hold instead. Light a lighthouse for the courier fleet: a name and address that outlive any ship. Then the trader can be pointed at it.',
         cta: 'Light lighthouse courier guiding the courier shipyard',
@@ -86,9 +118,9 @@ export const level5: Level = {
           if (t) ctx.play([{ at: 500, msg: podEvent(t, 'Normal', 'Resolved', `courier.${NS}.svc: following the beam`) }, { at: 600, msg: { type: 'modified', kind: 'Pod', obj: { ...t, ready: true, reason: undefined as never } } }]);
         },
         title: 'Design for the drain',
-        text: 'The trader now sails to the lighthouse. The rest is the ship\'s own design: rebuild the courier shipyard so each ship tolerates being replaced. Sell the old shipyard, then build courier again with lookouts (/ready, /healthz), a port, requests and limits, and GRACE 10 seconds so a ship can finish its last delivery after SIGTERM.',
+        text: `The trader now sails to the lighthouse. The rest is the ship's own design: rebuild the courier shipyard so each ship tolerates being replaced. Sell the old shipyard, then build courier again with lookouts (${lookouts}), a port, requests and limits, and GRACE 10 seconds so a ship can finish its last delivery after SIGTERM.`,
         cta: 'Rebuild courier with lookouts, port 80, limits and grace 10',
-        hint: `Sell shipyard courier (twice). Shop → Shipyard → green land → namespace ${NS}, name courier, port 80, CPU LIMIT 200m, MEM LIMIT 128Mi, readiness /ready, liveness /healthz, GRACE 10, BUILD.`,
+        hint: `Sell shipyard courier (twice). Shop → Shipyard → green land → namespace ${NS}, name courier, port 80, CPU LIMIT 200m, MEM LIMIT 128Mi, ${lookoutHint}, GRACE 10, BUILD.`,
         anchor: { kind: 'dom', selector: '#hud [data-shop-open]', placement: 'top' },
         waitFor: () => {
           const name = lookoutsShipyard(ctx.store, NS);
@@ -101,18 +133,18 @@ export const level5: Level = {
         id: 'again',
         onEnter: () => {
           selection.clear();
-          setTimeout(() => drain('harbor-worker'), 1000);
+          setTimeout(drain, 1000);
           const t = ctx.store.pods.get(traderKey);
           if (t) ctx.play([{ at: 2800, msg: podEvent(t, 'Normal', 'Resolved', 'courier beam swung to the new ship; delivery continues') }]);
         },
         title: 'Drain it again',
         text: 'The island is drained a second time. The ship stops gracefully, the lookouts keep traders away until the new ship is ready, the beam swings, and the trader never notices. The tanker comes back as ledger-db-0 with its tank, as before.',
-        anchor: { kind: 'map', key: 'dock:harbor-worker', placement: 'bottom' },
-        waitFor: () => ctx.store.pods.get(traderKey)?.ready === true && readyShips(ctx.store, NS, yard || 'courier') >= 1 && [...ctx.store.pods.values()].every((p) => p.ns !== NS || p.node !== 'harbor-worker' || !p.ready),
+        anchor: shipAnchor,
+        waitFor: () => ctx.store.pods.get(traderKey)?.ready === true && readyShips(ctx.store, NS, yard || 'courier') >= 1 && [...ctx.store.pods.values()].every((p) => p.ns !== NS || p.node !== island || !p.ready || p.labels[STAGED] === 'true'),
       },
       {
         id: 'lesson',
-        onEnter: () => undrain('harbor-worker'),
+        onEnter: undrain,
         title: 'Cattle, not pets',
         text: 'Pods get new IPs and nodes go away, so the platform offers stable abstractions on top: Services for network identity, PersistentVolumeClaims for storage that outlives a pod, StatefulSets when identity truly matters. Your side of the bargain: health probes, graceful shutdown, requests and limits, and no state inside the pod.',
         anchor: { kind: 'none' },

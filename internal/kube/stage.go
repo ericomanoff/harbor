@@ -47,6 +47,11 @@ func Stage(ctx context.Context, client kubernetes.Interface, incident string, re
 		if !strings.HasPrefix(ns, "harbor-academy") {
 			return out, invalid("academy fleets are named harbor-academy*")
 		}
+		// The previous level's fleet may still be scuttling; wait for it to
+		// sink rather than build on a namespace that is being deleted.
+		if err := awaitScuttled(ctx, client, ns); err != nil {
+			return out, err
+		}
 		_, err := client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns, Labels: map[string]string{ManagedByLabel: managedByValue, AcademyLabel: "true"}}}, metav1.CreateOptions{})
 		if err != nil && !apierrors.IsAlreadyExists(err) {
 			return out, err
@@ -118,6 +123,11 @@ func Stage(ctx context.Context, client kubernetes.Interface, incident string, re
 		}
 		n := 0
 		for i := range pods.Items {
+			// Staged props (lone ships) stay moored: a bare pod would never
+			// come back, and the levels need them to witness the drain.
+			if pods.Items[i].Labels[StagedLabel] == "true" {
+				continue
+			}
 			if err := client.CoreV1().Pods(ns).Delete(ctx, pods.Items[i].Name, metav1.DeleteOptions{}); err == nil {
 				n++
 			}
@@ -154,6 +164,31 @@ func Stage(ctx context.Context, client kubernetes.Interface, incident string, re
 		return out, invalid("unknown incident %q", incident)
 	}
 	return out, nil
+}
+
+// scuttleWait is how long "found" waits for a terminating academy namespace to go.
+var scuttleWait = 90 * time.Second
+
+// awaitScuttled returns once the namespace is absent or not being deleted.
+func awaitScuttled(ctx context.Context, client kubernetes.Interface, ns string) error {
+	deadline := time.Now().Add(scuttleWait)
+	for {
+		n, err := client.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) || (err == nil && n.DeletionTimestamp == nil) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if time.Now().After(deadline) {
+			return invalid("fleet %s is still being scuttled; try again in a moment", ns)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 }
 
 func academyNamespace(ctx context.Context, client kubernetes.Interface, ns string) error {

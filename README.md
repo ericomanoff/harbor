@@ -68,8 +68,13 @@ lighthouse" (Services), 6 "The harbor mouth" (Ingress), 7 "Sealed orders"
 "Fleets and ensigns" (namespaces and labels), 10 "Refit at sea" (rolling
 updates and rollback). Each completed level can be replayed as a challenge
 (no bubbles, just objectives and the clock) and, when a cluster is connected,
-"for real": levels 2, 5, 6, 7 and 10 stage their incidents on your cluster in
-a `harbor-academy` namespace that is cleaned up when you leave.
+"for real": Advanced levels 2, 5, 6, 7 and 10 and 1st Principles levels 1 (a
+real server-side apply, a bare pod the cluster never relaunches) and 5 (a
+real cordon-and-evict of the island your ship is on) stage their incidents
+on your cluster in a `harbor-academy` namespace that is cleaned up when you
+leave. Principles 2, 3 and 6 stay in the training harbor: a controller's
+watch blackout, a custom resource and an admission policy are platform
+changes no level should make to your cluster.
 
 Expeditions are vendor deployment guides played as levels on your own
 cluster: instructions, checks against the cluster (a fixed whitelist such as

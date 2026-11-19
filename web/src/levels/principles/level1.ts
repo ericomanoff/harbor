@@ -1,3 +1,4 @@
+import { createDeployment, createService } from '../../api/client';
 import { selection } from '../../app';
 import { ledger } from '../../game/ledger';
 import { nsKey, type Pod } from '../../store/cluster';
@@ -5,12 +6,19 @@ import { as } from '../../tour/training';
 import { academyHarbor, lighthouse, podEvent, shipyard } from '../advanced/fixture';
 import { readyShips, relaunched } from '../goals';
 import { deploymentYaml } from '../manifest';
-import type { Level } from '../types';
+import type { Level, LevelContext } from '../types';
 
 const overlayOpen = (id: string): boolean => document.getElementById(id)?.hidden === false;
 const applies = (): number => ledger.entries.filter((e) => e.dir === 'request' && e.what === 'POST /api/apply').length;
 
-export const MANIFEST = (replicas: number): string => deploymentYaml({ ns: 'harbor', name: 'courier', image: 'ghcr.io/example/courier:1.0', replicas, port: 80 }).replace(/ +#.*$/gm, '');
+/** The hull a real cluster can pull; the simulator's image is only a name. */
+const REAL_SHIP = 'nginx:1.27-alpine';
+
+/** The courier manifest for the level's fleet, with the hull the shipyard already has. */
+export const manifestFor = (ctx: Pick<LevelContext, 'ns' | 'store'>, replicas: number): string => {
+  const image = ctx.store.deployments.get(nsKey(ctx.ns, 'courier'))?.image ?? 'ghcr.io/example/courier:1.0';
+  return deploymentYaml({ ns: ctx.ns, name: 'courier', image, replicas, port: 80 }).replace(/ +#.*$/gm, '');
+};
 
 /** Principle 1: declarative desired state, stored in one place. */
 export const level1: Level = {
@@ -24,11 +32,22 @@ export const level1: Level = {
     const y = shipyard('courier', 3);
     return academyHarbor({ deployments: [y.deployment], pods: y.pods, services: [lighthouse('courier', 'courier')] });
   },
+  real: {
+    setup: async (ctx) => {
+      await ctx.stage('found');
+      await createDeployment({ ns: ctx.ns, name: 'courier', image: REAL_SHIP, replicas: 3, port: 80 });
+      await createService({ ns: ctx.ns, name: 'courier', selector: { app: 'courier' }, port: 80 });
+    },
+    ready: (ctx) => readyShips(ctx.store, ctx.ns, 'courier') >= 3 && ctx.store.services.has(nsKey(ctx.ns, 'courier')),
+  },
   steps: (ctx) => {
     const NS = ctx.ns;
     const yard = nsKey(NS, 'courier');
+    const byHand = nsKey(NS, 'courier-by-hand');
+    const MANIFEST = (replicas: number): string => manifestFor(ctx, replicas);
     let baseline = 0;
     let sunk = '';
+    let seenByHand = false;
     const extra = (): Pod => ({ ns: NS, name: 'courier-by-hand', node: 'harbor-worker', phase: 'Running', ready: true, restarts: 0, created: new Date().toISOString(), labels: { app: 'courier-by-hand' }, containers: ['courier'] });
     return [
       {
@@ -51,14 +70,32 @@ export const level1: Level = {
       {
         id: 'imperative',
         onEnter: () => {
+          if (ctx.mode === 'real') {
+            // A bare pod on the real cluster, sunk once it has moored: nothing relaunches it.
+            void ctx.stage('lone-ship', { name: 'courier-by-hand' }).then(() => {
+              const until = Date.now() + 90_000;
+              const poll = (): void => {
+                const p = ctx.store.pods.get(byHand);
+                if (p?.ready) {
+                  ctx.play([{ at: 1500, msg: podEvent(p, 'Warning', 'Reef', 'courier-by-hand struck the reef') }]);
+                  setTimeout(() => ctx.sink(p), 1600);
+                } else if (Date.now() < until) setTimeout(poll, 400);
+              };
+              poll();
+            });
+            return;
+          }
           const p = extra();
           as('you', () => ctx.store.apply({ type: 'modified', kind: 'Pod', obj: p }));
           ctx.play([{ at: 2500, msg: podEvent(p, 'Warning', 'Reef', 'courier-by-hand struck the reef') }, { at: 2600, msg: { type: 'deleted', kind: 'Pod', obj: p } }]);
         },
         title: 'An order, not a record',
         text: 'The old way: the harbor master shouts "one more ship!" and a ship is launched by hand. Nothing wrote that wish down. Watch what happens when the reef takes it: nobody rebuilds it, because no record says it should exist.',
-        anchor: { kind: 'map', key: `u:${nsKey(NS, 'courier-by-hand')}`, placement: 'top' },
-        waitFor: () => !ctx.store.pods.has(nsKey(NS, 'courier-by-hand')),
+        anchor: { kind: 'map', key: `u:${byHand}`, placement: 'top' },
+        waitFor: () => {
+          if (ctx.store.pods.has(byHand)) seenByHand = true;
+          return seenByHand && !ctx.store.pods.has(byHand);
+        },
       },
       {
         id: 'apply4',

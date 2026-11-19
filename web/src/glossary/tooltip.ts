@@ -66,8 +66,9 @@ export class Tooltip {
     let y = anchor.top - h - 10;
     if (y < 8) y = anchor.bottom + 10;
     x = Math.max(8, Math.min(window.innerWidth - w - 8, x));
-    this.el.style.left = `${x}px`;
-    this.el.style.top = `${y}px`;
+    // Whole pixels: a fixed box at a fractional offset renders its text blurred.
+    this.el.style.left = `${Math.round(x)}px`;
+    this.el.style.top = `${Math.round(y)}px`;
     this.el.classList.toggle('below', y > anchor.top);
   }
 

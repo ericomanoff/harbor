@@ -63,7 +63,8 @@ test.describe('visual', () => {
     await term.hover();
     const tip = page.locator('#term-tip');
     await expect(tip).toBeVisible();
-    await expect(tip).toHaveScreenshot('tooltip-shipyard.png');
+    // The rounded corners show the animated sea behind the box: a few dozen pixels may differ.
+    await expect(tip).toHaveScreenshot('tooltip-shipyard.png', { maxDiffPixelRatio: 0.01 });
   });
 
   test('a scroll: the refit form over the selection card', async ({ page }) => {
